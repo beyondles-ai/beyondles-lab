@@ -145,7 +145,7 @@ if (JSON.stringify(deKeys) !== JSON.stringify(enKeys))
 //    template itself, a finding for a renamed Lab.
 if (pkg.name !== "examplelab") {
   const leftovers = walk(root)
-    .filter((f) => /\.(ts|tsx|json|yml|md|prisma|sh|mjs)$/.test(f))
+    .filter((f) => /\.(ts|tsx|json|yml|md|prisma|sh|mjs)$/.test(f) || path.basename(f) === "Dockerfile")
     .filter((f) => !f.includes("rename-lab.mjs") && !f.endsWith("package-lock.json"))
     .filter((f) => /examplelab|ExampleLab/.test(readFileSync(f, "utf8")))
     .map((f) => path.relative(root, f));

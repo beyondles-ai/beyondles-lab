@@ -32,8 +32,10 @@ if (!name || !/^[a-z]+lab$/.test(name) || name === "examplelab") {
 const displayName = display?.trim() || name.charAt(0).toUpperCase() + name.slice(1);
 
 const SKIP_DIRS = new Set(["node_modules", ".git", ".next", "coverage"]);
-const SKIP_FILES = new Set(["rename-lab.mjs", "package-lock.json"]);
+const SKIP_FILES = new Set(["rename-lab.mjs"]);
 const TEXT = /\.(ts|tsx|mjs|js|json|md|yml|yaml|prisma|sql|sh|css|example|txt)$/;
+// Files without an extension that still carry the name (comments, image tags).
+const EXTENSIONLESS = new Set(["Dockerfile", ".gitattributes", ".dockerignore", ".prettierignore"]);
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -42,7 +44,7 @@ function walk(dir, out = []) {
     if (entry.isDirectory()) walk(full, out);
     else if (
       !SKIP_FILES.has(entry.name) &&
-      (TEXT.test(entry.name) || entry.name.startsWith(".env") || entry.name === ".gitattributes")
+      (TEXT.test(entry.name) || entry.name.startsWith(".env") || EXTENSIONLESS.has(entry.name))
     )
       out.push(full);
   }

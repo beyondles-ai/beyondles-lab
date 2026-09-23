@@ -20,7 +20,8 @@ export async function register(): Promise<void> {
       `[platform-access] WARNING: the Suite login is active (NEXT_PUBLIC_PLATFORM_URL is set) ` +
         `but the platform door is not (PLATFORM_API_URL / PLATFORM_API_KEY missing). ` +
         `This Lab cannot ask the platform who has access, so it lets NOBODY in and refuses ` +
-        `every API key. Set both in the environment's .env (key name: ${LAB_KEY}) and restart. ` +
+        `every user key (worker keys keep working, they need no person). Set both in the ` +
+        `environment's .env (key name: ${LAB_KEY}) and restart. ` +
         `/api/health reports access: "unconfigured" until then.`,
     );
   }
