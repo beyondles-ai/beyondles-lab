@@ -48,6 +48,9 @@ REMOTE="$(git rev-parse "origin/$BRANCH" 2>/dev/null)"
 [ "$LOCAL" = "$REMOTE" ] && exit 0
 
 {
+  # Inside the block every failing step aborts the run (a failed build must
+  # never be followed by an "up" of the old image and a "deploy OK").
+  set -eo pipefail
   echo "===================================================================="
   echo "[$(date '+%F %T')] new commits on $BRANCH: $LOCAL -> $REMOTE"
   git reset --hard "origin/$BRANCH"

@@ -101,9 +101,10 @@ export async function complete(
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch (error) {
-      last = { ok: false, status: 0, code: "NETWORK", message: error instanceof Error ? error.message : "network error" };
-      if (attempt < MAX_ATTEMPTS) await wait(300 * attempt);
-      continue;
+      // NO retry on a network error or timeout: the platform may already have
+      // completed and billed the call. Only 429/503 (the platform itself
+      // answered, it did nothing) are retried below.
+      return { ok: false, status: 0, code: "NETWORK", message: error instanceof Error ? error.message : "network error" };
     }
 
     const envelope = (await res.json().catch(() => null)) as

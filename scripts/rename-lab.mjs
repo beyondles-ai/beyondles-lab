@@ -30,9 +30,13 @@ if (!name || !/^[a-z]+lab$/.test(name) || name === "examplelab") {
   process.exit(1);
 }
 const displayName = display?.trim() || name.charAt(0).toUpperCase() + name.slice(1);
+if (!/^[A-Za-z0-9][A-Za-z0-9 .-]{0,39}$/.test(displayName)) {
+  console.error('The display name may contain letters, digits, spaces, "." and "-" only (max 40).');
+  process.exit(1);
+}
 
 const SKIP_DIRS = new Set(["node_modules", ".git", ".next", "coverage"]);
-const SKIP_FILES = new Set(["rename-lab.mjs"]);
+const SKIP_FILES = new Set(["rename-lab.mjs", "check-frame.mjs"]);
 const TEXT = /\.(ts|tsx|mjs|js|json|md|yml|yaml|prisma|sql|sh|css|example|txt)$/;
 // Files without an extension that still carry the name (comments, image tags).
 const EXTENSIONLESS = new Set(["Dockerfile", ".gitattributes", ".dockerignore", ".prettierignore"]);
@@ -55,10 +59,12 @@ let changed = 0;
 for (const file of walk(root)) {
   if (statSync(file).size > 2_000_000) continue;
   const before = readFileSync(file, "utf8");
+  // Replacer FUNCTIONS: a display name containing a dollar sequence must be
+  // inserted literally, not interpreted by String.replace.
   const after = before
-    .replaceAll("examplelab", name)
-    .replaceAll("ExampleLab", displayName)
-    .replaceAll("EXAMPLELAB", name.toUpperCase());
+    .replaceAll("examplelab", () => name)
+    .replaceAll("ExampleLab", () => displayName)
+    .replaceAll("EXAMPLELAB", () => name.toUpperCase());
   if (after !== before) {
     writeFileSync(file, after);
     changed += 1;
@@ -69,9 +75,11 @@ for (const file of walk(root)) {
 console.log(`\n${changed} file(s) updated for "${name}" ("${displayName}").`);
 console.log(`
 Still yours to do (the template cannot know these):
-  1. Ports: pick the next free pair on the Playground (docs/SIDE-PROJECTS port
-     map) and put them into .env.example (APP_PORT), the dev port in
-     package.json ("dev": "next dev -p ...") and scripts/start.mjs.
+  1. Ports: pick the next free pair on the Playground (SIDE-PROJECTS.md port
+     map) and replace the dev port 3390 in ALL of: package.json ("dev"),
+     scripts/start.mjs, src/lib/mcp/server.ts, mcp/server.mjs, README.md and
+     the APP_PORT default in docker/docker-compose.yml. Two Labs on the same
+     dev port let the MCP self-call hit the wrong Lab with your key.
   2. The one sentence in README.md that says what this Lab does.
   3. Replace the example object "Note" (prisma/schema.prisma, src/server,
      src/app/(app)/notes, src/lib/mcp/catalog.ts) with your own objects.

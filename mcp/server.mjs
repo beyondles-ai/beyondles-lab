@@ -34,9 +34,13 @@ if (!API_KEY) {
 
 let nextId = 1;
 
-/** One JSON-RPC message. Retries only network errors, 429 and 5xx. */
+/**
+ * One JSON-RPC message. `tools/list` is retried on network errors, 429 and
+ * 5xx. `tools/call` is NEVER retried: a timeout does not mean the call did
+ * not happen, and a second `create_note` is a duplicate.
+ */
 async function rpc(method, params) {
-  const attempts = 3;
+  const attempts = method === "tools/list" ? 3 : 1;
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {

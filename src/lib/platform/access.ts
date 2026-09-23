@@ -288,12 +288,33 @@ export async function getAccessContext(
     return context;
   }
 
+  // 401 = OUR service key is wrong, 403 ORG_NOT_ALLOWED_FOR_KEY = our key
+  // is limited to other organisations. Both are operator errors and must be
+  // loud; to the person they look like "no access", which is right (closed)
+  // but not the whole story.
   if (res.status === 401 || res.status === 403 || res.status === 404) {
+    const code = await errorCode(res);
+    if (res.status === 401 || code === "ORG_NOT_ALLOWED_FOR_KEY") {
+      warnOnce(
+        `key-${res.status}`,
+        `the platform rejected the Lab's own service key (HTTP ${res.status}${code ? ` ${code}` : ""}). ` +
+          `Check PLATFORM_API_KEY — until it is fixed, nobody has access.`,
+      );
+    }
     cachePut(cache, key, null);
     return null;
   }
   warnOnce(`http-${res.status}`, `the platform answered /api/access/me with HTTP ${res.status}.`);
   return null;
+}
+
+async function errorCode(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.json()) as { error?: { code?: unknown } };
+    return typeof body.error?.code === "string" ? body.error.code : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -437,7 +458,14 @@ export async function getApiKeyAccessContext(
   }
 
   if (!res.ok) {
-    if (res.status === 401 || res.status === 403 || res.status === 404) {
+    const code = res.status === 401 || res.status === 403 ? await errorCode(res) : null;
+    // A rejected SERVICE key is our problem, not the key owner's: say so in
+    // the log and answer "could not check", never "you have no access".
+    if (res.status === 401 || code === "ORG_NOT_ALLOWED_FOR_KEY") {
+      warnOnce(`key-${res.status}`, `the platform rejected the Lab's own service key on the key path (HTTP ${res.status}).`);
+      return { ok: false, reason: "KEY_CHECK_UNAVAILABLE" };
+    }
+    if (res.status === 403 || res.status === 404) {
       const denied: MachineAccess = { ok: false, reason: "KEY_OWNER_NO_ACCESS" };
       cachePut(machineCache, input.keyId, denied);
       return denied;
@@ -466,8 +494,13 @@ export async function getApiKeyAccessContext(
     result = { ok: false, reason: "KEY_OWNER_NO_ACCESS" };
   } else if (revokedAt && !Number.isNaN(revokedAt.getTime()) && input.mintedAt < revokedAt) {
     result = { ok: false, reason: "KEY_REVOKED" };
+  } else if (context.organisationId.toLowerCase() !== input.organisationId.toLowerCase()) {
+    // The key belongs to ONE organisation (its row). A platform answer for
+    // another organisation is never acted upon.
+    warnOnce("key-org-mismatch", "the platform answered the key check with a different organisation than the key's row.");
+    result = { ok: false, reason: "KEY_CHECK_UNAVAILABLE" };
   } else {
-    result = { ok: true, context: { ...context, source: "api-key" } };
+    result = { ok: true, context: { ...context, organisationId: input.organisationId, source: "api-key" } };
   }
   cachePut(machineCache, input.keyId, result);
   return result;
@@ -475,11 +508,14 @@ export async function getApiKeyAccessContext(
 
 /* -------------------------------------------------------------- Helpers */
 
-/** May this context use the Lab? Once governed, only `productRole` counts. */
+/**
+ * May this context use the Lab? For a platform answer only `productRole`
+ * counts — the platform has already folded `accessMode = everyone` into it
+ * (contract: "refuse when productRole is null"). No second way in here.
+ */
 export function hasProductAccess(ctx: AccessContext): boolean {
   if (ctx.source === "local" || ctx.source === "worker-key") return true;
-  if (ctx.governed) return ctx.productRole !== null;
-  return ctx.productRole !== null || ctx.accessMode === "everyone";
+  return ctx.productRole !== null;
 }
 
 export function isProductAdmin(ctx: AccessContext): boolean {

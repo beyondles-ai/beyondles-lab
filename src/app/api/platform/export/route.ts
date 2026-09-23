@@ -19,7 +19,10 @@ import { exportOrganisation } from "@/server/services/platform-export";
  */
 export const dynamic = "force-dynamic";
 
-const querySchema = z.object({ organisationId: z.string().uuid() });
+// Well-formed uuid and NO MORE: zod's `.uuid()` also pins version and variant
+// digits, which the contract says not to do (sign-in accepts any 8-4-4-4-12).
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const querySchema = z.object({ organisationId: z.string().regex(UUID) });
 
 function fail(status: number, code: string, message: string) {
   return NextResponse.json(

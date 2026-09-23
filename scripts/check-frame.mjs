@@ -80,8 +80,9 @@ if (pkg.scripts?.start && /\bnext start\b/.test(pkg.scripts.start))
   fail('"start" uses `next start` — standalone output needs scripts/start.mjs');
 
 const FORBIDDEN_ENV =
-  /\b(ANTHROPIC_API_KEY|OPENAI_API_KEY|GOOGLE_[A-Z_]*API_KEY|MISTRAL_API_KEY|DEEPSEEK_API_KEY|RESEND_API_KEY|SMTP_PASS(WORD)?|PLATFORM_SSO_URL)\b/;
+  /\b(ANTHROPIC_API_KEY|OPENAI_API_KEY|GOOGLE_[A-Z_]*API_KEY|MISTRAL_API_KEY|DEEPSEEK_API_KEY|RESEND_API_KEY|RESEND_ENDPOINT|MAILER_MODE|SMTP_(HOST|PORT|USER|PASS|PASSWORD)|PLATFORM_SSO_URL)\b/;
 function walk(dir, out = []) {
+  if (!existsSync(dir)) return out;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (["node_modules", ".git", ".next", "coverage"].includes(entry.name)) continue;
     const full = path.join(dir, entry.name);
@@ -90,10 +91,32 @@ function walk(dir, out = []) {
   }
   return out;
 }
-const sourceFiles = walk(path.join(root, "src")).concat(
-  walk(path.join(root, "docker")),
-  [path.join(root, ".env.example")],
-);
+const sourceFiles = ["src", "docker", "ops", "scripts", "mcp", ".github"]
+  .flatMap((d) => walk(path.join(root, d)))
+  .filter((f) => !f.endsWith("check-frame.mjs"))
+  .concat([path.join(root, ".env.example")]);
+
+// JWT_SECRET must never be passed by Compose (a server .env must not carry it).
+{
+  const compose = read("docker/docker-compose.yml");
+  for (const name of ["JWT_SECRET", "ALLOW_LOCAL_JWT"]) {
+    if (new RegExp(`^\\s+${name}:`, "m").test(compose)) fail(`docker-compose.yml passes ${name} to the container`);
+  }
+}
+
+// Unknown files at the repo root are almost always a shell mishap (six of
+// them once got committed to this template). Everything at the root must be
+// on this list.
+const ROOT_ALLOWED = new Set([
+  ".dockerignore", ".env.example", ".gitattributes", ".gitignore", ".prettierignore", ".prettierrc.json",
+  "README.md", "eslint.config.mjs", "next.config.ts", "next-env.d.ts", "package-lock.json", "package.json",
+  "postcss.config.mjs", "prisma.config.ts", "tsconfig.json", "tsconfig.tsbuildinfo", "vitest.config.ts",
+  "CLAUDE.md", "LICENSE",
+]);
+for (const entry of readdirSync(root, { withFileTypes: true })) {
+  if (entry.isDirectory()) continue;
+  if (!ROOT_ALLOWED.has(entry.name)) fail(`unexpected file at the repo root: ${JSON.stringify(entry.name)}`);
+}
 for (const file of sourceFiles) {
   const text = readFileSync(file, "utf8");
   // Comments may NAME the forbidden variables (that is how the rule is
@@ -141,16 +164,23 @@ const enKeys = keys(en).sort();
 if (JSON.stringify(deKeys) !== JSON.stringify(enKeys))
   fail("messages/de.json and messages/en.json do not have the same keys");
 
-// 8. The Lab still carries the template name? Only a warning for the
-//    template itself, a finding for a renamed Lab.
-if (pkg.name !== "examplelab") {
+// 8. The Lab still carries the template name? The literals are assembled at
+//    runtime so `npm run rename` cannot rewrite them (it skips this file too);
+//    otherwise the check would switch itself off after the rename.
+const TEMPLATE_KEY = ["example", "lab"].join("");
+const TEMPLATE_NAME = ["Example", "Lab"].join("");
+const IS_TEMPLATE_REPO = pkg.name === TEMPLATE_KEY && /\btemplate\b/.test(pkg.description ?? "");
+if (!IS_TEMPLATE_REPO) {
+  const pattern = new RegExp(`${TEMPLATE_KEY}|${TEMPLATE_NAME}`);
   const leftovers = walk(root)
     .filter((f) => /\.(ts|tsx|json|yml|md|prisma|sh|mjs)$/.test(f) || path.basename(f) === "Dockerfile")
-    .filter((f) => !f.includes("rename-lab.mjs") && !f.endsWith("package-lock.json"))
-    .filter((f) => /examplelab|ExampleLab/.test(readFileSync(f, "utf8")))
+    .filter((f) => !f.endsWith("rename-lab.mjs") && !f.endsWith("check-frame.mjs"))
+    .filter((f) => pattern.test(readFileSync(f, "utf8")))
     .map((f) => path.relative(root, f));
   if (leftovers.length > 0)
-    fail(`template name still present in: ${leftovers.slice(0, 10).join(", ")}`);
+    fail(`template name still present in: ${leftovers.slice(0, 10).join(", ")} — run \`npm run rename\``);
+  if (pkg.name === TEMPLATE_KEY)
+    fail(`package.json still carries the template name "${TEMPLATE_KEY}" — run \`npm run rename\``);
 }
 
 if (findings.length > 0) {

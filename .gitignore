@@ -15,11 +15,10 @@ next-env.d.ts
 /coverage
 /test-results
 
-# env — the real values live only on the server, never in the repo
-.env
-.env.local
-.env.*.local
-.env.production
+# env — the real values live only on the server, never in the repo.
+# Everything that starts with .env except the committed example.
+.env*
+!.env.example
 
 # misc
 .DS_Store
