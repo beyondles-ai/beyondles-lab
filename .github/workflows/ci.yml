@@ -36,11 +36,13 @@ jobs:
         with:
           label: app
           install-cmd: npm ci
-          # HARD = TYPE, BUILD, LINT. UNIT/PLACEHOLDER/AUDIT/ANY only report.
+          # HARD = TYPE, BUILD, LINT, UNIT. The unit tests ARE the frame (export
+          # coverage, compose vs code, jwt guard, access rules), so they block.
+          # PLACEHOLDER/AUDIT/ANY only report.
           # No MIGRATIONS/DESTRUCTIVE gates: Labs use Prisma folder migrations,
           # not the numbered .sql files those gates were written for.
           gates: TYPE,BUILD,LINT,UNIT,PLACEHOLDER,AUDIT,ANY
-          soft-gates: UNIT,PLACEHOLDER,AUDIT,ANY
+          soft-gates: PLACEHOLDER,AUDIT,ANY
           type-cmd: npm run typecheck
           build-cmd: npm run build
           lint-cmd: npm run lint

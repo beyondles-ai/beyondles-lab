@@ -17,13 +17,16 @@ this file and that one disagree, that one wins and this template is updated.
 - No password form, no registration, no own session lifetime.
 - The Lab reads the cookie `platform-auth-token` and asks
   `GET <NEXT_PUBLIC_PLATFORM_URL>/api/auth/me` (`src/lib/auth.ts`). Each
-  environment asks ITS OWN Suite; there is no production fallback in the
-  code, and Compose refuses to start without the variable.
+  environment asks ITS OWN Suite. Sign-in and the gate have no production
+  fallback (the middleware answers 503 and Compose refuses to start without
+  the variable); only the "back to Suite" links fall back to beyondles.ai.
 - `organisationId` comes from the confirmed token, never from the answer body,
-  never from a request. Empty or non-uuid = reject.
+  never from a request. Empty or non-uuid = reject. A platform answer for a
+  different organisation than the token is refused (`src/lib/rbac.ts`).
 - `JWT_SECRET` only with `ALLOW_LOCAL_JWT=true` and only in development/CI.
-  A production process with `JWT_SECRET` refuses to start
-  (`src/lib/jwt-guard.ts`, `src/instrumentation.ts`).
+  A production process with `JWT_SECRET` and without the switch refuses to
+  start (`src/lib/jwt-guard.ts`, `src/instrumentation.ts`); with the switch
+  (E2E only) it starts and logs loudly.
 
 ## 3. Access in three levels
 
@@ -34,8 +37,11 @@ this file and that one disagree, that one wins and this template is updated.
    with the Lab's service key and the person's cookie. Fail closed.
    (`src/lib/platform/access.ts`)
 3. **Container on the row:** `visibility`, `ownerUserId`, `collectionId` on
-   every top-level object; `visibleWhere`/`canEdit` in
-   `src/lib/access-rules.ts` are the only filter, used by UI, API and MCP alike.
+   every top-level object; `visibleWhere` / `canSee` / `canEdit` in
+   `src/lib/access-rules.ts` are the only filter. The example object uses
+   `visibleWhere` on every read; a Lab that adds updates uses `canEdit`
+   before every write. The local fallback context applies only while the
+   platform door is NOT configured; once it is, the platform's "no" is final.
 
 People without access land on `/kein-zugriff` with their e-mail, the reason
 and a way back to the Suite. The Suite tile points at `/`, which IS the app.

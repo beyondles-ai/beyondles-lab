@@ -1,26 +1,24 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
+import { NEW_KEY_COOKIE } from "@/lib/api-keys";
 import { requireAccess } from "@/lib/rbac";
 import { platformUrl } from "@/lib/platform/door";
 import { listApiKeys } from "@/server/services/api-keys";
-import { createApiKeyAction, revokeApiKeyAction } from "@/server/actions/api-keys";
+import { createApiKeyAction, dismissNewKeyAction, revokeApiKeyAction } from "@/server/actions/api-keys";
 
 /**
  * Settings: API keys (machine door) and the Team notice. Who is in the
  * organisation and who may use this Lab is decided in the Suite, never here.
- * The freshly created key comes back through the query string ONCE; it is
- * never stored in plaintext.
+ * The freshly created key arrives in a one-time httpOnly flash cookie (60 s),
+ * never in the address bar; it is never stored in plaintext.
  */
-export default async function SettingsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ created?: string }>;
-}) {
+export default async function SettingsPage() {
   const { access, organisationId, isAdmin } = await requireAccess();
   if (!isAdmin) redirect("/");
   const t = await getTranslations("settings");
-  const { created } = await searchParams;
+  const created = (await cookies()).get(NEW_KEY_COOKIE)?.value;
   const keys = await listApiKeys(organisationId);
   const suite = platformUrl() ?? "https://beyondles.ai";
 
@@ -36,6 +34,11 @@ export default async function SettingsPage({
           <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
             <p>{t("keyCreated")}</p>
             <code className="mt-1 block break-all">{created}</code>
+            <form action={dismissNewKeyAction} className="mt-2">
+              <button type="submit" className="rounded border px-2 py-1 text-xs">
+                {t("keyCopied")}
+              </button>
+            </form>
           </div>
         ) : null}
 

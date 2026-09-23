@@ -35,9 +35,12 @@ npm run dev                     # http://localhost:3390
 node scripts/dev-login.mjs      # prints a cookie line for the browser console
 ```
 
-Without `NEXT_PUBLIC_PLATFORM_URL` and the platform door the Lab runs in
-local mode: the gate is open, every signed-in person is a user, owners are
-product admins. Never on a server — see `src/lib/jwt-guard.ts`.
+Local mode needs `JWT_SECRET` + `ALLOW_LOCAL_JWT=true` (otherwise there is
+no way to sign in and the middleware answers 503). In local mode, and only
+while `PLATFORM_API_URL/KEY` are NOT set, the gate is open, every signed-in
+person is a user and owners are product admins. As soon as the platform
+door is configured, the platform decides — also locally. Never on a
+server — see `src/lib/jwt-guard.ts`.
 
 ## What is where
 
@@ -62,11 +65,12 @@ product admins. Never on a server — see `src/lib/jwt-guard.ts`.
 ## Rules that the checks enforce
 
 - No provider or mail key, no provider SDK. AI and mail go through the door.
-- Every UI action also exists under `/api/v1` and as an MCP tool.
-- Every tenant table appears in the export (test fails otherwise).
+- Every tenant table (with `organisationId`) appears in the export (test fails otherwise).
+  Child tables without that column are the reviewer's job.
 - Every variable the code reads is passed by Compose and explained in `.env.example`.
 - `messages/de.json` and `messages/en.json` carry the same keys.
-- `JWT_SECRET` never on a server; a production process refuses to start with it.
+- `JWT_SECRET` never on a server; a production process refuses to start with it (unless `ALLOW_LOCAL_JWT=true`, the E2E exception, which is logged loudly).
+- Rule that no check enforces and every review must: each UI action also exists under `/api/v1` and as an MCP tool.
 
 ## Where it runs
 

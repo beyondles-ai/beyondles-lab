@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { getAuthToken, getSession, type PlatformSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getLabGate, type LabGate } from "@/lib/platform-access";
-import { platformUrl } from "@/lib/platform/door";
+import { platformUrl, readDoorConfig } from "@/lib/platform/door";
 import {
   getAccessContext,
   hasProductAccess,
@@ -64,8 +64,21 @@ export const requireOrg = cache(async (): Promise<OrgContext> => {
 
   let access: AccessContext | null = null;
   if (gate.allowed) {
-    access = await getAccessContext(token);
-    if (!access && localFallbackAllowed()) access = localAccessContext(session);
+    if (readDoorConfig()) {
+      // The platform decides. A "no", an outage or a wrong key is a "no" —
+      // never the local fallback, even in local JWT mode.
+      access = await getAccessContext(token);
+      // The organisation of the signed-in TOKEN is the truth for every query.
+      // A platform answer for another organisation is never acted upon.
+      if (access && access.organisationId.toLowerCase() !== session.organisationId.toLowerCase()) {
+        console.error("[rbac] platform answered /api/access/me with a different organisation than the session token — refusing.");
+        access = null;
+      } else if (access) {
+        access = { ...access, organisationId: session.organisationId };
+      }
+    } else if (localFallbackAllowed()) {
+      access = localAccessContext(session);
+    }
   }
 
   return { session, organisationId: session.organisationId, gate, access, token };
@@ -102,6 +115,6 @@ export async function ensureOrganisation(session: PlatformSession): Promise<void
       slug: session.organisationSlug,
       name: session.organisationSlug,
     },
-    update: { slug: session.organisationSlug },
+    update: { slug: session.organisationSlug, name: session.organisationSlug },
   });
 }

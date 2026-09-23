@@ -18,6 +18,7 @@ describe("MCP catalogue", () => {
     const list = TOOL_DEFINITIONS.find((t) => t.name === `${LAB_KEY}_list_notes`)!;
     expect(list.toCall({ search: "x y", limit: 5 })).toEqual({ method: "GET", path: "/api/v1/notes?search=x+y&limit=5" });
     const create = TOOL_DEFINITIONS.find((t) => t.name === `${LAB_KEY}_create_note`)!;
+    expect(create.inputSchema.required).toContain("visibility");
     expect(create.toCall({ title: "T", visibility: "organisation" })).toEqual({
       method: "POST",
       path: "/api/v1/notes",
