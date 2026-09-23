@@ -1,0 +1,69 @@
+{
+  "common": {
+    "appName": "ExampleLab",
+    "save": "Save",
+    "create": "Create",
+    "delete": "Delete",
+    "loading": "Loading …",
+    "error": "Something went wrong.",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "nav": {
+    "backToSuite": "Back to Suite",
+    "dashboard": "Overview",
+    "notes": "Notes",
+    "settings": "Settings"
+  },
+  "dashboard": {
+    "title": "Overview",
+    "intro": "This is the entry page of your Lab. Replace it with what your Lab does.",
+    "signedInAs": "Signed in as {email} in organisation {organisation}.",
+    "doorState": "Platform door: {state}",
+    "notesCount": "{count, plural, =0 {No notes yet} one {# note} other {# notes}} visible to you."
+  },
+  "notes": {
+    "title": "Notes",
+    "intro": "A worked example of a tenant object with visibility. Everything you can do here also exists under /api/v1/notes and as an MCP tool.",
+    "newTitle": "Title",
+    "newBody": "Text",
+    "visibility": "Who may see it",
+    "visibilityPrivate": "Only me",
+    "visibilityOrganisation": "Everyone in my organisation",
+    "create": "Add note",
+    "empty": "No notes visible to you yet.",
+    "ownerYou": "you",
+    "created": "Created {date}"
+  },
+  "settings": {
+    "title": "Settings",
+    "apiKeysTitle": "API keys",
+    "apiKeysIntro": "Keys for machines and agents. A key acts in the view of the person who created it; a worker key sees organisation-wide rows only. The plaintext is shown exactly once.",
+    "keyName": "Name",
+    "keyKind": "Kind",
+    "keyKindUser": "Acts as me",
+    "keyKindWorker": "Worker (organisation-wide only)",
+    "createKey": "Create key",
+    "keyCreated": "New key created. Copy it now, it will not be shown again:",
+    "revoke": "Revoke",
+    "revoked": "revoked",
+    "noKeys": "No keys yet.",
+    "teamTitle": "Team",
+    "teamBody": "Who is in your organisation and who may use this Lab is managed in the Beyondles Suite, not here.",
+    "teamLink": "Open the Suite"
+  },
+  "noAccess": {
+    "title": "No access to ExampleLab",
+    "body": "ExampleLab has not been assigned to you yet. An admin of your organisation gives it to you in the Beyondles Suite under Administration, Products and access.",
+    "titleBlocked": "ExampleLab is not released yet",
+    "bodyBlocked": "ExampleLab has not been released for your account in the Beyondles Suite yet.",
+    "bodyUnreachable": "The Beyondles Suite is currently unreachable, so ExampleLab stays closed as a precaution. Please try again later.",
+    "titleNotConfigured": "ExampleLab is not fully set up here yet",
+    "bodyNotConfigured": "This environment cannot ask the Beyondles platform who may use ExampleLab, so it stays closed for everyone. This is not about your account. The operator sets PLATFORM_API_URL and PLATFORM_API_KEY and restarts.",
+    "titleAllowed": "You have access",
+    "bodyAllowed": "This page is just a notice. Your account is enabled.",
+    "signedInAs": "Signed in as {email} in organisation {organisation}.",
+    "toApp": "Go to overview",
+    "toSuite": "Back to the Beyondles Suite"
+  }
+}

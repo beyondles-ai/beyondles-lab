@@ -1,0 +1,5 @@
+node_modules
+.next
+mcp/node_modules
+package-lock.json
+prisma/migrations

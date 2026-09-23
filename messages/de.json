@@ -1,0 +1,69 @@
+{
+  "common": {
+    "appName": "ExampleLab",
+    "save": "Speichern",
+    "create": "Anlegen",
+    "delete": "Löschen",
+    "loading": "Lädt …",
+    "error": "Etwas ist schiefgelaufen.",
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "nav": {
+    "backToSuite": "Zurück zur Suite",
+    "dashboard": "Übersicht",
+    "notes": "Notizen",
+    "settings": "Einstellungen"
+  },
+  "dashboard": {
+    "title": "Übersicht",
+    "intro": "Das ist die Einstiegsseite deines Labs. Ersetze sie durch das, was dein Lab tut.",
+    "signedInAs": "Angemeldet als {email} in der Organisation {organisation}.",
+    "doorState": "Plattform-Tür: {state}",
+    "notesCount": "{count, plural, =0 {Noch keine Notizen} one {# Notiz} other {# Notizen}} für dich sichtbar."
+  },
+  "notes": {
+    "title": "Notizen",
+    "intro": "Ein Beispiel für ein mandantengebundenes Objekt mit Sichtbarkeit. Alles, was du hier tun kannst, gibt es auch unter /api/v1/notes und als MCP-Werkzeug.",
+    "newTitle": "Titel",
+    "newBody": "Text",
+    "visibility": "Wer darf es sehen",
+    "visibilityPrivate": "Nur ich",
+    "visibilityOrganisation": "Alle in meiner Organisation",
+    "create": "Notiz anlegen",
+    "empty": "Noch keine Notizen für dich sichtbar.",
+    "ownerYou": "du",
+    "created": "Angelegt {date}"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "apiKeysTitle": "API-Schlüssel",
+    "apiKeysIntro": "Schlüssel für Maschinen und Agenten. Ein Schlüssel handelt in der Sicht der Person, die ihn angelegt hat; ein Worker-Schlüssel sieht nur organisationsweite Zeilen. Der Klartext wird genau einmal angezeigt.",
+    "keyName": "Name",
+    "keyKind": "Art",
+    "keyKindUser": "Handelt als ich",
+    "keyKindWorker": "Worker (nur organisationsweit)",
+    "createKey": "Schlüssel anlegen",
+    "keyCreated": "Neuer Schlüssel angelegt. Jetzt kopieren, er wird nicht noch einmal angezeigt:",
+    "revoke": "Widerrufen",
+    "revoked": "widerrufen",
+    "noKeys": "Noch keine Schlüssel.",
+    "teamTitle": "Team",
+    "teamBody": "Wer in deiner Organisation ist und wer dieses Lab benutzen darf, wird in der Beyondles Suite verwaltet, nicht hier.",
+    "teamLink": "Suite öffnen"
+  },
+  "noAccess": {
+    "title": "Kein Zugriff auf ExampleLab",
+    "body": "ExampleLab ist dir noch nicht zugeteilt. Ein Admin deiner Organisation gibt es dir in der Beyondles Suite unter Verwaltung, Produkte und Zugang.",
+    "titleBlocked": "ExampleLab ist noch nicht freigegeben",
+    "bodyBlocked": "ExampleLab ist für dein Konto in der Beyondles Suite noch nicht freigegeben.",
+    "bodyUnreachable": "Die Beyondles Suite ist gerade nicht erreichbar, deshalb bleibt ExampleLab vorsichtshalber geschlossen. Bitte versuche es später noch einmal.",
+    "titleNotConfigured": "ExampleLab ist hier noch nicht fertig eingerichtet",
+    "bodyNotConfigured": "Diese Umgebung kann die Beyondles-Plattform nicht fragen, wer ExampleLab benutzen darf, deshalb bleibt es für alle geschlossen. Das liegt nicht an deinem Konto. Der Betreiber setzt PLATFORM_API_URL und PLATFORM_API_KEY und startet neu.",
+    "titleAllowed": "Du hast Zugriff",
+    "bodyAllowed": "Diese Seite ist nur ein Hinweis. Dein Konto ist freigeschaltet.",
+    "signedInAs": "Angemeldet als {email} in der Organisation {organisation}.",
+    "toApp": "Zur Übersicht",
+    "toSuite": "Zurück zur Beyondles Suite"
+  }
+}

@@ -1,0 +1,56 @@
+name: CI Gates
+
+# One job builds the app and delegates to the shared composite action
+# beyondles-ai/beyondles-ci/quality-gates@v1 (named gates plus an enforce step
+# that blocks on every HARD gate and only reports SOFT gates). The job name
+# stays literally "Quality Gates · app" so the required-check context in the
+# branch ruleset remains valid. Bump @v1 to pick up gate changes.
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-gates-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: Quality Gates · app
+    runs-on: ubuntu-latest
+    # Build-only placeholders — NO real secrets, never deployed. `npm ci`
+    # already runs postinstall `prisma generate`, which reads DATABASE_URL
+    # through prisma.config.ts, so the variable sits at job level.
+    env:
+      DATABASE_URL: postgresql://build:build@localhost:5432/build
+      JWT_SECRET: build-only-placeholder
+      ALLOW_LOCAL_JWT: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: beyondles-ai/beyondles-ci/quality-gates@v1
+        with:
+          label: app
+          install-cmd: npm ci
+          # HARD = TYPE, BUILD, LINT. UNIT/PLACEHOLDER/AUDIT/ANY only report.
+          # No MIGRATIONS/DESTRUCTIVE gates: Labs use Prisma folder migrations,
+          # not the numbered .sql files those gates were written for.
+          gates: TYPE,BUILD,LINT,UNIT,PLACEHOLDER,AUDIT,ANY
+          soft-gates: UNIT,PLACEHOLDER,AUDIT,ANY
+          type-cmd: npm run typecheck
+          build-cmd: npm run build
+          lint-cmd: npm run lint
+          unit-cmd: npm test
+          placeholder-roots: src
+          any-roots: src
+          any-baseline: "0"
+          build-env: |
+            DATABASE_URL=postgresql://build:build@localhost:5432/build
+            JWT_SECRET=build-only-placeholder
+            ALLOW_LOCAL_JWT=true
+      - name: Frame self-check
+        run: npm run check:frame

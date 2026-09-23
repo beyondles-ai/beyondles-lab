@@ -1,0 +1,29 @@
+# dependencies
+/node_modules
+/mcp/node_modules
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# prisma
+/prisma/generated
+
+# testing
+/coverage
+/test-results
+
+# env — the real values live only on the server, never in the repo
+.env
+.env.local
+.env.*.local
+.env.production
+
+# misc
+.DS_Store
+*.pem
+/logs
+*.log
+npm-debug.log*

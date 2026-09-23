@@ -1,0 +1,77 @@
+# beyondles-lab — the template for a Beyondles Lab
+
+> **ExampleLab does nothing yet. Replace this sentence with what YOUR Lab does, and for whom.**
+
+A Lab is a standalone tool under `<name>.beyondles.ai`: used internally,
+offered to customers, and attached to Beyondles HorAIzon as a tool. This
+repository is the **frame** every Lab shares — sign-in through the Suite,
+the three-level access model, the platform door for AI and mail, the tenant
+export, the API and MCP doors, two languages, Docker, CI and deploy scripts.
+The product itself is yours. `docs/FRAME.md` lists what the frame guarantees.
+
+## Start a new Lab (5 minutes)
+
+```bash
+gh repo create beyondles-ai/<name> --private --template beyondles-ai/beyondles-lab --clone
+cd <name>
+npm run rename -- <name> "<Display Name>"     # e.g. bookinglab "BookingLab"
+npm install
+npm run check:frame && npm test
+```
+
+`<name>` is one word, lower-case, ending in `lab`. Then follow
+`/lab-pipeline neu <name>` for branches, rulesets, Suite row, platform keys,
+host, tunnel, DNS and the Suite tile — the template covers phase 2 and 3 of
+that pipeline, the host side stays with the pipeline.
+
+## Run locally
+
+```bash
+cp .env.example .env            # fill DATABASE_URL, POSTGRES_PASSWORD
+# local development without a Suite:
+#   JWT_SECRET=<any string>  ALLOW_LOCAL_JWT=true  (in .env)
+npm run db:migrate              # needs a local Postgres
+npm run dev                     # http://localhost:3390
+node scripts/dev-login.mjs      # prints a cookie line for the browser console
+```
+
+Without `NEXT_PUBLIC_PLATFORM_URL` and the platform door the Lab runs in
+local mode: the gate is open, every signed-in person is a user, owners are
+product admins. Never on a server — see `src/lib/jwt-guard.ts`.
+
+## What is where
+
+| Path | Purpose |
+|---|---|
+| `src/lib/lab.ts` | the Lab's name — the single place |
+| `src/lib/auth.ts`, `src/middleware.ts` | sign-in through the Suite |
+| `src/lib/platform-access.ts` | level 1: release switch (Suite) |
+| `src/lib/platform/access.ts` | level 2 + 3: product access, collections, grants (platform) |
+| `src/lib/access-rules.ts` | the container filter every query uses |
+| `src/lib/platform/llm.ts`, `mail.ts` | AI and mail through the platform door |
+| `src/app/api/platform/export/route.ts` | tenant export for the platform |
+| `src/app/api/v1/…`, `src/lib/api-auth.ts` | HTTP door (`x-api-key`) |
+| `src/app/api/mcp/route.ts`, `src/lib/mcp/` | MCP door for agents |
+| `src/app/(app)/notes` + `src/server/…` | the worked example of a tenant object |
+| `docker/`, `ops/deploy/` | container stack and host scripts |
+| `scripts/check-frame.mjs` | the repo half of `/lab-pipeline check`, runs in CI |
+| `docs/FRAME.md` | what the frame guarantees |
+| `docs/SUBMISSION.md` | how a Lab gets into the ecosystem (concept) |
+| `docs/OFFEN.md` | what is deliberately not finished |
+
+## Rules that the checks enforce
+
+- No provider or mail key, no provider SDK. AI and mail go through the door.
+- Every UI action also exists under `/api/v1` and as an MCP tool.
+- Every tenant table appears in the export (test fails otherwise).
+- Every variable the code reads is passed by Compose and explained in `.env.example`.
+- `messages/de.json` and `messages/en.json` carry the same keys.
+- `JWT_SECRET` never on a server; a production process refuses to start with it.
+
+## Where it runs
+
+Playground server (`ssh playground`), Docker Compose, one project per
+environment (`/opt/<name>/staging`, `/opt/<name>/production`), public only
+through the Cloudflare tunnel under `<name>.beyondles.ai` and
+`<name>-staging.beyondles.ai`. Operating description:
+`beyondles-ci/docs/SIDE-PROJECTS.md`.

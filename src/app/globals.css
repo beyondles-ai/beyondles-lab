@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+/*
+ * Kept deliberately small. The template ships with plain Tailwind utilities
+ * and no component library, so a Lab can bring its own (shadcn, Base UI, …)
+ * without first removing ours. Fonts: system stack; self-host a webfont when
+ * the Lab wants the Beyondles look (see LeadLab `src/app/fonts/`).
+ */
+
+:root {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}
