@@ -41,7 +41,16 @@ flock -n 9 || exit 0
 [ -d "$REPO/.git" ] || exit 0
 cd "$REPO" || exit 1
 
-git fetch --quiet origin "$BRANCH" || { echo "[$(date '+%F %T')] git fetch failed" >>"$LOG"; exit 1; }
+# A single failed fetch is a GitHub blip, not an incident: stay silent until it
+# fails 8 ticks in a row (deploy-fetch-guard.sh, 2026-09-29). Without the guard
+# file every failure still aborts loudly, as before.
+FETCH_GUARD=/opt/scripts/deploy-fetch-guard.sh
+if ! git fetch --quiet origin "$BRANCH"; then
+  echo "[$(date '+%F %T')] git fetch failed" >>"$LOG"
+  if [ -r "$FETCH_GUARD" ]; then . "$FETCH_GUARD"; fetch_failed "$(basename "$0" .sh)"; fi
+  exit 1
+fi
+if [ -r "$FETCH_GUARD" ]; then . "$FETCH_GUARD"; fetch_ok "$(basename "$0" .sh)"; fi
 LOCAL="$(git rev-parse @ 2>/dev/null)"
 REMOTE="$(git rev-parse "origin/$BRANCH" 2>/dev/null)"
 [ -n "$REMOTE" ] || { echo "[$(date '+%F %T')] cannot resolve origin/$BRANCH" >>"$LOG"; exit 1; }
