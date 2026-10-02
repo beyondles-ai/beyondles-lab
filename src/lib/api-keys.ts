@@ -13,6 +13,13 @@ import { API_KEY_PREFIX } from "@/lib/lab";
 
 const KEY_BYTES = 32;
 
+/**
+ * Name of the one-time flash cookie that carries a freshly created key to the
+ * settings page. httpOnly, 60 s, path-limited: it never appears in a URL,
+ * in browser history, in proxy logs or in a screenshot of the address bar.
+ */
+export const NEW_KEY_COOKIE = "lab-new-api-key";
+
 export function hashApiKey(plaintext: string): string {
   return createHash("sha256").update(plaintext, "utf8").digest("hex");
 }

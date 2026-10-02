@@ -41,13 +41,25 @@ flock -n 9 || exit 0
 [ -d "$REPO/.git" ] || exit 0
 cd "$REPO" || exit 1
 
-git fetch --quiet origin "$BRANCH" || { echo "[$(date '+%F %T')] git fetch failed" >>"$LOG"; exit 1; }
+# A single failed fetch is a GitHub blip, not an incident: stay silent until it
+# fails 8 ticks in a row (deploy-fetch-guard.sh, 2026-09-29). Without the guard
+# file every failure still aborts loudly, as before.
+FETCH_GUARD=/opt/scripts/deploy-fetch-guard.sh
+if ! git fetch --quiet origin "$BRANCH"; then
+  echo "[$(date '+%F %T')] git fetch failed" >>"$LOG"
+  if [ -r "$FETCH_GUARD" ]; then . "$FETCH_GUARD"; fetch_failed "$(basename "$0" .sh)"; fi
+  exit 1
+fi
+if [ -r "$FETCH_GUARD" ]; then . "$FETCH_GUARD"; fetch_ok "$(basename "$0" .sh)"; fi
 LOCAL="$(git rev-parse @ 2>/dev/null)"
 REMOTE="$(git rev-parse "origin/$BRANCH" 2>/dev/null)"
 [ -n "$REMOTE" ] || { echo "[$(date '+%F %T')] cannot resolve origin/$BRANCH" >>"$LOG"; exit 1; }
 [ "$LOCAL" = "$REMOTE" ] && exit 0
 
 {
+  # Inside the block every failing step aborts the run (a failed build must
+  # never be followed by an "up" of the old image and a "deploy OK").
+  set -eo pipefail
   echo "===================================================================="
   echo "[$(date '+%F %T')] new commits on $BRANCH: $LOCAL -> $REMOTE"
   git reset --hard "origin/$BRANCH"
@@ -79,5 +91,14 @@ REMOTE="$(git rev-parse "origin/$BRANCH" 2>/dev/null)"
     sleep 2
   done
   [ "$ok" = "1" ] || { echo "health check on :${PORT} failed"; exit 1; }
+  # Access door (access model, 2026-09-03): /api/health must report access == ok,
+  # i.e. NEXT_PUBLIC_PLATFORM_URL AND the platform door are set. Otherwise the
+  # Lab runs but lets nobody in — a deploy must not call that a success.
+  ACCESS_DOOR="$(curl -s --max-time 10 "http://127.0.0.1:${PORT}/api/health" | grep -oE '"access":"[a-z_]+"' | cut -d'"' -f4 || true)"
+  if [ "${ACCESS_DOOR:-}" != "ok" ]; then
+    echo "ACCESS DOOR NOT OK on :${PORT} (access='${ACCESS_DOOR:-empty}'): NEXT_PUBLIC_PLATFORM_URL, PLATFORM_API_URL or PLATFORM_API_KEY missing in the .env."
+    exit 1
+  fi
+  echo "[access door] ok"
   echo "[$(date '+%F %T')] deploy OK: $(git rev-parse --short @)"
 } >>"$LOG" 2>&1

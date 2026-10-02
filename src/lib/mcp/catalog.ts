@@ -80,9 +80,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: `${LAB_KEY}_create_note`,
     description:
-      "Create a note. `visibility` is 'private' (only the key's person) or " +
+      "Create a note. `visibility` is required: 'private' (only the key's person) or " +
       "'organisation' (everybody in the organisation). A worker key can only " +
-      "create organisation-wide notes.",
+      "create organisation-wide notes, so pass 'organisation' for worker keys.",
     inputSchema: {
       type: "object",
       properties: {
@@ -90,7 +90,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         body: { type: "string", maxLength: 20000 },
         visibility: { type: "string", enum: ["private", "organisation"] },
       },
-      required: ["title"],
+      required: ["title", "visibility"],
       additionalProperties: false,
     },
     toCall: (args) => ({
@@ -99,7 +99,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       body: {
         title: str(args, "title") ?? "",
         body: typeof args.body === "string" ? args.body : "",
-        visibility: str(args, "visibility") ?? "private",
+        visibility: str(args, "visibility") ?? "",
       },
     }),
   },

@@ -23,17 +23,22 @@ export interface TenantExport {
 }
 
 export async function exportOrganisation(organisationId: string): Promise<TenantExport> {
-  const organisation = await db.organisation.findUnique({ where: { id: organisationId } });
+  // The platform compares ids case-insensitively; the stored id is the
+  // token's spelling. Look up without case, echo the REQUESTED value.
+  const organisation = await db.organisation.findFirst({
+    where: { id: { equals: organisationId, mode: "insensitive" } },
+  });
   if (!organisation) {
     return { source: LAB_KEY, organisationId, exportedAt: new Date().toISOString(), entities: {} };
   }
+  const storedId = organisation.id;
 
   const [notes, apiKeys] = await Promise.all([
-    db.note.findMany({ where: { organisationId }, orderBy: { createdAt: "asc" } }),
+    db.note.findMany({ where: { organisationId: storedId }, orderBy: { createdAt: "asc" } }),
     // Keys are exported WITHOUT the hash: it is not the customer's data, it
     // is our lock.
     db.apiKey.findMany({
-      where: { organisationId },
+      where: { organisationId: storedId },
       orderBy: { createdAt: "asc" },
       select: { id: true, name: true, kind: true, createdByUserId: true, createdAt: true, lastUsedAt: true, revokedAt: true },
     }),

@@ -70,14 +70,16 @@ describe("docker-compose passes every variable the code reads", () => {
 
   it("no variable read by the code is missing in the container", () => {
     const env = appEnvironmentBlock();
-    const missing = variablesRead().filter((name) => !NOT_IN_CONTAINER.has(name) && !env.includes(`${name}:`));
+    const missing = variablesRead().filter(
+      (name) => !NOT_IN_CONTAINER.has(name) && !new RegExp(`^\\s+${name}:`, "m").test(env),
+    );
     expect(missing, `read by the code but not passed to service app: ${missing.join(", ")}`).toEqual([]);
   });
 
   it("no forbidden variable is passed to the container", () => {
     const env = appEnvironmentBlock();
     for (const name of ["JWT_SECRET", "ALLOW_LOCAL_JWT", "PLATFORM_SSO_URL"]) {
-      expect(env.includes(`${name}:`), `${name} must not be in docker-compose.yml`).toBe(false);
+      expect(new RegExp(`^\\s+${name}:`, "m").test(env), `${name} must not be in docker-compose.yml`).toBe(false);
     }
   });
 

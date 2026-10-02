@@ -35,9 +35,12 @@ npm run dev                     # http://localhost:3390
 node scripts/dev-login.mjs      # prints a cookie line for the browser console
 ```
 
-Without `NEXT_PUBLIC_PLATFORM_URL` and the platform door the Lab runs in
-local mode: the gate is open, every signed-in person is a user, owners are
-product admins. Never on a server — see `src/lib/jwt-guard.ts`.
+Local mode needs `JWT_SECRET` + `ALLOW_LOCAL_JWT=true` (otherwise there is
+no way to sign in and the middleware answers 503). In local mode, and only
+while `PLATFORM_API_URL/KEY` are NOT set, the gate is open, every signed-in
+person is a user and owners are product admins. As soon as the platform
+door is configured, the platform decides — also locally. Never on a
+server — see `src/lib/jwt-guard.ts`.
 
 ## What is where
 
@@ -50,6 +53,8 @@ product admins. Never on a server — see `src/lib/jwt-guard.ts`.
 | `src/lib/access-rules.ts` | the container filter every query uses |
 | `src/lib/platform/llm.ts`, `mail.ts` | AI and mail through the platform door |
 | `src/app/api/platform/export/route.ts` | tenant export for the platform |
+| `src/app/api/platform/organisation/route.ts` | tenant deletion for the platform (own key `PLATFORM_DELETE_KEY`) |
+| `src/app/api/platform/member/route.ts` | person deletion for the platform (same key; plan in `platform-delete-member.ts`) |
 | `src/app/api/v1/…`, `src/lib/api-auth.ts` | HTTP door (`x-api-key`) |
 | `src/app/api/mcp/route.ts`, `src/lib/mcp/` | MCP door for agents |
 | `src/app/(app)/notes` + `src/server/…` | the worked example of a tenant object |
@@ -62,11 +67,13 @@ product admins. Never on a server — see `src/lib/jwt-guard.ts`.
 ## Rules that the checks enforce
 
 - No provider or mail key, no provider SDK. AI and mail go through the door.
-- Every UI action also exists under `/api/v1` and as an MCP tool.
-- Every tenant table appears in the export (test fails otherwise).
+- Every tenant table (with `organisationId`) appears in the export (test fails otherwise).
+- Every table has a decision in the deletion plan: delete, anonymise, retain with a reason, or global with a reason (test fails otherwise).
+  Child tables without that column are the reviewer's job.
 - Every variable the code reads is passed by Compose and explained in `.env.example`.
 - `messages/de.json` and `messages/en.json` carry the same keys.
-- `JWT_SECRET` never on a server; a production process refuses to start with it.
+- `JWT_SECRET` never on a server; a production process refuses to start with it (unless `ALLOW_LOCAL_JWT=true`, the E2E exception, which is logged loudly).
+- Rule that no check enforces and every review must: each UI action also exists under `/api/v1` and as an MCP tool.
 
 ## Where it runs
 

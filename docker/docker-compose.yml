@@ -67,11 +67,12 @@ services:
       PLATFORM_API_KEY: ${PLATFORM_API_KEY:-}
       # Tenant export for the platform (GET /api/platform/export).
       PLATFORM_EXPORT_KEY: ${PLATFORM_EXPORT_KEY:-}
+      PLATFORM_DELETE_KEY: ${PLATFORM_DELETE_KEY:-}
       # MCP over HTTP: override of the base URL for the self-call to /api/v1.
       # Empty is the norm (then http://127.0.0.1:${PORT}).
       MCP_SELF_BASE_URL: ${MCP_SELF_BASE_URL:-}
     ports:
-      - "127.0.0.1:${APP_PORT:-3390}:3000"
+      - "127.0.0.1:${APP_PORT:?APP_PORT missing in .env — staging and production must not share a port}:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1 || exit 1"]
       interval: 10s
