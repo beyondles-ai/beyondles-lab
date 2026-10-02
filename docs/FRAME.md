@@ -55,7 +55,7 @@ and a way back to the Suite. The Suite tile points at `/`, which IS the app.
 - Purposes are `<LAB_KEY>.<action>` (`purposeFor`), stable forever.
 - Retry only on 429/503. Mail only with an `idempotencyKey`.
 - Fixed variable names: `PLATFORM_API_URL`, `PLATFORM_API_KEY`,
-  `PLATFORM_EXPORT_KEY`, `NEXT_PUBLIC_PLATFORM_URL`. `PLATFORM_SSO_URL` is
+  `PLATFORM_EXPORT_KEY`, `PLATFORM_DELETE_KEY`, `NEXT_PUBLIC_PLATFORM_URL`. `PLATFORM_SSO_URL` is
   retired and refused by the frame check.
 
 ## 5. Headless: API and MCP
@@ -74,6 +74,55 @@ and a way back to the Suite. The Suite tile points at `/`, which IS the app.
 unknown organisation = `200` with `entities: {}`; echoes the requested id;
 `Cache-Control: no-store` everywhere; every tenant table included
 (`tests/unit/platform-export-coverage.test.ts` enforces it against the schema).
+
+## 6a. Tenant deletion
+
+`DELETE /api/platform/organisation?organisationId=<uuid>&runId=<uuid>` — the
+counterpart of the export. `X-API-Key` against `PLATFORM_DELETE_KEY` in
+constant time. It is its OWN key and never falls back to the export key; unset
+key = `503 DELETE_NOT_CONFIGURED`. Unknown organisation = `200`, `ok: true`,
+every item `skipped`. Echoes the requested id and the `runId`.
+
+The answer is `{ source, organisationId, runId, ok, items, failures }`. Each
+item is `{ store, target, action, itemCount, outcome, detail }` with `outcome`
+one of `success | skipped | failed`; the platform copies the items into its
+deletion log unchanged.
+
+`DELETION_PLAN` in `src/server/services/platform-delete.ts` is the one place
+that decides, table by table: `delete`, `anonymise` or `retain` (the last two
+with a written reason). `tests/unit/platform-delete-coverage.test.ts` enforces
+it against the schema for EVERY model, child tables included; a table that
+belongs to no organisation goes into `GLOBAL_TABLES` with a reason. Files and
+other stores outside the database are removed in `eraseExternalStores` after
+the commit and reported as items of their own.
+
+## 6b. Person deletion
+
+`DELETE /api/platform/member?organisationId=<uuid>&userId=<uuid>&toUserId=<uuid>&runId=<uuid>`
+erases ONE Suite user from this Lab inside one organisation (the Suite's
+"Delete my profile"). Same key and auth as 6a (`PLATFORM_DELETE_KEY`, no new
+variable, no fallback), all four ids uuids, `toUserId` (the organisation's
+owner, the successor) different from `userId`. Same answer as 6a plus
+`userId`. An unknown organisation or person is `200`, `ok: true`, every item
+`skipped`.
+
+The rule: what is personal to the person is erased; what they shared with the
+organisation stays and is reassigned to `toUserId`; afterwards no row with
+their user id remains except anonymised evidence rows. `PERSON_PLAN` in
+`src/server/services/platform-delete-member.ts` lists every (table, column)
+that can hold a Suite user with `delete_rows`, `reassign`, `anonymise` or
+`not_personal` (reason required). In the template: a `Note` owned by the person
+is deleted when `PRIVATE` and reassigned when `COLLECTION`/`ORGANISATION`; a
+`USER` API key they created is deleted, a `WORKER` key keeps working and loses
+its creator. `tests/unit/platform-delete-member-coverage.test.ts` parses the
+schema and fails when a user-looking column (`userId`, `ownerId`, `email`,
+`...ByUserId`, `...ById`) has no entry. Every statement carries the
+organisation AND the user. Files that belong only to the person are erased
+BEFORE the transaction; a failure there leaves the database untouched.
+
+People who are not Suite users (guests, signers, visitors, leads) are the
+customer's data subjects. Their erasure is the customer's request to us,
+handled per Lab, and is not part of the profile deletion.
 
 ## 7. Operations
 

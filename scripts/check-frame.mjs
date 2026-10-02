@@ -35,6 +35,12 @@ for (const rel of [
   "src/instrumentation.ts",
   "src/app/api/health/route.ts",
   "src/app/api/platform/export/route.ts",
+  "src/app/api/platform/organisation/route.ts",
+  "src/server/services/platform-delete.ts",
+  "tests/unit/platform-delete-coverage.test.ts",
+  "src/app/api/platform/member/route.ts",
+  "src/server/services/platform-delete-member.ts",
+  "tests/unit/platform-delete-member-coverage.test.ts",
   "src/app/api/mcp/route.ts",
   "src/app/icon.png",
   "src/app/apple-icon.png",
@@ -144,6 +150,29 @@ for (const name of [
 }
 if (/^JWT_SECRET=/m.test(envExample) || /^ALLOW_LOCAL_JWT=/m.test(envExample))
   fail(".env.example sets JWT_SECRET/ALLOW_LOCAL_JWT — a server .env must never carry them");
+
+// 5b. The tenant deletion: its own key, passed by Compose, and never the
+//     export key. (`.env.example` is checked above for the export key only;
+//     the delete key is checked where it reaches the container.)
+{
+  const compose = read("docker/docker-compose.yml");
+  if (!/^\s+PLATFORM_DELETE_KEY:/m.test(compose))
+    fail("docker-compose.yml does not pass PLATFORM_DELETE_KEY to the container");
+  // Comments may NAME the export key (that is how the rule is explained);
+  // reading it is the finding.
+  const code = (rel) =>
+    read(rel)
+      .split("\n")
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .join("\n");
+  if (exists("src/lib/platform-delete-auth.ts") && /PLATFORM_EXPORT_KEY/.test(code("src/lib/platform-delete-auth.ts")))
+    fail("platform-delete-auth.ts reads PLATFORM_EXPORT_KEY — deletion needs its own key");
+  if (
+    exists("src/app/api/platform/organisation/route.ts") &&
+    !/export\s+async\s+function\s+DELETE\b/.test(read("src/app/api/platform/organisation/route.ts"))
+  )
+    fail("src/app/api/platform/organisation/route.ts exports no DELETE handler");
+}
 
 // 6. Sign-in never hard-codes the production Suite for /api/auth/me.
 for (const file of sourceFiles.filter((f) => /\.tsx?$/.test(f))) {

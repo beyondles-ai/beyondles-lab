@@ -32,8 +32,11 @@ can decide instead of guessing. Remove entries when done.
   `writePlatformAudit` is the pattern.
 - **Reassign owner on departure.** The platform calls
   `POST /api/platform/reassign-owner` when a person leaves an organisation;
-  the template does not implement it yet. Needed as soon as a Lab has
-  person-owned rows in production.
+  the template does not implement that route yet (still open as a separate
+  route). Owned rows of a person who deletes their profile are already handled
+  by the person door `DELETE /api/platform/member` (FRAME.md 6b): private
+  rows are deleted, shared ones reassigned. Needed as soon as a Lab has
+  person-owned rows in production and the platform calls the route on departure.
 - **E2E tests.** Unit tests only. LeadLab's Playwright setup
   (`tests/e2e`, `.github/workflows/e2e.yml`) is the pattern.
 - **Stale organisation in the token.** Known platform-wide weakness: the
