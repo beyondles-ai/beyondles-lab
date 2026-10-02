@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "modules": [
+    { "name": "share-ui", "dest": "src/components/share" }
+  ],
+  "messages": {
+    "en": { "file": "messages/en.json" },
+    "de": { "file": "messages/de.json", "variant": "du" }
+  }
+}
