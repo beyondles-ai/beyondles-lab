@@ -53,6 +53,7 @@ server — see `src/lib/jwt-guard.ts`.
 | `src/lib/access-rules.ts` | the container filter every query uses |
 | `src/lib/platform/llm.ts`, `mail.ts` | AI and mail through the platform door |
 | `src/app/api/platform/export/route.ts` | tenant export for the platform |
+| `src/app/api/platform/organisation/route.ts` | tenant deletion for the platform (own key `PLATFORM_DELETE_KEY`) |
 | `src/app/api/v1/…`, `src/lib/api-auth.ts` | HTTP door (`x-api-key`) |
 | `src/app/api/mcp/route.ts`, `src/lib/mcp/` | MCP door for agents |
 | `src/app/(app)/notes` + `src/server/…` | the worked example of a tenant object |
@@ -66,6 +67,7 @@ server — see `src/lib/jwt-guard.ts`.
 
 - No provider or mail key, no provider SDK. AI and mail go through the door.
 - Every tenant table (with `organisationId`) appears in the export (test fails otherwise).
+- Every table has a decision in the deletion plan: delete, anonymise, retain with a reason, or global with a reason (test fails otherwise).
   Child tables without that column are the reviewer's job.
 - Every variable the code reads is passed by Compose and explained in `.env.example`.
 - `messages/de.json` and `messages/en.json` carry the same keys.

@@ -55,7 +55,7 @@ and a way back to the Suite. The Suite tile points at `/`, which IS the app.
 - Purposes are `<LAB_KEY>.<action>` (`purposeFor`), stable forever.
 - Retry only on 429/503. Mail only with an `idempotencyKey`.
 - Fixed variable names: `PLATFORM_API_URL`, `PLATFORM_API_KEY`,
-  `PLATFORM_EXPORT_KEY`, `NEXT_PUBLIC_PLATFORM_URL`. `PLATFORM_SSO_URL` is
+  `PLATFORM_EXPORT_KEY`, `PLATFORM_DELETE_KEY`, `NEXT_PUBLIC_PLATFORM_URL`. `PLATFORM_SSO_URL` is
   retired and refused by the frame check.
 
 ## 5. Headless: API and MCP
@@ -74,6 +74,27 @@ and a way back to the Suite. The Suite tile points at `/`, which IS the app.
 unknown organisation = `200` with `entities: {}`; echoes the requested id;
 `Cache-Control: no-store` everywhere; every tenant table included
 (`tests/unit/platform-export-coverage.test.ts` enforces it against the schema).
+
+## 6a. Tenant deletion
+
+`DELETE /api/platform/organisation?organisationId=<uuid>&runId=<uuid>` — the
+counterpart of the export. `X-API-Key` against `PLATFORM_DELETE_KEY` in
+constant time. It is its OWN key and never falls back to the export key; unset
+key = `503 DELETE_NOT_CONFIGURED`. Unknown organisation = `200`, `ok: true`,
+every item `skipped`. Echoes the requested id and the `runId`.
+
+The answer is `{ source, organisationId, runId, ok, items, failures }`. Each
+item is `{ store, target, action, itemCount, outcome, detail }` with `outcome`
+one of `success | skipped | failed`; the platform copies the items into its
+deletion log unchanged.
+
+`DELETION_PLAN` in `src/server/services/platform-delete.ts` is the one place
+that decides, table by table: `delete`, `anonymise` or `retain` (the last two
+with a written reason). `tests/unit/platform-delete-coverage.test.ts` enforces
+it against the schema for EVERY model, child tables included; a table that
+belongs to no organisation goes into `GLOBAL_TABLES` with a reason. Files and
+other stores outside the database are removed in `eraseExternalStores` after
+the commit and reported as items of their own.
 
 ## 7. Operations
 

@@ -67,6 +67,7 @@ services:
       PLATFORM_API_KEY: ${PLATFORM_API_KEY:-}
       # Tenant export for the platform (GET /api/platform/export).
       PLATFORM_EXPORT_KEY: ${PLATFORM_EXPORT_KEY:-}
+      PLATFORM_DELETE_KEY: ${PLATFORM_DELETE_KEY:-}
       # MCP over HTTP: override of the base URL for the self-call to /api/v1.
       # Empty is the norm (then http://127.0.0.1:${PORT}).
       MCP_SELF_BASE_URL: ${MCP_SELF_BASE_URL:-}
