@@ -59,9 +59,14 @@ type PlanTable = (typeof DELETION_PLAN)[number]["table"];
  * One executor per plan entry, returning the number of rows it touched. The
  * `Record` type makes a plan entry without an executor a compile error.
  */
-const EXECUTORS: Record<PlanTable, (tx: Prisma.TransactionClient, organisationId: string) => Promise<number>> = {
-  notes: async (tx, organisationId) => (await tx.note.deleteMany({ where: { organisationId } })).count,
-  api_keys: async (tx, organisationId) => (await tx.apiKey.deleteMany({ where: { organisationId } })).count,
+const EXECUTORS: Record<
+  PlanTable,
+  (tx: Prisma.TransactionClient, organisationId: string) => Promise<number>
+> = {
+  notes: async (tx, organisationId) =>
+    (await tx.note.deleteMany({ where: { organisationId } })).count,
+  api_keys: async (tx, organisationId) =>
+    (await tx.apiKey.deleteMany({ where: { organisationId } })).count,
   organisations: async (tx, organisationId) =>
     (await tx.organisation.deleteMany({ where: { id: organisationId } })).count,
 };
@@ -95,17 +100,32 @@ export interface TenantDeletion {
 }
 
 /** Data outside the database. Runs after the commit; never throws. */
-async function eraseExternalStores(storedOrganisationId: string): Promise<DeletionItem[]> {
+async function eraseExternalStores(
+  storedOrganisationId: string,
+): Promise<DeletionItem[]> {
   void storedOrganisationId;
   return [];
 }
 
-export async function deleteOrganisation(organisationId: string, runId: string): Promise<TenantDeletion> {
+export async function deleteOrganisation(
+  organisationId: string,
+  runId: string,
+): Promise<TenantDeletion> {
   const result = (items: DeletionItem[]): TenantDeletion => {
     const failures = items
       .filter((item) => item.outcome === "failed")
-      .map((item) => `${item.store} ${item.target} ${item.action} failed${item.detail ? `: ${item.detail}` : ""}`);
-    return { source: LAB_KEY, organisationId, runId, ok: failures.length === 0, items, failures };
+      .map(
+        (item) =>
+          `${item.store} ${item.target} ${item.action} failed${item.detail ? `: ${item.detail}` : ""}`,
+      );
+    return {
+      source: LAB_KEY,
+      organisationId,
+      runId,
+      ok: failures.length === 0,
+      items,
+      failures,
+    };
   };
 
   // The platform compares ids case-insensitively; the stored id is the
@@ -131,21 +151,25 @@ export async function deleteOrganisation(organisationId: string, runId: string):
 
   let items: DeletionItem[];
   try {
-    items = await db.$transaction(async (tx) => {
-      const lines: DeletionItem[] = [];
-      for (const entry of DELETION_PLAN) {
-        const count = await EXECUTORS[entry.table](tx, storedId);
-        lines.push({
-          store: "postgres",
-          target: entry.table,
-          action: ACTION[entry.treatment],
-          itemCount: count,
-          outcome: "success",
-          detail: (entry as PlanEntry).reason ?? null,
-        });
-      }
-      return lines;
-    });
+    items = await db.$transaction(
+      async (tx) => {
+        const lines: DeletionItem[] = [];
+        for (const entry of DELETION_PLAN) {
+          const count = await EXECUTORS[entry.table](tx, storedId);
+          lines.push({
+            store: "postgres",
+            target: entry.table,
+            action: ACTION[entry.treatment],
+            itemCount: count,
+            outcome: "success",
+            detail: (entry as PlanEntry).reason ?? null,
+          });
+        }
+        return lines;
+      },
+      // Prisma's default is 5 s; a large organisation needs longer (the platform allows 120 s).
+      { maxWait: 10_000, timeout: 100_000 },
+    );
   } catch (error) {
     // The transaction rolled back: nothing was erased. Say so in one line
     // instead of pretending per table.
@@ -164,7 +188,11 @@ export async function deleteOrganisation(organisationId: string, runId: string):
 
   items.push(...(await eraseExternalStores(storedId)));
 
-  const summary = items.map((item) => `${item.target}=${item.itemCount ?? "?"}`).join(" ");
-  console.info(`[platform/delete] organisation ${storedId} run ${runId}: ${summary}`);
+  const summary = items
+    .map((item) => `${item.target}=${item.itemCount ?? "?"}`)
+    .join(" ");
+  console.info(
+    `[platform/delete] organisation ${storedId} run ${runId}: ${summary}`,
+  );
   return result(items);
 }
