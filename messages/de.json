@@ -66,5 +66,60 @@
     "signedInAs": "Angemeldet als {email} in der Organisation {organisation}.",
     "toApp": "Zur Übersicht",
     "toSuite": "Zurück zur Beyondles Suite"
+  },
+  "share": {
+    "adminNote": "Der Verwalter sieht Titel, Besitzer und Verbrauch, nie den Inhalt.",
+    "picker": {
+      "legend": "Wer sieht das?",
+      "private": "Nur ich",
+      "privateHint": "Bleibt bei dir, bis du es freigibst.",
+      "privateBlocked": "Deine Organisation hat „Nur ich“ für dieses Produkt ausgeschaltet.",
+      "personalOffExisting": "Persönliche Objekte sind in deiner Organisation abgeschaltet; wähle eine Sammlung oder die ganze Organisation.",
+      "personalOffNoWayOut": "Persönliche Objekte sind in deiner Organisation abgeschaltet. Es gibt aber noch keine Sammlung, und an die ganze Organisation darfst du nicht freigeben. Bitte deinen Verwalter um eine Sammlung oder um das Recht, an alle freizugeben. Bearbeiten kannst du das Objekt weiterhin.",
+      "collection": "Eine Sammlung",
+      "collectionHint": "Alle Personen in der gewählten Sammlung sehen es.",
+      "collectionBlocked": "Es gibt noch keine Sammlung.",
+      "collectionSelectLabel": "Sammlung",
+      "organisation": "Die ganze Organisation",
+      "organisationHint": "Jedes Mitglied deiner Organisation sieht es.",
+      "organisationBlocked": "Deine Organisation erlaubt Mitgliedern nicht, an alle freizugeben."
+    },
+    "badge": {
+      "private": "Nur ich",
+      "collection": "Eine Sammlung",
+      "collectionNamed": "Sammlung {name}",
+      "organisation": "Die ganze Organisation"
+    },
+    "people": {
+      "searchLabel": "Person hinzufügen",
+      "searchPlaceholder": "Name oder E-Mail",
+      "noMatches": "Keine passende Person gefunden.",
+      "moreHint": "{count, plural, one {Noch eine weitere Person. Bitte den Namen eintippen.} other {Noch # weitere Personen. Bitte den Namen eintippen.}}",
+      "selectedHeading": "Einzeln hinzugefügt",
+      "empty": "Noch niemand einzeln hinzugefügt.",
+      "levelLabel": "Recht von {name}",
+      "levelView": "Ansehen",
+      "levelEdit": "Bearbeiten",
+      "remove": "{name} entfernen"
+    },
+    "dialog": {
+      "trigger": "Teilen",
+      "viewTrigger": "Wer hat Zugriff",
+      "title": "Teilen: {title}",
+      "close": "Dialog schließen",
+      "ownedBy": "Gehört {name}",
+      "loading": "Wird geladen …",
+      "loadError": "Die Freigaben konnten nicht geladen werden.",
+      "saveError": "Speichern nicht möglich.",
+      "personalConnections": "Dieser Eintrag benutzt deine Verbindung {labels}. Er läuft weiter unter deinem Zugang.",
+      "peopleHeading": "Wer zusätzlich Zugriff hat",
+      "readOnlyNote": "Du kannst diese Freigabe nicht ändern.",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "closeButton": "Schließen",
+      "discardQuestion": "Ungespeicherte Änderungen verwerfen?",
+      "discardKeep": "Weiter bearbeiten",
+      "discardConfirm": "Verwerfen"
+    }
   }
 }
