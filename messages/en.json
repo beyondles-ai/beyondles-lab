@@ -27,9 +27,6 @@
     "intro": "A worked example of a tenant object with visibility. Everything you can do here also exists under /api/v1/notes and as an MCP tool.",
     "newTitle": "Title",
     "newBody": "Text",
-    "visibility": "Who may see it",
-    "visibilityPrivate": "Only me",
-    "visibilityOrganisation": "Everyone in my organisation",
     "create": "Add note",
     "empty": "No notes visible to you yet.",
     "ownerYou": "you",
@@ -66,5 +63,60 @@
     "signedInAs": "Signed in as {email} in organisation {organisation}.",
     "toApp": "Go to overview",
     "toSuite": "Back to the Beyondles Suite"
+  },
+  "share": {
+    "adminNote": "Admins see title, owner and usage, never the content.",
+    "picker": {
+      "legend": "Who can see this?",
+      "private": "Only me",
+      "privateHint": "Stays with you until you share it.",
+      "privateBlocked": "Your organisation has switched “Only me” off for this product.",
+      "personalOffExisting": "Personal objects are switched off in your organisation; choose a collection or the whole organisation.",
+      "personalOffNoWayOut": "Personal objects are switched off in your organisation. There is no collection yet, and you may not share with the whole organisation. Ask your admin for a collection or for permission to share with everyone. You can keep editing the object.",
+      "collection": "A collection",
+      "collectionHint": "Everyone in the chosen collection sees it.",
+      "collectionBlocked": "There is no collection yet.",
+      "collectionSelectLabel": "Collection",
+      "organisation": "Whole organisation",
+      "organisationHint": "Every member of your organisation sees it.",
+      "organisationBlocked": "Your organisation does not let members share with everyone."
+    },
+    "badge": {
+      "private": "Only me",
+      "collection": "A collection",
+      "collectionNamed": "Collection {name}",
+      "organisation": "Whole organisation"
+    },
+    "people": {
+      "searchLabel": "Add a person",
+      "searchPlaceholder": "Name or e-mail",
+      "noMatches": "No matching person.",
+      "moreHint": "{count, plural, one {One more person. Type a name to narrow it down.} other {# more people. Type a name to narrow it down.}}",
+      "selectedHeading": "Added one by one",
+      "empty": "Nobody added yet.",
+      "levelLabel": "Level for {name}",
+      "levelView": "View",
+      "levelEdit": "Edit",
+      "remove": "Remove {name}"
+    },
+    "dialog": {
+      "trigger": "Share",
+      "viewTrigger": "Who has access",
+      "title": "Share: {title}",
+      "close": "Close dialog",
+      "ownedBy": "Owned by {name}",
+      "loading": "Loading …",
+      "loadError": "The sharing settings could not be loaded.",
+      "saveError": "Saving did not work.",
+      "personalConnections": "This item uses your connection {labels}. It keeps running under your access.",
+      "peopleHeading": "Who else has access",
+      "readOnlyNote": "You cannot change this sharing.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "closeButton": "Close",
+      "discardQuestion": "Discard your unsaved changes?",
+      "discardKeep": "Keep editing",
+      "discardConfirm": "Discard"
+    }
   }
 }

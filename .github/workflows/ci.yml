@@ -56,3 +56,5 @@ jobs:
             ALLOW_LOCAL_JWT=true
       - name: Frame self-check
         run: npm run check:frame
+      - name: Shared code is unchanged
+        uses: beyondles-ai/beyondles-shared/check@v1.0.0

@@ -17,6 +17,8 @@ const eslintConfig = [
       "next-env.d.ts",
       "mcp/node_modules/**",
       "src/generated/**",
+      // Generated from beyondles-ai/beyondles-shared; never edited here.
+      "src/components/share/**",
     ],
   },
 ];
