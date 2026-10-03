@@ -31,6 +31,8 @@ import {
   type AccessContext,
 } from "@/lib/platform/access";
 import { accessDoorState } from "@/lib/platform/door";
+import { complete } from "@/lib/platform/llm";
+import { sendMail } from "@/lib/platform/mail";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const ANNA = "22222222-2222-4222-8222-222222222222";
@@ -272,5 +274,60 @@ describe("[P1] one door vocabulary", () => {
     expect(accessDoorState()).toBe("unconfigured");
     expect(await getApiKeyAccessContext(userKey)).toMatchObject({ ok: false, reason: "KEY_CHECK_UNAVAILABLE" });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * `readDoorConfig` is not only the access door's: the AI door (`llm.ts`) and
+ * the mail door (`mail.ts`) read the same address and key through it. The P1
+ * reading of a placeholder therefore reaches them too. Pinned here so the side
+ * effect is a known, tested behaviour and not a surprise for a Lab built from
+ * the template: such a value answers DOOR_NOT_CONFIGURED (503) without a
+ * request, where origin/develop sent the request and got a platform 401.
+ */
+describe("[P1] the AI and mail doors share readDoorConfig with the access door", () => {
+  const llmRequest = { organisationId: ORG, action: "summarise", messages: [{ role: "user" as const, content: "hi" }] };
+  const mailRequest = {
+    organisationId: ORG,
+    action: "notify",
+    to: [{ email: "anna@example.test" }],
+    subject: "Hello",
+    text: "Hello",
+    idempotencyKey: "note-1:notify",
+  };
+
+  /** What the platform answers a key it does not know (what origin/develop got). */
+  const refuseServiceKey = () =>
+    fetchMock.mockImplementation(async () =>
+      json({ success: false, error: { code: "UNAUTHORIZED", message: "Invalid API key" } }, 401),
+    );
+
+  it("a placeholder key answers DOOR_NOT_CONFIGURED on both doors, and nothing is sent", async () => {
+    refuseServiceKey();
+    vi.stubEnv("PLATFORM_API_KEY", "<your-platform-key>");
+    expect(await complete(llmRequest)).toMatchObject({ ok: false, status: 503, code: "DOOR_NOT_CONFIGURED" });
+    expect(await sendMail(mailRequest)).toMatchObject({ ok: false, status: 503, code: "DOOR_NOT_CONFIGURED" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("a sentinel word as key, or an address that is no http(s) URL, answers the same", async () => {
+    refuseServiceKey();
+    vi.stubEnv("PLATFORM_API_KEY", "changeme");
+    expect(await complete(llmRequest)).toMatchObject({ ok: false, code: "DOOR_NOT_CONFIGURED" });
+    vi.stubEnv("PLATFORM_API_KEY", "examplelab-service-key");
+    vi.stubEnv("PLATFORM_API_URL", "platform.test");
+    expect(await sendMail(mailRequest)).toMatchObject({ ok: false, code: "DOOR_NOT_CONFIGURED" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("control: with a real address and key both doors send their request", async () => {
+    fetchMock.mockRejectedValue(new Error("offline"));
+    expect(await complete(llmRequest)).toMatchObject({ ok: false, code: "NETWORK" });
+    expect(await sendMail(mailRequest)).toMatchObject({ ok: false, code: "NETWORK" });
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://platform.test/api/llm/complete",
+      "https://platform.test/api/mail/send",
+      "https://platform.test/api/mail/send",
+    ]);
   });
 });
