@@ -20,12 +20,23 @@ const privateRow = { id: "n1", ownerUserId: "u1", visibility: "PRIVATE" as const
 const collectionRow = { id: "n2", ownerUserId: "u9", visibility: "COLLECTION" as const, collectionId: "c1" };
 const orgRow = { id: "n3", ownerUserId: "u9", visibility: "ORGANISATION" as const, collectionId: null };
 
+// Rule 9 (CONTRACT 4.3, HOST-CONTRACT section 3): the two `visibleWhere`
+// cases below pinned the template's own clause list (organisation clause
+// first, a separate shape for the worker key). `visibleWhere` is now the
+// organisation filter plus the shared `visibilityWhere`: the clauses come in
+// the shared order (owner, organisation, collection, grants), the worker key
+// gets the same OR form, and the organisation clause requires product access
+// (policy P4). The rows each context selects are the same as before for
+// every context that passes the person check.
 describe("visibleWhere", () => {
   it("a worker key sees organisation-wide rows only", () => {
-    expect(visibleWhere(workerAccessContext(ORG), "note")).toEqual({ organisationId: ORG, visibility: "ORGANISATION" });
+    expect(visibleWhere(workerAccessContext(ORG), "note")).toEqual({
+      organisationId: ORG,
+      OR: [{ visibility: "ORGANISATION" }],
+    });
   });
 
-  it("a person sees organisation rows, OWN rows of any container, collections and grants", () => {
+  it("a person sees OWN rows of any container, organisation rows, collections and grants", () => {
     const ctx = person({
       collections: [{ id: "c1", name: "Sales", isOwner: false }],
       grantedIds: { ...emptyGrants(), note: { view: ["n9"], edit: ["n8"] } },
@@ -33,11 +44,16 @@ describe("visibleWhere", () => {
     const where = visibleWhere(ctx, "note");
     expect(where.organisationId).toBe(ORG);
     expect(where.OR).toEqual([
-      { visibility: "ORGANISATION" },
       { ownerUserId: "u1" },
+      { visibility: "ORGANISATION" },
       { visibility: "COLLECTION", collectionId: { in: ["c1"] } },
       { id: { in: ["n9", "n8"] } },
     ]);
+  });
+
+  it("without product access the organisation clause is gone (policy P4)", () => {
+    const where = visibleWhere(person({ productRole: null }), "note");
+    expect(where).toEqual({ organisationId: ORG, OR: [{ ownerUserId: "u1" }] });
   });
 });
 

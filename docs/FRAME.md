@@ -43,6 +43,11 @@ this file and that one disagree, that one wins and this template is updated.
    before every write. The local fallback context applies only while the
    platform door is NOT configured; once it is, the platform's "no" is final.
 
+The three files are thin layers over the shared access code in
+`src/lib/platform-client/` (generated from `beyondles-ai/beyondles-shared`,
+checked in CI, never edited here). `/api/health` reports the door in the one
+vocabulary of every product: `ok`, `local`, `unconfigured`, `off`.
+
 People without access land on `/kein-zugriff` with their e-mail, the reason
 and a way back to the Suite. The Suite tile points at `/`, which IS the app.
 

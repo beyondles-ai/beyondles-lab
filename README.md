@@ -59,6 +59,7 @@ server — see `src/lib/jwt-guard.ts`.
 | `src/app/api/mcp/route.ts`, `src/lib/mcp/` | MCP door for agents |
 | `src/app/(app)/notes` + `src/server/…` | the worked example of a tenant object |
 | `src/components/share/`, `.beyondles-shared.json` | the share blocks (picker, badge, people picker, dialog): **generated from `beyondles-ai/beyondles-shared`, never edited here** |
+| `src/lib/platform-client/` | the access client, decisions and container rules behind `platform-access.ts`, `platform/access.ts`, `access-rules.ts`, `rbac.ts` and `api-auth.ts`: **generated from `beyondles-ai/beyondles-shared`, never edited here** |
 | `src/components/ui/share-primitives/` | the four small components the share blocks draw with (this Lab's own look) |
 | `docker/`, `ops/deploy/` | container stack and host scripts |
 | `scripts/check-frame.mjs` | the repo half of `/lab-pipeline check`, runs in CI |

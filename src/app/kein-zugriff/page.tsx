@@ -2,8 +2,8 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import { requireOrg } from "@/lib/rbac";
-import { accessDoorState, platformUrl } from "@/lib/platform/door";
-import { hasProductAccess, localFallbackAllowed } from "@/lib/platform/access";
+import { platformUrl } from "@/lib/platform/door";
+import { hasProductAccess } from "@/lib/platform/access";
 
 /**
  * Notice page for people without access. Lives OUTSIDE the `(app)` group:
@@ -15,14 +15,17 @@ import { hasProductAccess, localFallbackAllowed } from "@/lib/platform/access";
  *
  * Reasons: `blocked` (level 1: not released, or Suite unreachable),
  * `not-assigned` (level 2: the organisation has not given this person the
- * Lab), `not-configured` (the platform door is missing in this environment —
- * an operator problem, not the person's).
+ * Lab, or the platform could not be asked), `not-configured` (the door state
+ * is `unconfigured` or `off`: the platform door is missing in this
+ * environment — an operator problem, not the person's).
  */
 export default async function NoAccessPage() {
-  const { session, access, gate } = await requireOrg();
+  const { session, access, gate, denied, doorState } = await requireOrg();
   const t = await getTranslations("noAccess");
 
-  const doorMissing = accessDoorState() === "unconfigured" && !localFallbackAllowed();
+  // Policy P1: with the door unconfigured or off nobody gets in; that is the
+  // operator's problem, not the person's.
+  const doorMissing = denied === "unavailable" && (doorState === "unconfigured" || doorState === "off");
 
   const reason = !gate.allowed
     ? gate.reason === "unreachable"

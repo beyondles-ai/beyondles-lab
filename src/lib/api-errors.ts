@@ -15,6 +15,8 @@ export type ApiErrorCode =
   /** Key valid, but the PERSON behind it lost product access (contract code). */
   | "KEY_OWNER_NO_ACCESS"
   | "KEY_REVOKED"
+  /** The creator of the key is no longer a member of the organisation. */
+  | "PERSON_GONE"
   | "KEY_CHECK_UNAVAILABLE"
   | "internal_error";
 

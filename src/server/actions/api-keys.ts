@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { NEW_KEY_COOKIE } from "@/lib/api-keys";
-import { requireAccessOrNull } from "@/lib/rbac";
+import { requireAccessOrNull, requireFreshAccessOrNull } from "@/lib/rbac";
 import { createApiKey, revokeApiKey } from "@/server/services/api-keys";
 
 const createSchema = z.object({
@@ -14,9 +14,13 @@ const createSchema = z.object({
   kind: z.enum(["user", "worker"]).default("user"),
 });
 
-/** Only product admins manage keys. */
+/**
+ * Only product admins manage keys. Creating one asks the platform NOW, not
+ * from its 60 s cache: a key minted from a session whose token the platform
+ * already refuses would be younger than the token floor and outlive it.
+ */
 export async function createApiKeyAction(formData: FormData): Promise<void> {
-  const ctx = await requireAccessOrNull();
+  const ctx = await requireFreshAccessOrNull();
   if (!ctx || !ctx.isAdmin) redirect("/kein-zugriff");
 
   const parsed = createSchema.safeParse({ name: formData.get("name"), kind: formData.get("kind") ?? "user" });
