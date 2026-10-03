@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { allowedVisibilities, canEdit, canSee, visibleWhere } from "@/lib/access-rules";
-import { emptyGrants, localAccessContext, workerAccessContext, type AccessContext } from "@/lib/platform/access";
+import {
+  agentAccessContext,
+  emptyGrants,
+  hasProductAccess,
+  localAccessContext,
+  workerAccessContext,
+  type AccessContext,
+} from "@/lib/platform/access";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 
@@ -93,5 +100,50 @@ describe("allowedVisibilities", () => {
     expect(allowedVisibilities(person({ orgRole: "admin" }))).toEqual(["PRIVATE", "ORGANISATION"]);
     // a product admin who is a plain org member is NOT enough
     expect(allowedVisibilities(person({ productRole: "product_admin" }))).toEqual(["PRIVATE"]);
+  });
+});
+
+describe("the collection-agent view (on-behalf token, contract stage 6, 2.7)", () => {
+  const agent = agentAccessContext(ORG, "c1");
+  const otherCollectionRow = { id: "n4", ownerUserId: "u9", visibility: "COLLECTION" as const, collectionId: "c2" };
+  const ownerlessRow = { id: "n5", ownerUserId: "", visibility: "PRIVATE" as const, collectionId: null };
+
+  it("is a context without a person, with one collection and no grants", () => {
+    expect(agent).toMatchObject({
+      userId: "",
+      source: "agent",
+      collections: [{ id: "c1", name: "c1", isOwner: false }],
+      grantedIds: emptyGrants(),
+      personalAllowed: false,
+      membersMayShareOrg: false,
+      membersMayCreateCollections: false,
+      orgRole: "member",
+      productRole: "user",
+    });
+    expect(hasProductAccess(agent)).toBe(true);
+  });
+
+  it("visibleWhere: organisation rows and rows of its collection, no owner branch", () => {
+    expect(visibleWhere(agent, "note")).toEqual({
+      organisationId: ORG,
+      OR: [{ visibility: "ORGANISATION" }, { visibility: "COLLECTION", collectionId: { in: ["c1"] } }],
+    });
+  });
+
+  it("canSee / canEdit: organisation and own-collection rows, nothing private, no other collection", () => {
+    expect(canSee(agent, "note", orgRow)).toBe(true);
+    expect(canEdit(agent, "note", orgRow)).toBe(true);
+    expect(canSee(agent, "note", collectionRow)).toBe(true);
+    expect(canEdit(agent, "note", collectionRow)).toBe(true);
+    expect(canSee(agent, "note", privateRow)).toBe(false);
+    expect(canEdit(agent, "note", privateRow)).toBe(false);
+    expect(canSee(agent, "note", otherCollectionRow)).toBe(false);
+    expect(canEdit(agent, "note", otherCollectionRow)).toBe(false);
+    // An empty person never matches a row whose owner is empty too.
+    expect(canSee(agent, "note", ownerlessRow)).toBe(false);
+  });
+
+  it("allowedVisibilities: its collection only", () => {
+    expect(allowedVisibilities(agent)).toEqual(["COLLECTION"]);
   });
 });

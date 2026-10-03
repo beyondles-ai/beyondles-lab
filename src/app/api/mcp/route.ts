@@ -1,33 +1,45 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 
-import { requireApiKey } from "@/lib/api-auth";
+import { requireApiKey, type ApiKeyContext } from "@/lib/api-auth";
 import { ApiError } from "@/lib/api-errors";
-import { createMcpServer, resolveSelfBaseUrl } from "@/lib/mcp/server";
+import { createMcpServer, resolveSelfBaseUrl, type McpCredential } from "@/lib/mcp/server";
+import { onBehalfBearer } from "@/lib/tool-door/obo-door";
 
 /**
  * `POST /api/mcp` — the Lab as a tool for agents, over HTTP.
  *
  * Streamable HTTP, stateless (`sessionIdGenerator: undefined`), JSON answers
- * (`enableJsonResponse: true`). The key is checked BEFORE anything else; the
- * route is on the middleware's public list because an agent has no Suite
- * cookie. Its security boundary is `requireApiKey`, the same as `/api/v1`.
+ * (`enableJsonResponse: true`). The credential is checked BEFORE anything
+ * else; the route is on the middleware's public list because an agent has no
+ * Suite cookie. Its security boundary is `requireApiKey`, the same as
+ * `/api/v1`: an `x-api-key` of this Lab, or an on-behalf token the platform
+ * signed for this Lab (connection layer contract, stage 6).
  *
  * Nothing else happens here: no Prisma, no service. The tools call the own
- * `/api/v1` with the same key (`src/lib/mcp/server.ts`).
+ * `/api/v1` with exactly the credential this request carried
+ * (`src/lib/mcp/server.ts`).
  */
 export const dynamic = "force-dynamic";
 
-function jsonRpcError(status: number, code: number, message: string): NextResponse {
+function jsonRpcError(
+  status: number,
+  code: number,
+  message: string,
+  headers: Readonly<Record<string, string>> = {},
+): NextResponse {
   return NextResponse.json(
     { jsonrpc: "2.0", error: { code, message }, id: null },
-    { status, headers: { "Cache-Control": "no-store" } },
+    { status, headers: { ...headers, "Cache-Control": "no-store" } },
   );
 }
 
+/** HTTP status of a refusal → JSON-RPC error code (contract stage 6, 2.4). */
 function rpcCodeFor(status: number): number {
+  if (status === 400) return -32600;
   if (status === 401) return -32001;
   if (status === 403) return -32002;
+  if (status === 429) return -32029;
   if (status === 503) return -32003;
   return -32603;
 }
@@ -47,18 +59,40 @@ async function withAcceptHeader(request: NextRequest): Promise<Request> {
   return new Request(request.url, { method: "POST", headers, body: await request.text() });
 }
 
-export async function POST(request: NextRequest): Promise<Response> {
-  const apiKey = request.headers.get("x-api-key")?.trim() ?? "";
+/** Exactly the credential that was accepted, for the self-call. Never both. */
+function receivedCredential(request: Request, key: ApiKeyContext): McpCredential {
+  if (key.via === "on-behalf") {
+    const bearer = onBehalfBearer(request);
+    const token = bearer && "token" in bearer ? bearer.token : "";
+    return { header: "authorization", value: `Bearer ${token}` };
+  }
+  return { header: "x-api-key", value: request.headers.get("x-api-key")?.trim() ?? "" };
+}
 
+export async function POST(request: NextRequest): Promise<Response> {
+  let key: ApiKeyContext;
   try {
-    await requireApiKey(request);
+    key = await requireApiKey(request);
   } catch (error) {
-    if (error instanceof ApiError) return jsonRpcError(error.status, rpcCodeFor(error.status), error.message);
-    console.error("[mcp] key check failed:", error);
+    if (error instanceof ApiError) {
+      return jsonRpcError(error.status, rpcCodeFor(error.status), error.message, error.headers);
+    }
+    console.error("[mcp] credential check failed:", error);
     return jsonRpcError(500, -32603, "Internal error in the MCP endpoint.");
   }
 
-  const server = createMcpServer({ baseUrl: resolveSelfBaseUrl(), apiKey });
+  const server = createMcpServer({
+    baseUrl: resolveSelfBaseUrl(),
+    credential: receivedCredential(request, key),
+    caller: {
+      via: key.via,
+      callingProduct: key.onBehalf?.callingProduct ?? null,
+      organisationId: key.organisationId,
+      userId: key.onBehalf?.userId ?? key.createdByUserId,
+      agentLevel: key.onBehalf?.agent?.level ?? null,
+      tokenId: key.onBehalf?.tokenId ?? null,
+    },
+  });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
