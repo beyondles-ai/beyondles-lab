@@ -1,5 +1,7 @@
 import { getFormatter, getTranslations } from "next-intl/server";
 
+import { VisibilityBadge, type Visibility } from "@/components/share";
+import { NoteVisibilityField } from "@/components/notes/note-visibility-field";
 import { requireAccess } from "@/lib/rbac";
 import { allowedVisibilities } from "@/lib/access-rules";
 import { listNotes } from "@/server/services/notes";
@@ -15,7 +17,7 @@ export default async function NotesPage() {
   const t = await getTranslations("notes");
   const format = await getFormatter();
   const notes = await listNotes(access, { limit: 50 });
-  const visibilities = allowedVisibilities(access).filter((v) => v !== "COLLECTION");
+  const allowed = allowedVisibilities(access);
 
   return (
     <div className="space-y-6">
@@ -33,16 +35,10 @@ export default async function NotesPage() {
           <span className="mb-1 block font-medium">{t("newBody")}</span>
           <textarea name="body" maxLength={20000} rows={3} className="w-full rounded border px-2 py-1" />
         </label>
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium">{t("visibility")}</span>
-          <select name="visibility" className="rounded border px-2 py-1">
-            {visibilities.map((v) => (
-              <option key={v} value={v.toLowerCase()}>
-                {v === "PRIVATE" ? t("visibilityPrivate") : t("visibilityOrganisation")}
-              </option>
-            ))}
-          </select>
-        </label>
+        <NoteVisibilityField
+          personalAllowed={allowed.includes("PRIVATE")}
+          organisationAllowed={allowed.includes("ORGANISATION")}
+        />
         <button type="submit" className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white">
           {t("create")}
         </button>
@@ -56,11 +52,16 @@ export default async function NotesPage() {
             <li key={note.id} className="rounded-lg border bg-white p-3">
               <p className="font-medium">{note.title}</p>
               {note.body ? <p className="whitespace-pre-wrap text-sm text-zinc-700">{note.body}</p> : null}
-              <p className="mt-1 text-xs text-zinc-500">
-                {note.visibility.toLowerCase()} ·{" "}
-                {t("created", { date: format.dateTime(note.createdAt, { dateStyle: "medium" }) })}
-                {note.ownerUserId === access.userId ? ` · ${t("ownerYou")}` : ""}
-              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                <VisibilityBadge
+                  visibility={note.visibility.toLowerCase() as Visibility}
+                  collectionName={access.collections.find((c) => c.id === note.collectionId)?.name}
+                />
+                <span>
+                  {t("created", { date: format.dateTime(note.createdAt, { dateStyle: "medium" }) })}
+                  {note.ownerUserId === access.userId ? ` · ${t("ownerYou")}` : ""}
+                </span>
+              </div>
             </li>
           ))}
         </ul>

@@ -122,7 +122,7 @@ const sourceFiles = ["src", "docker", "ops", "scripts", "mcp", ".github"]
 // them once got committed to this template). Everything at the root must be
 // on this list.
 const ROOT_ALLOWED = new Set([
-  ".dockerignore", ".env.example", ".gitattributes", ".gitignore", ".prettierignore", ".prettierrc.json",
+  ".beyondles-shared.json", ".dockerignore", ".env.example", ".gitattributes", ".gitignore", ".prettierignore", ".prettierrc.json",
   "README.md", "eslint.config.mjs", "next.config.ts", "next-env.d.ts", "package-lock.json", "package.json",
   "postcss.config.mjs", "prisma.config.ts", "tsconfig.json", "tsconfig.tsbuildinfo", "vitest.config.ts",
   "CLAUDE.md", "LICENSE",
