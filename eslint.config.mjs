@@ -19,6 +19,7 @@ const eslintConfig = [
       "src/generated/**",
       // Generated from beyondles-ai/beyondles-shared; never edited here.
       "src/components/share/**",
+      "src/lib/platform-client/**",
     ],
   },
 ];

@@ -10,3 +10,6 @@
 
 # Generated from beyondles-ai/beyondles-shared (share-ui). Never edited here.
 src/components/share/** text eol=lf
+
+# Generated from beyondles-ai/beyondles-shared (platform-client). Never edited here.
+src/lib/platform-client/** text eol=lf

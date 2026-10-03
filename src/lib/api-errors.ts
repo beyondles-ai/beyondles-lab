@@ -15,6 +15,8 @@ export type ApiErrorCode =
   /** Key valid, but the PERSON behind it lost product access (contract code). */
   | "KEY_OWNER_NO_ACCESS"
   | "KEY_REVOKED"
+  /** The creator of the key is no longer a member of the organisation. */
+  | "PERSON_GONE"
   | "KEY_CHECK_UNAVAILABLE"
   /** Tool door (connection layer stage 6): an on-behalf token next to an `x-api-key`. */
   | "ambiguous_credential"

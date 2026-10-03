@@ -268,12 +268,16 @@ describe("requireApiKey: the token path (2.4)", () => {
       status: 403,
       code: "no_product_access",
     });
+    __clearAccessCacheForTests();
     persons[USER] = { status: 403 };
     expect(await refusal(requireApiKey(req("/api/v1/notes", bearer(token))))).toMatchObject({
       status: 403,
       code: "no_product_access",
     });
-    // The refusal is not cached: the next answer counts.
+    // Test changed because it pinned "a person-level 403/404 is not cached" (#339): the shared client
+    // caches a clear refusal for 60 s, like every clear answer (never a failure, see the 5xx case).
+    // After the cache is dropped the next answer counts.
+    __clearAccessCacheForTests();
     persons[USER] = {};
     expect((await requireApiKey(req("/api/v1/notes", bearer(token)))).access.userId).toBe(USER);
     expect(personCalls()).toHaveLength(3);
@@ -423,7 +427,12 @@ describe("the collection agent at /api/v1/notes", () => {
   it("an organisation agent lists organisation rows only (no PRIVATE row, no COLLECTION row)", async () => {
     const token = signToken({ aud: AUD, org: ORG, agt: { id: "a-1", level: "organisation" } });
     await listNotesRoute(req("/api/v1/notes", bearer(token)));
-    expect(h.note.findMany.mock.calls[0][0].where.AND[0]).toEqual({ organisationId: ORG, visibility: "ORGANISATION" });
+    // Test changed because it pinned the old query shape `{ organisationId, visibility }` (#339, policy P4):
+    // the shared `visibilityWhere` writes the same rows as `OR: [{ visibility: "ORGANISATION" }]`.
+    expect(h.note.findMany.mock.calls[0][0].where.AND[0]).toEqual({
+      organisationId: ORG,
+      OR: [{ visibility: "ORGANISATION" }],
+    });
   });
 
   it("a person token without visibility still creates a private note", async () => {
