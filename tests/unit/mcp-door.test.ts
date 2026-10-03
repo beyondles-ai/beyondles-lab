@@ -261,6 +261,24 @@ describe("requireApiKey: the token path (2.4)", () => {
     expect(refused).toMatchObject({ status: 403, code: "no_product_access" });
   });
 
+  it("person answer 404 or 403: 403 no_product_access, not a retryable 503", async () => {
+    const token = signToken({ aud: AUD, org: ORG, sub: USER });
+    persons[USER] = { status: 404 };
+    expect(await refusal(requireApiKey(req("/api/v1/notes", bearer(token))))).toMatchObject({
+      status: 403,
+      code: "no_product_access",
+    });
+    persons[USER] = { status: 403 };
+    expect(await refusal(requireApiKey(req("/api/v1/notes", bearer(token))))).toMatchObject({
+      status: 403,
+      code: "no_product_access",
+    });
+    // The refusal is not cached: the next answer counts.
+    persons[USER] = {};
+    expect((await requireApiKey(req("/api/v1/notes", bearer(token)))).access.userId).toBe(USER);
+    expect(personCalls()).toHaveLength(3);
+  });
+
   it("platform unreachable or 5xx: 503, and the failure is not cached", async () => {
     persons[USER] = { status: 502 };
     const token = signToken({ aud: AUD, org: ORG, sub: USER });

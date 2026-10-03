@@ -577,9 +577,15 @@ async function personAnswer(
     return null;
   }
   if (!res.ok) {
-    if (res.status === 401 || res.status === 403) {
+    const code = res.status === 401 || res.status === 403 ? await errorCode(res) : null;
+    // A rejected SERVICE key is our problem, not the person's: "could not check".
+    if (res.status === 401 || code === "ORG_NOT_ALLOWED_FOR_KEY") {
       warnOnce(`obo-key-${res.status}`, `the platform rejected the Lab's own service key on the token path (HTTP ${res.status}).`);
+      return null;
     }
+    // Any other 403, or 404: a final refusal about the person, as on the key
+    // path. Not cached (contract 2.4 step 5 caches answers, never failures).
+    if (res.status === 403 || res.status === 404) return { context: null, revokedAt: null, memberActive: null };
     return null;
   }
 
@@ -619,8 +625,9 @@ async function personAnswer(
  * Every named person is checked (`personUserId` whenever present, and the
  * owner of a private agent), in this order: the floor against the token's
  * `issuedAt` (`KEY_REVOKED`), `memberActive === false` (`PERSON_GONE`),
- * product access (`KEY_OWNER_NO_ACCESS`). Platform unreachable, `5xx` or any
- * other unusable answer: `KEY_CHECK_UNAVAILABLE`.
+ * product access (`KEY_OWNER_NO_ACCESS`, also for a person-level `403`/`404`).
+ * Platform unreachable, `5xx`, a rejected service key or any other unusable
+ * answer: `KEY_CHECK_UNAVAILABLE`.
  */
 export async function getOnBehalfAccessContext(
   input: {
