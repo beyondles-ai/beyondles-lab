@@ -55,8 +55,10 @@ server — see `src/lib/jwt-guard.ts`.
 | `src/app/api/platform/export/route.ts` | tenant export for the platform |
 | `src/app/api/platform/organisation/route.ts` | tenant deletion for the platform (own key `PLATFORM_DELETE_KEY`) |
 | `src/app/api/platform/member/route.ts` | person deletion for the platform (same key; plan in `platform-delete-member.ts`) |
-| `src/app/api/v1/…`, `src/lib/api-auth.ts` | HTTP door (`x-api-key`) |
-| `src/app/api/mcp/route.ts`, `src/lib/mcp/` | MCP door for agents |
+| `src/app/api/v1/…`, `src/lib/api-auth.ts` | HTTP door (`x-api-key` or on-behalf token, release gate) |
+| `src/app/api/mcp/route.ts`, `src/app/api/mcp/describe/route.ts`, `src/lib/mcp/` | MCP door for agents and its description |
+| `src/lib/tool-door/`, `src/lib/platform/on-behalf.ts` | Shared tool-door files (copied verbatim into every Lab) |
+| `src/app/api/platform/reassign-owner/route.ts` | Hand-over when a person leaves |
 | `src/app/(app)/notes` + `src/server/…` | the worked example of a tenant object |
 | `src/components/share/`, `.beyondles-shared.json` | the share blocks (picker, badge, people picker, dialog): **generated from `beyondles-ai/beyondles-shared`, never edited here** |
 | `src/lib/platform-client/` | the access client, decisions and container rules behind `platform-access.ts`, `platform/access.ts`, `access-rules.ts`, `rbac.ts` and `api-auth.ts`: **generated from `beyondles-ai/beyondles-shared`, never edited here** |

@@ -157,3 +157,16 @@ export async function ensureOrganisation(session: PlatformSession): Promise<void
     update: { slug: session.organisationSlug, name: session.organisationSlug },
   });
 }
+
+/**
+ * Mirror row for a caller WITHOUT a Suite session: an on-behalf token names
+ * only the organisation id. Created with id = slug = name; an existing row is
+ * left alone, and a later Suite sign-in overwrites slug and name as above.
+ */
+export async function ensureOrganisationById(organisationId: string): Promise<void> {
+  await db.organisation.upsert({
+    where: { id: organisationId },
+    create: { id: organisationId, slug: organisationId, name: organisationId },
+    update: {},
+  });
+}

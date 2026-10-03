@@ -13,10 +13,15 @@ import type { AccessContext } from "@/lib/platform/access";
  * door and MCP all call these functions; there is no second path.
  */
 
+/**
+ * `visibility` is optional: a person who names none creates a private note.
+ * A collection agent (on-behalf token, `source: "agent"`) must name none: its
+ * notes always land in its own collection.
+ */
 export const noteInputSchema = z.object({
   title: z.string().trim().min(1).max(200),
   body: z.string().max(20_000).default(""),
-  visibility: z.enum(["private", "organisation"]).default("private"),
+  visibility: z.enum(["private", "organisation"]).optional(),
 });
 export type NoteInput = z.infer<typeof noteInputSchema>;
 
@@ -57,9 +62,30 @@ export async function getNote(ctx: AccessContext, noteId: string) {
 }
 
 export async function createNote(ctx: AccessContext, input: NoteInput) {
-  const visibility = input.visibility === "organisation" ? "ORGANISATION" : "PRIVATE";
+  if (ctx.source === "agent") {
+    // A collection agent creates in its own collection and nowhere else: no
+    // private rows (it is no person), no organisation-wide rows.
+    const collectionId = ctx.collections[0]?.id;
+    if (input.visibility !== undefined || !collectionId) {
+      throw new ApiError(403, "forbidden", "A collection agent creates notes in its own collection only; do not name a visibility.");
+    }
+    return db.note.create({
+      data: {
+        organisationId: ctx.organisationId,
+        title: input.title,
+        body: input.body,
+        visibility: "COLLECTION",
+        collectionId,
+        ownerUserId: ctx.userId,
+      },
+      select,
+    });
+  }
+
+  const wanted = input.visibility ?? "private";
+  const visibility = wanted === "organisation" ? "ORGANISATION" : "PRIVATE";
   if (!allowedVisibilities(ctx).includes(visibility)) {
-    throw new ApiError(403, "forbidden", `This key or person may not create ${input.visibility} notes.`);
+    throw new ApiError(403, "forbidden", `This key or person may not create ${wanted} notes.`);
   }
   return db.note.create({
     data: {

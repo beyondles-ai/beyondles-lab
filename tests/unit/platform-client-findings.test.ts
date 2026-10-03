@@ -231,6 +231,10 @@ describe("[P3] API keys act as their creator, checked per call", () => {
       revokedAt: null,
       lastUsedAt: null,
     });
+    // The key door first asks the Suite's release switch (tool door); answer "released".
+    fetchMock.mockImplementation(async (url: string) =>
+      String(url).includes("/api/registry/released") ? envelope({ released: true }) : json({}, 500),
+    );
     const request = new Request("http://lab.test/api/v1/notes", { headers: { "x-api-key": plaintext } });
     await expect(requireApiKey(request)).rejects.toMatchObject({ status: 403, code: "KEY_OWNER_NO_ACCESS" });
   });

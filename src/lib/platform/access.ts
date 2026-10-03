@@ -8,6 +8,7 @@ import {
 import {
   hasProductAccess as sharedHasProductAccess,
   isProductAdmin as sharedIsProductAdmin,
+  machineVerdict,
   resolveKeyAccess,
 } from "@/lib/platform-client/core/decide";
 import type {
@@ -21,6 +22,7 @@ import type {
 } from "@/lib/platform-client/core/types";
 import { LAB_KEY } from "@/lib/lab";
 import { door, localAllowed, readDoorConfig } from "@/lib/platform/door";
+import type { OnBehalfAgent } from "@/lib/platform/on-behalf";
 
 /**
  * Access model, LEVELS 2 + 3 — both come from the PLATFORM, never from a
@@ -67,9 +69,14 @@ export type {
 /**
  * The shared context for this Lab's object types. `source` says where it
  * comes from: `platform` = normal; `local` = no door (dev/CI);
- * `api-key`/`worker-key` = machine.
+ * `api-key`/`worker-key` = machine; `agent` = a collection agent behind an
+ * on-behalf token (no person, one collection). `agent` is this Lab's own
+ * addition to the shared sources, so the type is widened here and the shared
+ * code stays untouched.
  */
-export type AccessContext = SharedAccessContext<ObjectType>;
+export type AccessContext = Omit<SharedAccessContext<ObjectType>, "source"> & {
+  source: SharedAccessContext<ObjectType>["source"] | "agent";
+};
 
 /** Which product asks the platform. `productKey` is the name of the service key. */
 export const PRODUCT: ProductConfig<ObjectType> = { productKey: LAB_KEY, objectTypes: OBJECT_TYPES };
@@ -208,6 +215,93 @@ export async function getApiKeyAccessContext(input: MachineKey): Promise<Machine
   return { ok: true, context: { ...verdict.context, organisationId: input.organisationId } };
 }
 
+/* ------------------------------------------------------ On-behalf tokens */
+
+/**
+ * A COLLECTION AGENT behind an on-behalf token: no person, exactly one
+ * collection. With `userId ""`, `personalAllowed false` and
+ * `membersMayShareOrg false` the rules of `src/lib/access-rules.ts` give it
+ * organisation rows plus the rows of its collection, editing what it sees and
+ * creating in its collection only. Nothing private, no individual grants.
+ */
+export function agentAccessContext(organisationId: string, collectionId: string): AccessContext {
+  return {
+    ...sharedWorkerAccessContext(organisationId, PRODUCT),
+    userId: "",
+    email: "",
+    orgRole: "member",
+    productRole: "user",
+    governed: false,
+    accessMode: "assigned",
+    collections: [{ id: collectionId, name: collectionId, isOwner: false }],
+    grantedIds: emptyGrants(),
+    personalAllowed: false,
+    membersMayShareOrg: false,
+    membersMayCreateCollections: false,
+    source: "agent",
+  };
+}
+
+/**
+ * Steps 4 and 5 of the token path (connection layer contract, stage 6, 2.4):
+ * WHOSE view a token gets, and the check of every person it names.
+ *
+ *  - organisation agent, or neither agent nor person: the WORKER view;
+ *  - collection agent: `agentAccessContext` (its collection, no person);
+ *  - private agent: the view of `agent.owner`;
+ *  - no agent, `personUserId` (`claims.sub`) present: that person's view.
+ *
+ * Every named person is checked (`personUserId` whenever present, and the
+ * owner of a private agent) through the shared client's person answer
+ * (cached 60 s per person, never a verdict). The verdict is the shared one,
+ * with the token's `issuedAt` as the mint time: the floor (`KEY_REVOKED`),
+ * `memberActive === false` (`PERSON_GONE`), product access
+ * (`KEY_OWNER_NO_ACCESS`, also for a person-level `403`/`404`). Platform
+ * unreachable, `5xx`, a rejected service key or any other unusable answer:
+ * `KEY_CHECK_UNAVAILABLE`.
+ */
+export async function getOnBehalfAccessContext(input: {
+  organisationId: string;
+  personUserId: string | null;
+  issuedAt: Date;
+  agent: OnBehalfAgent | null;
+}): Promise<MachineAccess> {
+  const named = new Set<string>();
+  if (input.personUserId) named.add(input.personUserId.toLowerCase());
+  const owner = input.agent?.level === "private" ? input.agent.owner?.toLowerCase() ?? null : null;
+  if (input.agent?.level === "private" && !owner) return { ok: false, reason: "KEY_CHECK_UNAVAILABLE" };
+  if (owner) named.add(owner);
+
+  const contexts = new Map<string, AccessContext>();
+  for (const userId of named) {
+    const answer = await client.userContext(input.organisationId, userId);
+    const verdict = machineVerdict(answer, { mintedAt: input.issuedAt });
+    if (!verdict.ok) return { ok: false, reason: verdict.code };
+    if (verdict.context.organisationId.toLowerCase() !== input.organisationId.toLowerCase()) {
+      console.error(
+        "[platform-access] the platform answered the person check with a different organisation than the token's.",
+      );
+      return { ok: false, reason: "KEY_CHECK_UNAVAILABLE" };
+    }
+    contexts.set(userId, { ...verdict.context, organisationId: input.organisationId, source: "api-key" });
+  }
+
+  const level = input.agent?.level ?? null;
+  if (level === "organisation") return { ok: true, context: workerAccessContext(input.organisationId) };
+  if (level === "collection") {
+    const collectionId = input.agent?.col;
+    if (!collectionId) return { ok: false, reason: "KEY_CHECK_UNAVAILABLE" };
+    return { ok: true, context: agentAccessContext(input.organisationId, collectionId) };
+  }
+  const viewPerson = level === "private" ? owner : input.personUserId?.toLowerCase() ?? null;
+  if (viewPerson) {
+    const context = contexts.get(viewPerson);
+    if (!context) return { ok: false, reason: "KEY_CHECK_UNAVAILABLE" };
+    return { ok: true, context };
+  }
+  return { ok: true, context: workerAccessContext(input.organisationId) };
+}
+
 /* -------------------------------------------------------------- Helpers */
 
 /**
@@ -216,6 +310,7 @@ export async function getApiKeyAccessContext(input: MachineKey): Promise<Machine
  * contexts carry a role of their own. No second way in here.
  */
 export function hasProductAccess(ctx: AccessContext): boolean {
+  if (ctx.source === "agent") return true;
   return sharedHasProductAccess(ctx);
 }
 

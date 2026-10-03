@@ -18,6 +18,18 @@ export type ApiErrorCode =
   /** The creator of the key is no longer a member of the organisation. */
   | "PERSON_GONE"
   | "KEY_CHECK_UNAVAILABLE"
+  /** Tool door (connection layer stage 6): an on-behalf token next to an `x-api-key`. */
+  | "ambiguous_credential"
+  /** On-behalf token: could not be checked (configuration, platform keys, person check). */
+  | "token_check_unavailable"
+  | "rate_limited"
+  /** On-behalf token: the named person has no active membership any more. */
+  | "person_gone"
+  /** On-behalf token: the named person has no access to this Lab. */
+  | "no_product_access"
+  /** Machine key: the Lab is not released for the key's organisation in the Suite. */
+  | "lab_not_released"
+  | "release_check_unavailable"
   | "internal_error";
 
 export interface ApiErrorBody {
@@ -34,6 +46,8 @@ export class ApiError extends Error {
     readonly code: ApiErrorCode,
     message: string,
     readonly fields?: ApiErrorBody["error"]["fields"],
+    /** Response headers the error must carry (`WWW-Authenticate`, `Retry-After`). */
+    readonly headers: Readonly<Record<string, string>> = {},
   ) {
     super(message);
     this.name = "ApiError";
@@ -49,7 +63,7 @@ export function apiErrorResponse(error: ApiError): NextResponse<ApiErrorBody> {
         ...(error.fields ? { fields: error.fields } : {}),
       },
     },
-    { status: error.status, headers: { "Cache-Control": "no-store" } },
+    { status: error.status, headers: { ...error.headers, "Cache-Control": "no-store" } },
   );
 }
 

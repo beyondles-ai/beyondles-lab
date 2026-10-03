@@ -60,17 +60,55 @@ and a way back to the Suite. The Suite tile points at `/`, which IS the app.
 - Purposes are `<LAB_KEY>.<action>` (`purposeFor`), stable forever.
 - Retry only on 429/503. Mail only with an `idempotencyKey`.
 - Fixed variable names: `PLATFORM_API_URL`, `PLATFORM_API_KEY`,
-  `PLATFORM_EXPORT_KEY`, `PLATFORM_DELETE_KEY`, `NEXT_PUBLIC_PLATFORM_URL`. `PLATFORM_SSO_URL` is
-  retired and refused by the frame check.
+  `PLATFORM_EXPORT_KEY`, `PLATFORM_DELETE_KEY`, `NEXT_PUBLIC_PLATFORM_URL`,
+  `ON_BEHALF_ISSUER`. `PLATFORM_SSO_URL` is retired and refused by the frame check.
 
-## 5. Headless: API and MCP
+## 5. Headless: API and MCP (the machine door)
 
-- Every action a person can click exists under `/api/v1/...` with header
-  `x-api-key` (`src/lib/api-auth.ts`). USER keys act as their creator (asked
-  at the platform per request), WORKER keys see organisation rows only.
-- `POST /api/mcp` serves the tool catalogue (`src/lib/mcp/catalog.ts`) over
-  Streamable HTTP; tools call the own `/api/v1`, never the database.
-- `mcp/server.mjs` is the stdio bridge for Claude Desktop/Code.
+- Every action a person can click exists under `/api/v1/...`; `POST /api/mcp`
+  serves the tool catalogue (`src/lib/mcp/catalog.ts`) over Streamable HTTP;
+  tools call the own `/api/v1`, never the database. `mcp/server.mjs` is the
+  stdio bridge for Claude Desktop/Code.
+- **Two credentials, one entry** (`requireApiKey`, `src/lib/api-auth.ts`):
+  - `x-api-key`: a key of this Lab. USER keys act as their creator (asked at
+    the platform per request), WORKER keys see organisation rows only.
+  - `Authorization: Bearer <on-behalf token>`: another Beyondles product
+    (Beyondles HorAIzon, another Lab) calling for an organisation, a person
+    or an agent. The platform signed it for audience = `LAB_KEY`; the Lab
+    verifies it with the platform's public keys (`src/lib/platform/on-behalf.ts`,
+    a verbatim copy, checked by the frame check). The view follows the agent:
+    organisation agent = worker view, collection agent = its collection only
+    (`source: "agent"`), private agent = its owner, no agent = the person
+    (`sub`), neither = worker view. Every named person is checked at the
+    platform (floor, membership, product access).
+  - Both together: `400 ambiguous_credential`. Without `ON_BEHALF_ISSUER` a
+    token answers `503`; keys keep working.
+  - A route reserved for WORKER keys also requires `via === "api-key"`: an
+    organisation agent gets the worker view but never a worker-only route.
+- **Release gate (level 1 for machines).** A key works only for organisations
+  the Lab is released for in the Suite (`src/lib/tool-door/release-gate.ts`,
+  `GET /api/registry/released` at the platform, 60 s cache, 15 minutes of
+  grace during an outage, not applied by a platform without the route).
+  Tokens are not gated here: the platform issues none for an unreleased Lab.
+- **Markers.** Every tool says what it does: `access` (`read`, `write`,
+  `destructive` = deletes, reaches somebody outside, spends money or credits),
+  `idempotent`, `title` in German and English, and a `capability`
+  (`mail.send`, `post.publish`, `calendar.write`) when its effect leaves the
+  organisation through a connected account. `tools/list` carries them as
+  MCP `annotations` and `_meta["ai.beyondles/capability"]`.
+- **Prefix rule.** `TOOL_PREFIX` is declared once in `src/lib/lab.ts`; every
+  tool name starts with it, is at most 48 characters and unique.
+  `tests/unit/tool-catalog.test.ts` runs `catalogProblems` on the catalogue.
+- **Describe route.** `GET /api/mcp/describe` (same credentials and checks as
+  `/api/mcp`) lists every tool with markers, titles and `available`.
+- One log line per `tools/call`: `[tool-door] via=… cp=… org=… sub=… agent=…
+  tool=… outcome=… jti=…`, never arguments or results.
+- `GET /api/health` reports `onBehalf: "ok" | "unconfigured"`.
+- Lab-to-Lab calls: `createLabToolClient` (`src/lib/tool-door/lab-client.ts`)
+  gets a token with the Lab's own service key and calls the target's door.
+- The shared files under `src/lib/tool-door/` (except `lab-client.ts`) and
+  `src/lib/platform/on-behalf.ts` are copied verbatim into every Lab; change
+  them here, never in a copy.
 
 ## 6. Tenant export
 
