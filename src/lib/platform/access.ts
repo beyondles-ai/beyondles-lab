@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { isLocalMode } from "@/lib/jwt-guard";
 import { LAB_KEY } from "@/lib/lab";
 import { accessDoorState, readDoorConfig } from "@/lib/platform/door";
+import type { OnBehalfAgent } from "@/lib/platform/on-behalf";
 
 /**
  * Access model, LEVELS 2 + 3 — both come from the PLATFORM, never from a
@@ -63,8 +64,11 @@ export interface AccessContext {
   personalAllowed: boolean;
   membersMayShareOrg: boolean;
   membersMayCreateCollections: boolean;
-  /** `platform` = normal; `local` = no door (dev/CI); `api-key`/`worker-key` = machine. */
-  source: "platform" | "local" | "api-key" | "worker-key";
+  /**
+   * `platform` = normal; `local` = no door (dev/CI); `api-key`/`worker-key` = machine;
+   * `agent` = a collection agent behind an on-behalf token (no person, one collection).
+   */
+  source: "platform" | "local" | "api-key" | "worker-key" | "agent";
 }
 
 /* --------------------------------------------------------------- Config */
@@ -80,6 +84,8 @@ interface CacheEntry<T> {
 
 const cache = new Map<string, CacheEntry<AccessContext | null>>();
 const machineCache = new Map<string, CacheEntry<MachineAccess>>();
+/** On-behalf tokens: the platform's ANSWER per `${org}:${user}`, never a verdict (the floor is per token). */
+const personAnswerCache = new Map<string, CacheEntry<PersonAnswer>>();
 
 const warned = new Set<string>();
 function warnOnce(reason: string, text: string): void {
@@ -117,6 +123,7 @@ export function emptyGrants(): Record<ObjectType, GrantedIds> {
 export function __clearAccessCacheForTests(): void {
   cache.clear();
   machineCache.clear();
+  personAnswerCache.clear();
   warned.clear();
 }
 
@@ -355,7 +362,9 @@ export type MachineDenyReason =
   /** The key is older than the token floor of its creator. */
   | "KEY_REVOKED"
   /** The platform could not be asked — "unclear" means "no". */
-  | "KEY_CHECK_UNAVAILABLE";
+  | "KEY_CHECK_UNAVAILABLE"
+  /** On-behalf token: the Suite holds no active membership of the named person any more. */
+  | "PERSON_GONE";
 
 export type MachineAccess =
   | { ok: true; context: AccessContext }
@@ -506,6 +515,168 @@ export async function getApiKeyAccessContext(
   return result;
 }
 
+/* ------------------------------------------------------ On-behalf tokens */
+
+/**
+ * A COLLECTION AGENT behind an on-behalf token: no person, exactly one
+ * collection. With `userId ""`, `personalAllowed false` and
+ * `membersMayShareOrg false` the rules of `src/lib/access-rules.ts` give it
+ * organisation rows plus the rows of its collection, editing what it sees and
+ * creating in its collection only. Nothing private, no individual grants.
+ */
+export function agentAccessContext(organisationId: string, collectionId: string): AccessContext {
+  return {
+    userId: "",
+    organisationId,
+    email: "",
+    orgRole: "member",
+    productRole: "user",
+    governed: false,
+    accessMode: "assigned",
+    collections: [{ id: collectionId, name: collectionId, isOwner: false }],
+    grantedIds: emptyGrants(),
+    personalAllowed: false,
+    membersMayShareOrg: false,
+    membersMayCreateCollections: false,
+    source: "agent",
+  };
+}
+
+interface PersonAnswer {
+  context: AccessContext | null;
+  revokedAt: string | null;
+  memberActive: boolean | null;
+}
+
+/** The machine route's answer for one person, cached 60 s per `${org}:${user}`. Failures are never cached. */
+async function personAnswer(
+  organisationId: string,
+  userId: string,
+  fetchImpl: typeof fetch,
+): Promise<PersonAnswer | null> {
+  const config = readDoorConfig();
+  if (!config) return null;
+
+  const key = `${organisationId.toLowerCase()}:${userId.toLowerCase()}`;
+  const hit = cacheGet(personAnswerCache, key);
+  if (hit) return hit.value;
+
+  let res: Response;
+  try {
+    res = await fetchImpl(
+      `${config.baseUrl}/api/access/orgs/${encodeURIComponent(organisationId)}/users/${encodeURIComponent(
+        userId,
+      )}/context?product=${LAB_KEY}`,
+      {
+        headers: { "X-API-Key": config.apiKey, Accept: "application/json" },
+        cache: "no-store",
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      },
+    );
+  } catch {
+    return null;
+  }
+  if (!res.ok) {
+    const code = res.status === 401 || res.status === 403 ? await errorCode(res) : null;
+    // A rejected SERVICE key is our problem, not the person's: "could not check".
+    if (res.status === 401 || code === "ORG_NOT_ALLOWED_FOR_KEY") {
+      warnOnce(`obo-key-${res.status}`, `the platform rejected the Lab's own service key on the token path (HTTP ${res.status}).`);
+      return null;
+    }
+    // Any other 403, or 404: a final refusal about the person, as on the key
+    // path. Not cached (contract 2.4 step 5 caches answers, never failures).
+    if (res.status === 403 || res.status === 404) return { context: null, revokedAt: null, memberActive: null };
+    return null;
+  }
+
+  let answer: PersonAnswer | null = null;
+  try {
+    const envelope = (await res.json()) as {
+      success?: boolean;
+      data?: RawMe & { revokedAt?: unknown; memberActive?: unknown };
+    };
+    if (envelope.success === true && envelope.data) {
+      answer = {
+        context: toContext(envelope.data),
+        revokedAt: asString(envelope.data.revokedAt),
+        memberActive: typeof envelope.data.memberActive === "boolean" ? envelope.data.memberActive : null,
+      };
+    }
+  } catch {
+    answer = null;
+  }
+  if (!answer) {
+    warnOnce("obo-bad-response", "the platform answered the person check of an on-behalf token with a body this build cannot read.");
+    return null;
+  }
+  cachePut(personAnswerCache, key, answer);
+  return answer;
+}
+
+/**
+ * Steps 4 and 5 of the token path (connection layer contract, stage 6, 2.4):
+ * WHOSE view a token gets, and the check of every person it names.
+ *
+ *  - organisation agent, or neither agent nor person: the WORKER view;
+ *  - collection agent: `agentAccessContext` (its collection, no person);
+ *  - private agent: the view of `agent.owner`;
+ *  - no agent, `personUserId` (`claims.sub`) present: that person's view.
+ *
+ * Every named person is checked (`personUserId` whenever present, and the
+ * owner of a private agent), in this order: the floor against the token's
+ * `issuedAt` (`KEY_REVOKED`), `memberActive === false` (`PERSON_GONE`),
+ * product access (`KEY_OWNER_NO_ACCESS`, also for a person-level `403`/`404`).
+ * Platform unreachable, `5xx`, a rejected service key or any other unusable
+ * answer: `KEY_CHECK_UNAVAILABLE`.
+ */
+export async function getOnBehalfAccessContext(
+  input: {
+    organisationId: string;
+    personUserId: string | null;
+    issuedAt: Date;
+    agent: OnBehalfAgent | null;
+  },
+  fetchImpl: typeof fetch = fetch,
+): Promise<MachineAccess> {
+  const named = new Set<string>();
+  if (input.personUserId) named.add(input.personUserId.toLowerCase());
+  const owner = input.agent?.level === "private" ? input.agent.owner?.toLowerCase() ?? null : null;
+  if (input.agent?.level === "private" && !owner) return { ok: false, reason: "KEY_CHECK_UNAVAILABLE" };
+  if (owner) named.add(owner);
+
+  const contexts = new Map<string, AccessContext>();
+  for (const userId of named) {
+    const answer = await personAnswer(input.organisationId, userId, fetchImpl);
+    if (!answer) return { ok: false, reason: "KEY_CHECK_UNAVAILABLE" };
+    if (answer.revokedAt) {
+      const floor = Date.parse(answer.revokedAt);
+      if (!Number.isNaN(floor) && input.issuedAt.getTime() < floor) return { ok: false, reason: "KEY_REVOKED" };
+    }
+    if (answer.memberActive === false) return { ok: false, reason: "PERSON_GONE" };
+    if (!answer.context || !hasProductAccess(answer.context)) return { ok: false, reason: "KEY_OWNER_NO_ACCESS" };
+    if (answer.context.organisationId.toLowerCase() !== input.organisationId.toLowerCase()) {
+      warnOnce("obo-org-mismatch", "the platform answered the person check with a different organisation than the token's.");
+      return { ok: false, reason: "KEY_CHECK_UNAVAILABLE" };
+    }
+    contexts.set(userId, { ...answer.context, organisationId: input.organisationId, source: "api-key" });
+  }
+
+  const level = input.agent?.level ?? null;
+  if (level === "organisation") return { ok: true, context: workerAccessContext(input.organisationId) };
+  if (level === "collection") {
+    const collectionId = input.agent?.col;
+    if (!collectionId) return { ok: false, reason: "KEY_CHECK_UNAVAILABLE" };
+    return { ok: true, context: agentAccessContext(input.organisationId, collectionId) };
+  }
+  const viewPerson = level === "private" ? owner : input.personUserId?.toLowerCase() ?? null;
+  if (viewPerson) {
+    const context = contexts.get(viewPerson);
+    if (!context) return { ok: false, reason: "KEY_CHECK_UNAVAILABLE" };
+    return { ok: true, context };
+  }
+  return { ok: true, context: workerAccessContext(input.organisationId) };
+}
+
 /* -------------------------------------------------------------- Helpers */
 
 /**
@@ -514,7 +685,7 @@ export async function getApiKeyAccessContext(
  * (contract: "refuse when productRole is null"). No second way in here.
  */
 export function hasProductAccess(ctx: AccessContext): boolean {
-  if (ctx.source === "local" || ctx.source === "worker-key") return true;
+  if (ctx.source === "local" || ctx.source === "worker-key" || ctx.source === "agent") return true;
   return ctx.productRole !== null;
 }
 

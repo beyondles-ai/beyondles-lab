@@ -1,4 +1,5 @@
-import { LAB_KEY } from "@/lib/lab";
+import { TOOL_PREFIX } from "@/lib/lab";
+import type { ToolMarker } from "@/lib/tool-door/markers";
 
 /**
  * The tool catalogue — the ONE truth about what agents can do with this Lab.
@@ -10,6 +11,12 @@ import { LAB_KEY } from "@/lib/lab";
  *
  * Schemas are literal JSON Schema, as they reach the agent. Descriptions are
  * English and say what the tool does for the person, not how it is built.
+ *
+ * Every tool carries a MARKER (`src/lib/tool-door/markers.ts`): `access`
+ * (`read`, `write`, `destructive`), `idempotent`, a title in German and
+ * English (verb first), and a `capability` when its effect leaves the
+ * organisation through a connected account. Names start with `TOOL_PREFIX`
+ * (`src/lib/lab.ts`); `tests/unit/tool-catalog.test.ts` checks the rule.
  *
  * Add a tool for every new API route. There is deliberately no delete tool
  * in the example: deleting through an agent needs a human decision first.
@@ -23,7 +30,7 @@ export interface V1Call {
   body?: unknown;
 }
 
-export interface ToolDefinition {
+export interface ToolDefinition extends ToolMarker {
   name: string;
   description: string;
   inputSchema: {
@@ -42,7 +49,10 @@ function str(args: ToolArguments, key: string): string | undefined {
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
-    name: `${LAB_KEY}_list_notes`,
+    name: `${TOOL_PREFIX}list_notes`,
+    access: "read",
+    idempotent: true,
+    title: { de: "Notizen auflisten", en: "List notes" },
     description:
       "List the notes visible to the key's organisation and view, newest first. " +
       "Optional free-text search over title and body.",
@@ -64,7 +74,10 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: `${LAB_KEY}_get_note`,
+    name: `${TOOL_PREFIX}get_note`,
+    access: "read",
+    idempotent: true,
+    title: { de: "Notiz lesen", en: "Read a note" },
     description: "Read one note by id, if the key's view may see it.",
     inputSchema: {
       type: "object",
@@ -78,11 +91,15 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     }),
   },
   {
-    name: `${LAB_KEY}_create_note`,
+    name: `${TOOL_PREFIX}create_note`,
+    access: "write",
+    idempotent: false,
+    title: { de: "Notiz anlegen", en: "Create a note" },
     description:
-      "Create a note. `visibility` is required: 'private' (only the key's person) or " +
-      "'organisation' (everybody in the organisation). A worker key can only " +
-      "create organisation-wide notes, so pass 'organisation' for worker keys.",
+      "Create a note. `visibility`: 'private' (only the caller's person, the default) or " +
+      "'organisation' (everybody in the organisation). A worker key or an organisation agent " +
+      "can only create organisation-wide notes, so pass 'organisation' there. A collection " +
+      "agent passes no visibility: its notes always land in its own collection.",
     inputSchema: {
       type: "object",
       properties: {
@@ -90,18 +107,21 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         body: { type: "string", maxLength: 20000 },
         visibility: { type: "string", enum: ["private", "organisation"] },
       },
-      required: ["title", "visibility"],
+      required: ["title"],
       additionalProperties: false,
     },
-    toCall: (args) => ({
-      method: "POST",
-      path: "/api/v1/notes",
-      body: {
-        title: str(args, "title") ?? "",
-        body: typeof args.body === "string" ? args.body : "",
-        visibility: str(args, "visibility") ?? "",
-      },
-    }),
+    toCall: (args) => {
+      const visibility = str(args, "visibility");
+      return {
+        method: "POST",
+        path: "/api/v1/notes",
+        body: {
+          title: str(args, "title") ?? "",
+          body: typeof args.body === "string" ? args.body : "",
+          ...(visibility ? { visibility } : {}),
+        },
+      };
+    },
   },
 ];
 
