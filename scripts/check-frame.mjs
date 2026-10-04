@@ -10,6 +10,7 @@
  *
  * Exit code 1 on the first group of findings; every finding is printed.
  */
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,6 +43,13 @@ for (const rel of [
   "src/server/services/platform-delete-member.ts",
   "tests/unit/platform-delete-member-coverage.test.ts",
   "src/app/api/mcp/route.ts",
+  "src/app/api/mcp/describe/route.ts",
+  "src/app/api/platform/reassign-owner/route.ts",
+  "src/lib/platform/on-behalf.ts",
+  "src/lib/tool-door/markers.ts",
+  "src/lib/tool-door/obo-door.ts",
+  "src/lib/tool-door/release-gate.ts",
+  "tests/unit/tool-catalog.test.ts",
   "src/app/icon.png",
   "src/app/apple-icon.png",
   "src/app/favicon.ico",
@@ -114,10 +122,12 @@ const sourceFiles = ["src", "docker", "ops", "scripts", "mcp", ".github"]
 // them once got committed to this template). Everything at the root must be
 // on this list.
 const ROOT_ALLOWED = new Set([
-  ".dockerignore", ".env.example", ".gitattributes", ".gitignore", ".prettierignore", ".prettierrc.json",
+  ".beyondles-shared.json", ".dockerignore", ".env.example", ".gitattributes", ".gitignore", ".prettierignore", ".prettierrc.json",
   "README.md", "eslint.config.mjs", "next.config.ts", "next-env.d.ts", "package-lock.json", "package.json",
   "postcss.config.mjs", "prisma.config.ts", "tsconfig.json", "tsconfig.tsbuildinfo", "vitest.config.ts",
   "CLAUDE.md", "LICENSE",
+  // In a `git worktree` checkout `.git` is a file pointing at the main clone.
+  ".git",
 ]);
 for (const entry of readdirSync(root, { withFileTypes: true })) {
   if (entry.isDirectory()) continue;
@@ -172,6 +182,20 @@ if (/^JWT_SECRET=/m.test(envExample) || /^ALLOW_LOCAL_JWT=/m.test(envExample))
     !/export\s+async\s+function\s+DELETE\b/.test(read("src/app/api/platform/organisation/route.ts"))
   )
     fail("src/app/api/platform/organisation/route.ts exports no DELETE handler");
+}
+
+// 5c. The on-behalf module is a VERBATIM copy (connection layer contract,
+//     stage 6, 2.5). A changed byte means a Lab verifies tokens differently
+//     from every other product. Line endings are normalised to LF first, so a
+//     Windows checkout with CRLF does not count as a change.
+{
+  const ON_BEHALF_SHA256 = "d8793acafaf02afde7345ed37c22db3486de442fb75cfbedc57f87793e1f10da";
+  const rel = "src/lib/platform/on-behalf.ts";
+  if (exists(rel)) {
+    const digest = createHash("sha256").update(read(rel).replace(/\r\n/g, "\n"), "utf8").digest("hex");
+    if (digest !== ON_BEHALF_SHA256)
+      fail(`${rel} is not the verbatim copy of the contract (sha256 ${digest}, expected ${ON_BEHALF_SHA256})`);
+  }
 }
 
 // 6. Sign-in never hard-codes the production Suite for /api/auth/me.

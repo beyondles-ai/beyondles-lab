@@ -55,9 +55,14 @@ server — see `src/lib/jwt-guard.ts`.
 | `src/app/api/platform/export/route.ts` | tenant export for the platform |
 | `src/app/api/platform/organisation/route.ts` | tenant deletion for the platform (own key `PLATFORM_DELETE_KEY`) |
 | `src/app/api/platform/member/route.ts` | person deletion for the platform (same key; plan in `platform-delete-member.ts`) |
-| `src/app/api/v1/…`, `src/lib/api-auth.ts` | HTTP door (`x-api-key`) |
-| `src/app/api/mcp/route.ts`, `src/lib/mcp/` | MCP door for agents |
+| `src/app/api/v1/…`, `src/lib/api-auth.ts` | HTTP door (`x-api-key` or on-behalf token, release gate) |
+| `src/app/api/mcp/route.ts`, `src/app/api/mcp/describe/route.ts`, `src/lib/mcp/` | MCP door for agents and its description |
+| `src/lib/tool-door/`, `src/lib/platform/on-behalf.ts` | Shared tool-door files (copied verbatim into every Lab) |
+| `src/app/api/platform/reassign-owner/route.ts` | Hand-over when a person leaves |
 | `src/app/(app)/notes` + `src/server/…` | the worked example of a tenant object |
+| `src/components/share/`, `.beyondles-shared.json` | the share blocks (picker, badge, people picker, dialog): **generated from `beyondles-ai/beyondles-shared`, never edited here** |
+| `src/lib/platform-client/` | the access client, decisions and container rules behind `platform-access.ts`, `platform/access.ts`, `access-rules.ts`, `rbac.ts` and `api-auth.ts`: **generated from `beyondles-ai/beyondles-shared`, never edited here** |
+| `src/components/ui/share-primitives/` | the four small components the share blocks draw with (this Lab's own look) |
 | `docker/`, `ops/deploy/` | container stack and host scripts |
 | `scripts/check-frame.mjs` | the repo half of `/lab-pipeline check`, runs in CI |
 | `docs/FRAME.md` | what the frame guarantees |
@@ -71,6 +76,7 @@ server — see `src/lib/jwt-guard.ts`.
 - Every table has a decision in the deletion plan: delete, anonymise, retain with a reason, or global with a reason (test fails otherwise).
   Child tables without that column are the reviewer's job.
 - Every variable the code reads is passed by Compose and explained in `.env.example`.
+- `src/components/share/` and the `share` part of `messages/*.json` are generated from `beyondles-ai/beyondles-shared` and never edited locally: the CI step "Shared code is unchanged" fails on any difference. To change them, change the shared repo, tag a version, and run its `sync/sync.mjs --target <this repo>` from a checkout of that tag (what a Lab must provide: `share-ui/HOST-CONTRACT.md` there).
 - `messages/de.json` and `messages/en.json` carry the same keys.
 - `JWT_SECRET` never on a server; a production process refuses to start with it (unless `ALLOW_LOCAL_JWT=true`, the E2E exception, which is logged loudly).
 - Rule that no check enforces and every review must: each UI action also exists under `/api/v1` and as an MCP tool.

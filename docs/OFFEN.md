@@ -5,11 +5,6 @@ can decide instead of guessing. Remove entries when done.
 
 ## In the template itself
 
-- **The machine door ignores level 1.** `/api/v1` and `/api/mcp` check the
-  key and (for user keys) the platform, but not the Suite release switch
-  (`getLabGate` needs a person's cookie). A Lab switched off in the Suite
-  keeps serving API keys. Same in LeadLab. Fix needs a cookie-less gate
-  endpoint on the Suite side.
 - **Worker keys are never re-checked.** They skip the platform on purpose
   (no person behind them). A product admin who is later demoted keeps the
   worker key they minted until someone revokes it in the Lab's settings.
@@ -21,22 +16,21 @@ can decide instead of guessing. Remove entries when done.
   covered them once by hand; a Lab that changes them needs its own tests.
 
 - **Collections in the UI.** The access rules understand `COLLECTION`
-  visibility (platform collections), the example form only offers "private"
-  and "organisation". A Lab that shares by collection adds a collection
-  picker fed from `access.collections`.
-- **Individual grants (share dialog).** Reading grants works
-  (`grantedLevels` from the platform). Writing them (`PUT/DELETE
-  /api/access/objects/...`) is not in the template; copy LeadLab's
-  `src/lib/platform/protocol.ts` when a Lab needs a share dialog.
+  visibility (platform collections). The example form uses the shared
+  `VisibilityPicker` but passes no collections, because the note input
+  schema stores `private` and `organisation` only, so the "A collection" row
+  is shown as not available. A Lab that shares by collection passes
+  `access.collections` to `NoteVisibilityField` and extends the input schema
+  (with a check that the person is in that collection).
+- **Individual grants (share dialog).** The share blocks
+  (`src/components/share`, generated from `beyondles-ai/beyondles-shared`)
+  include `ShareDialog`, but the example does not use it: there is no
+  `/api/share/<type>/<id>` route. Reading grants works (`grantedLevels` from
+  the platform). Writing them (`PUT/DELETE /api/access/objects/...`) is not
+  in the template; copy LeadLab's `src/lib/platform/protocol.ts` and its
+  share route when a Lab needs the dialog.
 - **Protocol (audit) rows.** Not written by the example. LeadLab's
   `writePlatformAudit` is the pattern.
-- **Reassign owner on departure.** The platform calls
-  `POST /api/platform/reassign-owner` when a person leaves an organisation;
-  the template does not implement that route yet (still open as a separate
-  route). Owned rows of a person who deletes their profile are already handled
-  by the person door `DELETE /api/platform/member` (FRAME.md 6b): private
-  rows are deleted, shared ones reassigned. Needed as soon as a Lab has
-  person-owned rows in production and the platform calls the route on departure.
 - **E2E tests.** Unit tests only. LeadLab's Playwright setup
   (`tests/e2e`, `.github/workflows/e2e.yml`) is the pattern.
 - **Stale organisation in the token.** Known platform-wide weakness: the
