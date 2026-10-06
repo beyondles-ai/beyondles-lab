@@ -10,10 +10,6 @@ can decide instead of guessing. Remove entries when done.
 - **Retention periods are placeholders.** `RETENTION_NOTES_DAYS` defaults to
   365 for the example table. The period is the customer's decision; a Lab
   keeps this entry until the customer signed its periods off.
-- **The worker route `expire-notes` deletes without the deletion guard.**
-  It predates `deletion-guard.ts`. Smallest fix: count first, call
-  `checkDeletion`, refuse with `conflict`. Left for a separate change so the
-  headless parity tests of that route stay untouched here.
 - **The "Migrations · postgres" job is not yet a required check.** Adding it
   to the branch ruleset is a GitHub setting a human makes.
 
