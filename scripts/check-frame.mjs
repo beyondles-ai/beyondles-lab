@@ -50,6 +50,12 @@ for (const rel of [
   "src/lib/tool-door/obo-door.ts",
   "src/lib/tool-door/release-gate.ts",
   "tests/unit/tool-catalog.test.ts",
+  // Headless by construction (06.10.2026): the manifest, its parity test and
+  // the generated exclusions list.
+  "src/server/functions.manifest.ts",
+  "src/server/machine-door.ts",
+  "tests/unit/parity.test.ts",
+  "docs/EXCLUSIONS.md",
   "src/app/icon.png",
   "src/app/apple-icon.png",
   "src/app/favicon.ico",
