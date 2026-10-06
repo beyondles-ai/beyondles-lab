@@ -16,6 +16,7 @@ import {
 } from "@/lib/mcp/catalog";
 import { logToolCall } from "@/lib/tool-door/call-log";
 import { toolAnnotations, toolMeta } from "@/lib/tool-door/markers";
+import { toolErrorFromHttp } from "@/lib/service-errors";
 
 /**
  * The Lab's MCP server — built per request, stateless.
@@ -129,7 +130,8 @@ async function runTool(context: McpServerContext, name: string, args: ToolArgume
       redirect: "manual",
     });
     const body = await res.text();
-    if (!res.ok) return asError(`Error in ${name}: HTTP ${res.status}: ${shorten(body)}`);
+    // The one error mapping (src/lib/service-errors.ts): `<code> (HTTP <status>): <message>`.
+    if (!res.ok) return toolErrorFromHttp(res.status, body);
     try {
       return asText(JSON.parse(body) as unknown);
     } catch {
