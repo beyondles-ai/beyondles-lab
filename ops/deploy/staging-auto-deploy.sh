@@ -94,7 +94,7 @@ REMOTE="$(git rev-parse "origin/$BRANCH" 2>/dev/null)"
   # Access door (access model, 2026-09-03): /api/health must report access == ok,
   # i.e. NEXT_PUBLIC_PLATFORM_URL AND the platform door are set. Otherwise the
   # Lab runs but lets nobody in — a deploy must not call that a success.
-  ACCESS_DOOR="$(curl -s --max-time 10 "http://127.0.0.1:${PORT}/api/health" | grep -oE '"access":"[a-z_]+"' | cut -d'"' -f4 || true)"
+  ACCESS_DOOR="$(curl -s --max-time 10 "http://127.0.0.1:${PORT}/api/health" | grep -oE '"access":"[a-z_]+"' | cut -d'"' -f4)" || ACCESS_DOOR=""
   if [ "${ACCESS_DOOR:-}" != "ok" ]; then
     echo "ACCESS DOOR NOT OK on :${PORT} (access='${ACCESS_DOOR:-empty}'): NEXT_PUBLIC_PLATFORM_URL, PLATFORM_API_URL or PLATFORM_API_KEY missing in the .env."
     exit 1
