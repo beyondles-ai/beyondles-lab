@@ -14,6 +14,10 @@ can decide instead of guessing. Remove entries when done.
   It predates `deletion-guard.ts`. Smallest fix: count first, call
   `checkDeletion`, refuse with `conflict`. Left for a separate change so the
   headless parity tests of that route stay untouched here.
+- **Contract check secrets are not set.** `.github/workflows/contract-check.yml`
+  lists them; until a human sets them the daily run is red on purpose.
+  The `door-media` edge only checks reachability and key until the media
+  door contract is final.
 - **The "Migrations · postgres" job is not yet a required check.** Adding it
   to the branch ruleset is a GitHub setting a human makes.
 

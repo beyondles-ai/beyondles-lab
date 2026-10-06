@@ -77,6 +77,12 @@ for (const rel of [
   "tests/unit/locale.test.ts",
   "docs/RETENTION.md",
   "docs/HANDOVER.md",
+  "src/server/jobs/contract-edges.ts",
+  "scripts/contract-check.ts",
+  ".github/workflows/contract-check.yml",
+  "src/server/jobs/simulation.ts",
+  "scripts/simulate.ts",
+  "docs/SIMULATION.md",
 ]) {
   if (!exists(rel)) fail(`missing mandatory file: ${rel}`);
 }
