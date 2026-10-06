@@ -83,6 +83,7 @@ for (const rel of [
   "src/server/jobs/simulation.ts",
   "scripts/simulate.ts",
   "docs/SIMULATION.md",
+  "ops/cron/expire-notes.sh",
 ]) {
   if (!exists(rel)) fail(`missing mandatory file: ${rel}`);
 }

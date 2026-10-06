@@ -267,7 +267,10 @@ key of this Lab (`via === "api-key"`, `kind === "worker"`): a USER key, an
 on-behalf token or an organisation agent gets `403 worker_only`. The service
 sees `actor.door === "worker"` and audits as System. The parity test enforces
 the path prefix and the excluded MCP door. Example:
-`POST /api/v1/worker/expire-notes` (`expireNotes`).
+`POST /api/v1/worker/expire-notes` (`expireNotes`), scheduled by
+`ops/cron/expire-notes.sh`. A worker route that deletes is a dry run unless
+the body says `"dryRun": false`; the scheduled caller sends that explicitly
+and a unit test feeds its exact body through the route.
 
 ## 6. Tenant export
 

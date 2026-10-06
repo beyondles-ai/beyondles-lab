@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
@@ -515,6 +518,16 @@ describe("worker-triggered route POST /api/v1/worker/expire-notes", () => {
         },
       },
     ]);
+  });
+
+  it("the scheduled caller (ops/cron/expire-notes.sh) sends dryRun: false and really deletes", async () => {
+    const script = readFileSync(path.resolve(__dirname, "..", "..", "ops", "cron", "expire-notes.sh"), "utf8");
+    const body = JSON.parse(/^BODY='(.+)'$/m.exec(script)?.[1] ?? "null") as Record<string, unknown>;
+    expect(body.dryRun).toBe(false);
+    const res = await run("worker_job", body);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ data: { deleted: 2, expired: 2, dryRun: false } });
+    expect(h.note.deleteMany).toHaveBeenCalledTimes(1);
   });
 
   it("is a dry run unless the body says dryRun: false", async () => {

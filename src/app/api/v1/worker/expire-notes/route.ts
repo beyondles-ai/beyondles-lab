@@ -12,7 +12,7 @@ import { expireNotes } from "@/server/services/notes";
 
 /**
  * WORKER-TRIGGERED ROUTE (docs/FRAME.md 5, "Worker routes").
- *   POST /api/v1/worker/expire-notes  { "olderThanDays": 365 }
+ *   POST /api/v1/worker/expire-notes  { "olderThanDays": 365, "dryRun": false }
  * Called by a scheduler (cron on the host, a platform job) with a WORKER key
  * of this Lab that carries `write` and `notes:delete`. A USER key, an
  * on-behalf token or a missing scope is refused by `openMachineDoor`.
@@ -22,7 +22,8 @@ import { expireNotes } from "@/server/services/notes";
  * The pattern every Lab copies: the work runs through the job frame
  * (`runJob`: one completion line, `job_runs` heartbeat state, ops alert when
  * incomplete) and the service asks the deletion guard before it deletes.
- * Dry run unless the body says `"dryRun": false`.
+ * Dry run unless the body says `"dryRun": false`, so every SCHEDULED caller
+ * sends it explicitly (the template's caller: ops/cron/expire-notes.sh).
  */
 export const dynamic = "force-dynamic";
 
