@@ -7,6 +7,7 @@ import {
   visibilityWhere,
 } from "@/lib/platform-client/core/rules";
 import type { AccessContext, ObjectType } from "@/lib/platform/access";
+import { ServiceError } from "@/lib/service-errors";
 
 /**
  * Access model, LEVEL 3 — the CONTAINER on the single row.
@@ -69,4 +70,49 @@ export function allowedVisibilities(ctx: AccessContext): Visibility[] {
   if (ctx.collections.length > 0 && mayChooseVisibility(ctx, "COLLECTION")) out.push("COLLECTION");
   if (mayChooseVisibility(ctx, "ORGANISATION")) out.push("ORGANISATION");
   return out;
+}
+
+/** What a caller may ask for when creating a row; `undefined` = "the default". */
+export type ContainerRequest = "private" | "organisation" | undefined;
+
+export interface ChosenContainer {
+  visibility: Visibility;
+  collectionId: string | null;
+}
+
+/**
+ * THE container choice for a new row, for every door alike (screen, `/api/v1`,
+ * MCP). There is no second default anywhere.
+ *
+ *  - Nothing requested + a person acts: PRIVATE to that person. The safer
+ *    default: a wider container is always an explicit decision.
+ *  - Nothing requested + nobody acts (worker key, organisation agent):
+ *    refused with `container_required`. There is no private container
+ *    without a person, and a machine never widens silently; it names
+ *    `organisation` explicitly.
+ *  - A collection agent creates in its own collection only and names nothing.
+ *  - Anything requested is checked against `allowedVisibilities`.
+ */
+export function chooseContainer(ctx: AccessContext, requested: ContainerRequest): ChosenContainer {
+  if (ctx.source === "agent") {
+    const collectionId = ctx.collections[0]?.id;
+    if (requested !== undefined || !collectionId) {
+      throw new ServiceError("forbidden", "A collection agent creates rows in its own collection only; do not name a visibility.");
+    }
+    return { visibility: "COLLECTION", collectionId };
+  }
+  if (requested === undefined) {
+    if (!ctx.userId) {
+      throw new ServiceError(
+        "container_required",
+        "Nobody acts behind this credential, so there is no private container. Name the container explicitly (visibility: 'organisation').",
+      );
+    }
+    return { visibility: "PRIVATE", collectionId: null };
+  }
+  const visibility: Visibility = requested === "organisation" ? "ORGANISATION" : "PRIVATE";
+  if (!allowedVisibilities(ctx).includes(visibility)) {
+    throw new ServiceError("forbidden", `This key or person may not use the container '${requested}'.`);
+  }
+  return { visibility, collectionId: null };
 }
