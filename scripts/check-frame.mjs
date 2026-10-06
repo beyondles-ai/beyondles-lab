@@ -77,6 +77,7 @@ for (const rel of [
   "tests/unit/locale.test.ts",
   "docs/RETENTION.md",
   "docs/HANDOVER.md",
+  "ops/cron/expire-notes.sh",
 ]) {
   if (!exists(rel)) fail(`missing mandatory file: ${rel}`);
 }
