@@ -29,13 +29,24 @@ can decide instead of guessing. Remove entries when done.
   the platform). Writing them (`PUT/DELETE /api/access/objects/...`) is not
   in the template; copy LeadLab's `src/lib/platform/protocol.ts` and its
   share route when a Lab needs the dialog.
-- **Protocol (audit) rows.** Not written by the example. LeadLab's
-  `writePlatformAudit` is the pattern.
 - **E2E tests.** Unit tests only. LeadLab's Playwright setup
   (`tests/e2e`, `.github/workflows/e2e.yml`) is the pattern.
 - **Stale organisation in the token.** Known platform-wide weakness: the
   organisation uuid is a snapshot of the login moment (see SIDE-PROJECTS.md,
   "Stale organisation"). Not fixable in a Lab.
+
+- **Rate limit per process.** The in-memory store counts per container and
+  starts from zero on restart (docs/FRAME.md 5.5). Enough for one container
+  per environment; several replicas need `setRateLimitStore` with a shared
+  store.
+- **Narrowing an existing key.** Keys from before scopes keep `*` (full
+  access). There is no "edit scopes" button: the owner creates a narrower key
+  and revokes the old one. Add an edit action when Labs ask for it.
+- **Screen through `/api/v1`.** The AdvisorLab style (docs/FRAME.md 5.7) needs
+  a bridge that accepts the Suite cookie in `openMachineDoor`; not built.
+
+Deliberately missing doors are NOT listed here: they live in the functions
+manifest and `docs/EXCLUSIONS.md`.
 
 ## In a Lab built from this template
 
