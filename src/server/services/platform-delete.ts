@@ -49,9 +49,14 @@ export const DELETION_PLAN = [
 /**
  * Tables that hold nothing of any organisation (rate buckets, heartbeats,
  * catalogues). Each needs a reason, so "it is global" is a decision somebody
- * wrote down and not a table somebody forgot. The template has none.
+ * wrote down and not a table somebody forgot.
  */
-export const GLOBAL_TABLES: readonly { table: string; reason: string }[] = [];
+export const GLOBAL_TABLES: readonly { table: string; reason: string }[] = [
+  {
+    table: "job_runs",
+    reason: "Heartbeat state of the scheduled jobs: job name and timestamps, no organisation, no person.",
+  },
+];
 
 type PlanTable = (typeof DELETION_PLAN)[number]["table"];
 

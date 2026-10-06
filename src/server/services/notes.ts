@@ -7,6 +7,7 @@ import { LAB_KEY } from "@/lib/lab";
 import { ServiceError } from "@/lib/service-errors";
 import type { ExpireNotesInput, ListNotesQuery, NoteInput, NoteUpdate } from "@/server/schemas/notes";
 import { db } from "@/lib/db";
+import { assertNotRedacted } from "@/server/retention/redaction";
 
 /**
  * The notes functions — each exists ONCE and does everything that must be
@@ -85,6 +86,9 @@ export async function createNote(actor: Actor, input: NoteInput) {
 export async function updateNote(actor: Actor, noteId: string, patch: NoteUpdate) {
   const current = await getNote(actor, noteId);
   if (!canEdit(actor.access, "note", current)) throw new ServiceError("forbidden", "You may see this note but not change it.");
+  // Retention: a redacted note stays redacted (src/server/retention/redaction.ts).
+  const lock = await db.note.findFirst({ where: { id: current.id, organisationId: actor.organisationId }, select: { redactedAt: true } });
+  if (lock) assertNotRedacted(lock);
 
   let visibility = current.visibility;
   if (patch.visibility !== undefined) {

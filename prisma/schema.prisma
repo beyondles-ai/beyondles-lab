@@ -71,6 +71,10 @@ model Note {
   visibility     Visibility @default(PRIVATE)
   /// Platform collection id when `visibility = COLLECTION`.
   collectionId   String?
+  /// Set by the retention job (`src/server/retention/`). Once set, the
+  /// personal columns are blanked for good: a database trigger (migration
+  /// 0003) refuses any UPDATE that writes them back.
+  redactedAt     DateTime?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
@@ -103,4 +107,16 @@ model ApiKey {
 
   @@index([organisationId, createdAt(sort: Desc)])
   @@map("api_keys")
+}
+
+/// One row per scheduled job (`src/server/jobs/schedule.ts`). Written by
+/// `runJob`; read by the heartbeat job, which alerts when `lastSuccessAt` is
+/// older than the job's window. Not tenant data: no organisation, no person.
+model JobRun {
+  name          String    @id
+  lastRunAt     DateTime
+  lastStatus    String
+  lastSuccessAt DateTime?
+
+  @@map("job_runs")
 }
