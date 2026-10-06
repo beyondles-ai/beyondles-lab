@@ -322,7 +322,10 @@ export function createOnBehalfVerifier(config: OnBehalfVerifierConfig): OnBehalf
       const kid = typeof token === "string" ? keyIdOf(token) : null;
       const unknownKey = haveKeys && kid !== null && !keys.has(kid);
       const mayAsk = lastAttemptAt === 0 || now() - lastAttemptAt > refetchCooldownMs;
-      if ((stale || unknownKey) && mayAsk) await refresh();
+      // A fetch already in flight is awaited even inside the cooldown: otherwise a call that
+      // arrives while the first key fetch runs sees an empty cache and answers keys_unavailable.
+      if (inflight) await inflight;
+      else if ((stale || unknownKey) && mayAsk) await refresh();
       if (keys.size === 0 || now() - fetchedAt > staleMaxMs) return { ok: false, reason: "keys_unavailable" };
       return verifyOnBehalfToken(token, keys, { issuer: config.issuer, audience: config.audience }, now());
     },
