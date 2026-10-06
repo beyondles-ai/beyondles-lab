@@ -7,6 +7,7 @@ import { LAB_KEY } from "@/lib/lab";
 import { ServiceError } from "@/lib/service-errors";
 import type { ExpireNotesInput, ListNotesQuery, NoteInput, NoteUpdate } from "@/server/schemas/notes";
 import { db } from "@/lib/db";
+import { checkDeletion, parseMaxShare } from "@/server/jobs/deletion-guard";
 import { assertNotRedacted } from "@/server/retention/redaction";
 
 /**
@@ -135,17 +136,34 @@ export async function deleteNote(actor: Actor, noteId: string): Promise<{ id: st
  * WORKER key (`trigger: "worker"` in the manifest); no screen, no tool.
  * Organisation rows only, by construction: a worker sees nothing else.
  */
-export async function expireNotes(actor: Actor, input: ExpireNotesInput): Promise<{ deleted: number }> {
+export async function expireNotes(
+  actor: Actor,
+  input: ExpireNotesInput,
+): Promise<{ deleted: number; expired: number; dryRun: boolean }> {
   if (actor.door !== "worker") throw new ServiceError("forbidden", "Only a worker key runs this job.");
   const cutoff = new Date(Date.now() - input.olderThanDays * 86_400_000);
-  const result = await db.note.deleteMany({
-    where: { AND: [visibleWhere(actor.access, "note"), { visibility: "ORGANISATION" }, { createdAt: { lt: cutoff } }] },
+  const scope = [visibleWhere(actor.access, "note"), { visibility: "ORGANISATION" as const }];
+  // Deletion guard (lab learnings, rule 4): count first; more than the
+  // allowed share of the organisation's notes in one run is refused.
+  const total = await db.note.count({ where: { AND: scope } });
+  const expired = await db.note.count({ where: { AND: [...scope, { createdAt: { lt: cutoff } }] } });
+  const verdict = checkDeletion({
+    toDelete: expired,
+    total,
+    maxShare: parseMaxShare(process.env.EXPIRE_NOTES_MAX_SHARE),
+    allowEmpty: true,
   });
+  if (!verdict.ok) {
+    throw new ServiceError("conflict", `Refused by the deletion guard (${verdict.reason}): ${expired} of ${total} notes.`);
+  }
+  if (input.dryRun || expired === 0) return { deleted: 0, expired, dryRun: input.dryRun };
+
+  const result = await db.note.deleteMany({ where: { AND: [...scope, { createdAt: { lt: cutoff } }] } });
   if (result.count > 0) {
     await recordAudit(actor, {
       action: `${LAB_KEY}.notes_expired`,
       details: { deleted: result.count, olderThanDays: input.olderThanDays },
     });
   }
-  return { deleted: result.count };
+  return { deleted: result.count, expired, dryRun: false };
 }

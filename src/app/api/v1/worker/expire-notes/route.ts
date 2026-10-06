@@ -4,6 +4,8 @@ import {
   withErrorEnvelope,
   zodToApiError,
 } from "@/lib/api-errors";
+import { realJobDeps } from "@/server/jobs/jobs";
+import { runJob } from "@/server/jobs/run-job";
 import { openMachineDoor } from "@/server/machine-door";
 import { expireNotesSchema } from "@/server/schemas/notes";
 import { expireNotes } from "@/server/services/notes";
@@ -16,6 +18,11 @@ import { expireNotes } from "@/server/services/notes";
  * on-behalf token or a missing scope is refused by `openMachineDoor`.
  * REST only by design: no screen, no MCP tool (see the manifest).
  * All worker routes live under `/api/v1/worker/`.
+ *
+ * The pattern every Lab copies: the work runs through the job frame
+ * (`runJob`: one completion line, `job_runs` heartbeat state, ops alert when
+ * incomplete) and the service asks the deletion guard before it deletes.
+ * Dry run unless the body says `"dryRun": false`.
  */
 export const dynamic = "force-dynamic";
 
@@ -24,6 +31,23 @@ export async function POST(request: Request): Promise<Response> {
     const actor = await openMachineDoor(request, "expireNotes");
     const parsed = expireNotesSchema.safeParse(await readJson(request));
     if (!parsed.success) throw zodToApiError(parsed.error);
-    return apiJson({ data: await expireNotes(actor, parsed.data) });
+    let output: Awaited<ReturnType<typeof expireNotes>> | undefined;
+    let failure: unknown;
+    await runJob(
+      "expire-notes",
+      async () => {
+        try {
+          output = await expireNotes(actor, parsed.data);
+        } catch (error) {
+          failure = error;
+          throw error;
+        }
+        return { counts: { expired: output.expired, deleted: output.deleted, dry_run: output.dryRun ? 1 : 0 } };
+      },
+      realJobDeps(),
+    );
+    // The frame logged and alerted; the caller still gets the real error.
+    if (failure !== undefined || !output) throw failure ?? new Error("expire-notes produced no result");
+    return apiJson({ data: output });
   });
 }

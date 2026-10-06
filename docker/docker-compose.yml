@@ -86,6 +86,7 @@ services:
       RETENTION_DRY_RUN: ${RETENTION_DRY_RUN:-true}
       RETENTION_MAX_SHARE: ${RETENTION_MAX_SHARE:-}
       RETENTION_NOTES_DAYS: ${RETENTION_NOTES_DAYS:-}
+      EXPIRE_NOTES_MAX_SHARE: ${EXPIRE_NOTES_MAX_SHARE:-}
     ports:
       - "127.0.0.1:${APP_PORT:?APP_PORT missing in .env — staging and production must not share a port}:3000"
     healthcheck:
@@ -123,6 +124,7 @@ services:
       RETENTION_DRY_RUN: ${RETENTION_DRY_RUN:-true}
       RETENTION_MAX_SHARE: ${RETENTION_MAX_SHARE:-}
       RETENTION_NOTES_DAYS: ${RETENTION_NOTES_DAYS:-}
+      EXPIRE_NOTES_MAX_SHARE: ${EXPIRE_NOTES_MAX_SHARE:-}
 
 volumes:
   postgres-data:

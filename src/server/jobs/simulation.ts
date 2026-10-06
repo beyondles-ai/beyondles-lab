@@ -80,7 +80,7 @@ export function judgeRequest(scenario: Scenario, exchanges: Exchange[], organisa
     organisationId,
     purpose: `${LAB_KEY}.simulation-judge`,
     useCase: "verification",
-    level: "balanced",
+    level: "workhorse",
     system: JUDGE_SYSTEM,
     messages: [
       {

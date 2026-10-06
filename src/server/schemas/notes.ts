@@ -47,6 +47,8 @@ export const noteIdSchema = z.uuid();
 
 export const expireNotesSchema = z.object({
   olderThanDays: z.number().int().min(1).max(3650),
+  /** Dry unless the caller sends `false` (src/server/jobs/deletion-guard.ts). */
+  dryRun: z.boolean().default(true),
 });
 export type ExpireNotesInput = z.infer<typeof expireNotesSchema>;
 
@@ -68,5 +70,5 @@ export const deletedEnvelope = z.object({
   data: z.object({ id: z.string(), deleted: z.literal(true) }),
 });
 export const expiredEnvelope = z.object({
-  data: z.object({ deleted: z.number().int() }),
+  data: z.object({ deleted: z.number().int(), expired: z.number().int(), dryRun: z.boolean() }),
 });

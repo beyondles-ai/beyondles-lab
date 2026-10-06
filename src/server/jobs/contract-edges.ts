@@ -43,7 +43,7 @@ export function buildEdges(): Edge[] {
             organisationId: env.CONTRACT_ORGANISATION_ID,
             purpose: `${LAB_KEY}.contract-check`,
             useCase: "verification",
-            level: "fast",
+            level: "economy",
             messages: [{ role: "user", content: "Reply with the single word OK." }],
             maxTokens: 5,
           }),

@@ -33,7 +33,7 @@ describe("contract edges (fake fetch, no network)", () => {
     const { url, init } = llm.request(env);
     expect(url).toBe("https://door.test/api/llm/complete");
     const body = JSON.parse(String(init.body));
-    expect(body).toMatchObject({ useCase: "verification", level: "fast" });
+    expect(body).toMatchObject({ useCase: "verification", level: "economy" });
     expect(body.model).toBeUndefined();
   });
 
