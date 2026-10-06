@@ -24,7 +24,9 @@
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # Pinned by digest (lab learnings, rule 10). Renew on purpose:
+    #   docker buildx imagetools inspect postgres:16-alpine
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-examplelab}
@@ -77,6 +79,13 @@ services:
       API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-}
       MCP_RATE_LIMIT_PER_MINUTE: ${MCP_RATE_LIMIT_PER_MINUTE:-}
       ON_BEHALF_RATE_LIMIT_PER_MINUTE: ${ON_BEHALF_RATE_LIMIT_PER_MINUTE:-}
+      # Scheduled jobs (src/server/jobs): ops alerts through the mail door,
+      # retention settings. Dry run unless RETENTION_DRY_RUN says false/0/no.
+      OPS_ALERT_EMAIL: ${OPS_ALERT_EMAIL:-}
+      OPS_ALERT_ORGANISATION_ID: ${OPS_ALERT_ORGANISATION_ID:-}
+      RETENTION_DRY_RUN: ${RETENTION_DRY_RUN:-true}
+      RETENTION_MAX_SHARE: ${RETENTION_MAX_SHARE:-}
+      RETENTION_NOTES_DAYS: ${RETENTION_NOTES_DAYS:-}
     ports:
       - "127.0.0.1:${APP_PORT:?APP_PORT missing in .env — staging and production must not share a port}:3000"
     healthcheck:
@@ -105,6 +114,15 @@ services:
       - tools
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-examplelab}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-examplelab}
+      PLATFORM_API_URL: ${PLATFORM_API_URL:-}
+      PLATFORM_API_KEY: ${PLATFORM_API_KEY:-}
+      # Scheduled jobs (src/server/jobs): ops alerts through the mail door,
+      # retention settings. Dry run unless RETENTION_DRY_RUN says false/0/no.
+      OPS_ALERT_EMAIL: ${OPS_ALERT_EMAIL:-}
+      OPS_ALERT_ORGANISATION_ID: ${OPS_ALERT_ORGANISATION_ID:-}
+      RETENTION_DRY_RUN: ${RETENTION_DRY_RUN:-true}
+      RETENTION_MAX_SHARE: ${RETENTION_MAX_SHARE:-}
+      RETENTION_NOTES_DAYS: ${RETENTION_NOTES_DAYS:-}
 
 volumes:
   postgres-data:

@@ -1,5 +1,7 @@
 # The frame — what every Beyondles Lab guarantees
 
+Checked on: 2026-10-07
+
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
 binding operating description is `beyondles-ci/docs/SIDE-PROJECTS.md`; where
@@ -335,6 +337,58 @@ handled per Lab, and is not part of the profile deletion.
 - `GET /api/health` answers without a database and reports the door state.
 - Two languages (`messages/de.json`, `messages/en.json`), same keys, checked.
 - Beyondles icons in `src/app/`, "Back to Suite" link above the menu.
+
+## 7a. Lab learnings built in (Masoud, 30.09.2026)
+
+Each rule below cost a real incident in an earlier Lab. The template makes
+it true by construction; `npm run check:frame` and the unit tests keep it so.
+
+- **Every job ends with one line and an exit code.** Jobs run through
+  `src/server/jobs/run-job.ts`: one line
+  `job=<name> status=complete|incomplete counts=…` (counts, never ids), exit
+  1 when incomplete. Run one with `npm run job -- <name>`; on the server from
+  the host's cron:
+  `docker compose ... run --rm --no-deps toolchain npm run job -- retention`.
+  check-frame fails on an empty `catch {}`, `.catch(() => {})` and `|| true`
+  in `src/`, `scripts/`, `ops/`, `mcp/`, `docker/`.
+- **Alert before the first nightly job.** `src/server/jobs/alert.ts` mails
+  ops through the platform mail door (`OPS_ALERT_EMAIL`,
+  `OPS_ALERT_ORGANISATION_ID`; no mail key). Every run writes
+  `job_runs.lastSuccessAt`; the `heartbeat` job alerts when a job in
+  `SCHEDULED_JOBS` (`src/server/jobs/heartbeat.ts`) missed its window. Run
+  the heartbeat from a different scheduler than the jobs where possible.
+- **Deletion guards.** `src/server/jobs/deletion-guard.ts`: empty input
+  stops, more than 10 % of a table in one run stops (`*_MAX_SHARE`), and a
+  dry run is the default: only an explicit `false`/`0`/`no`/`off` is real,
+  `true`/`1`/`yes`, a typo or an empty value are dry.
+- **Retention.** `src/server/retention/registry.ts` lists every tenant table
+  with personal data (columns, period setting, default) or says why a table
+  has none (a test compares it with the export's tenant tables). The nightly
+  `retention` job redacts with the guards above. A redacted row cannot be
+  written back: the database trigger of migration 0003 refuses it, the
+  service answers `conflict` first (`redaction.ts`), and `tests/db` proves it
+  on a real Postgres. `npm run docs:retention` writes the privacy-note lines
+  to `docs/RETENTION.md`.
+- **Migrations run in CI.** Job `Migrations · postgres` applies every
+  migration to an empty Postgres, checks schema and migrations agree, and
+  runs `tests/db`. Make it a required check next to `Quality Gates · app`
+  (a ruleset setting, done by a human). No Windows job: nothing in the
+  template is OS-specific; a Lab with a Windows part adds one for it.
+- **Locale.** `tests/unit/locale.test.ts` checks every key the UI uses exists
+  in de and en. Dates are stored as ISO `YYYY-MM-DD` (`src/lib/dates.ts`);
+  formats whose day/month order is a guess are refused.
+- **Docs are generated or dated.** Every file in `docs/` has a
+  `Checked on: YYYY-MM-DD` line or a `<!-- GENERATED` marker. One open-items
+  file: `docs/OFFEN.md`. The handover uses `docs/HANDOVER.md`, whose
+  `## Not tested` section is mandatory.
+- **No provider keys, one key per purpose, pinned images.** check-frame fails
+  on provider key names and on `PLATFORM_LLM_*` outside `src/lib/platform/`;
+  AI calls carry `{ useCase, level }` or `{ model, fallback }`, never a key.
+  Each key has one job: `PLATFORM_API_KEY` (calls to the platform),
+  `PLATFORM_EXPORT_KEY` (platform reads the export), `PLATFORM_DELETE_KEY`
+  (platform deletes), worker API keys (schedulers). Third-party images in
+  Compose, CI and the Dockerfile are pinned by digest; check-frame warns on
+  an unpinned one.
 
 ## 8. What the frame does NOT do
 

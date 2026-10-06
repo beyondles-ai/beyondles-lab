@@ -12,7 +12,10 @@
 # No `prisma db seed` anywhere in the deploy path.
 # ---------------------------------------------------------------------------
 
-FROM node:22-alpine AS deps
+# Base images pinned by digest (lab learnings, rule 10): an unpinned tag once
+# changed upstream and silently broke deletes. Renew the digest on purpose:
+#   docker buildx imagetools inspect node:22-alpine
+FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS deps
 WORKDIR /app
 # Build-time dummy: prisma.config.ts wants the variable already during
 # `prisma generate` (postinstall). The real value arrives at RUNTIME from
@@ -33,10 +36,15 @@ RUN npm run build
 FROM deps AS toolchain
 COPY prisma ./prisma
 COPY prisma.config.ts tsconfig.json ./
+# Scheduled jobs (retention, heartbeat) run here, from the host's cron:
+#   docker compose ... run --rm --no-deps toolchain npm run job -- retention
+COPY src ./src
+COPY scripts ./scripts
+COPY messages ./messages
 CMD ["sh", "-c", "echo 'toolchain: docker compose run --rm --no-deps toolchain npx prisma migrate deploy'"]
 
 # --- Runtime ----------------------------------------------------------------
-FROM node:22-alpine AS runtime
+FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
