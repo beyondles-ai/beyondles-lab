@@ -15,6 +15,8 @@ import {
 } from "@/lib/platform/access";
 import { checkOnBehalfToken, onBehalfBearer } from "@/lib/tool-door/obo-door";
 import { checkLabReleased } from "@/lib/tool-door/release-gate";
+import { checkRateLimit, type RateDoor } from "@/lib/rate-limit";
+import { missingScopes, onBehalfScopes, type GrantedScopes, type Scope } from "@/lib/scopes";
 
 /**
  * The door for machines. It accepts TWO credentials:
@@ -35,6 +37,11 @@ import { checkLabReleased } from "@/lib/tool-door/release-gate";
  *     collection agent = its collection, private agent = its owner, no agent
  *     = the person (`sub`), neither = worker view. Every named person is
  *     checked at the platform (floor, membership, product access).
+ *
+ * After the credential: the RATE LIMIT (`src/lib/rate-limit.ts`, 429 with
+ * `Retry-After`) per key or per calling product, and the SCOPES the
+ * credential carries (`src/lib/scopes.ts`); each route asks for the scopes of
+ * its function with `requireScope` (through `src/server/machine-door.ts`).
  *
  * Both together are refused (`400 ambiguous_credential`). People keep coming
  * through the Suite cookie (`src/lib/rbac.ts`). The middleware lets `/api/v1`
@@ -71,6 +78,37 @@ export interface ApiKeyContext {
   access: AccessContext;
   via: "api-key" | "on-behalf";
   onBehalf: OnBehalfCaller | null;
+  /** Key: the stored scopes (`*` = legacy full access). Token: `onBehalfScopes`. */
+  scopes: GrantedScopes;
+}
+
+/** 403 `insufficient_scope` unless the credential carries every scope in `needed`. */
+export function requireScope(key: Pick<ApiKeyContext, "scopes">, needed: readonly Scope[]): void {
+  const missing = missingScopes(key.scopes, needed);
+  if (missing.length > 0) {
+    throw new ApiError(
+      403,
+      "insufficient_scope",
+      `This credential lacks the scope(s) ${missing.join(", ")}. A product admin creates a key with them in the Lab's settings.`,
+    );
+  }
+}
+
+function doorOf(request: Request): RateDoor {
+  try {
+    return new URL(request.url).pathname.startsWith("/api/mcp") ? "mcp" : "v1";
+  } catch {
+    return "v1";
+  }
+}
+
+function enforceRateLimit(request: Request, credential: "key" | "on-behalf", subject: string): void {
+  const decision = checkRateLimit({ door: doorOf(request), credential, subject });
+  if (!decision.allowed) {
+    throw new ApiError(429, "rate_limited", "Too many requests for this credential. Wait and try again.", undefined, {
+      "Retry-After": String(decision.retryAfterSeconds),
+    });
+  }
 }
 
 const LAST_USED_GRANULARITY_MS = 60_000;
@@ -122,12 +160,15 @@ export async function requireApiKey(request: Request): Promise<ApiKeyContext> {
       createdAt: true,
       revokedAt: true,
       lastUsedAt: true,
+      scopes: true,
     },
   });
 
   if (!row || row.revokedAt || !hashEquals(row.keyHash, hash)) {
     throw new ApiError(401, "unauthorized", "API key invalid.");
   }
+
+  enforceRateLimit(request, "key", `key:${row.id}`);
 
   // Level 1 for machines: the Suite's release switch, asked through the platform.
   const release = await checkLabReleased(row.organisationId, { localMode: localFallbackAllowed() });
@@ -159,6 +200,7 @@ export async function requireApiKey(request: Request): Promise<ApiKeyContext> {
     access: access.context,
     via: "api-key",
     onBehalf: null,
+    scopes: row.scopes,
   };
 }
 
@@ -176,6 +218,7 @@ async function requireOnBehalf(request: Request, token: string): Promise<ApiKeyC
   }
 
   const { claims } = check;
+  enforceRateLimit(request, "on-behalf", `cp:${claims.cp}:${claims.org}`);
   const agent = claims.agt ?? null;
   const issuedAt = new Date(claims.iat * 1000);
   const access = await getOnBehalfAccessContext({
@@ -227,6 +270,7 @@ async function requireOnBehalf(request: Request, token: string): Promise<ApiKeyC
       tokenId: claims.jti,
       issuedAt,
     },
+    scopes: onBehalfScopes({ personUserId: person }),
   };
 }
 
