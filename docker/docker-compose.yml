@@ -72,6 +72,11 @@ services:
       # MCP over HTTP: override of the base URL for the self-call to /api/v1.
       # Empty is the norm (then http://127.0.0.1:${PORT}).
       MCP_SELF_BASE_URL: ${MCP_SELF_BASE_URL:-}
+      # Rate limit of the machine doors per minute (src/lib/rate-limit.ts).
+      # Empty = default (120 / 60 / 600), 0 = off. Counted per process.
+      API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-}
+      MCP_RATE_LIMIT_PER_MINUTE: ${MCP_RATE_LIMIT_PER_MINUTE:-}
+      ON_BEHALF_RATE_LIMIT_PER_MINUTE: ${ON_BEHALF_RATE_LIMIT_PER_MINUTE:-}
     ports:
       - "127.0.0.1:${APP_PORT:?APP_PORT missing in .env — staging and production must not share a port}:3000"
     healthcheck:

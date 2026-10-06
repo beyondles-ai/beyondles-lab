@@ -351,6 +351,7 @@ describe("describeToolDoor", () => {
           idempotent: false,
           title: { de: "Senden", en: "Send" },
           capability: "mail.send",
+          scopes: ["write", "notes:delete"],
         },
       ],
       isAvailable: (name) => name !== "examplelab_send",
@@ -371,6 +372,7 @@ describe("describeToolDoor", () => {
           idempotent: true,
           capability: null,
           available: true,
+          scopes: [],
           inputSchema: { type: "object", properties: {} },
         },
         {
@@ -381,6 +383,7 @@ describe("describeToolDoor", () => {
           idempotent: false,
           capability: "mail.send",
           available: false,
+          scopes: ["write", "notes:delete"],
           inputSchema: { type: "object", properties: {} },
         },
       ],

@@ -1,7 +1,8 @@
 import { requireApiKey } from "@/lib/api-auth";
 import { apiJson, withErrorEnvelope } from "@/lib/api-errors";
 import { LAB_KEY, LAB_NAME, TOOL_PREFIX } from "@/lib/lab";
-import { TOOL_DEFINITIONS } from "@/lib/mcp/catalog";
+import { TOOLS_BY_NAME, TOOL_DEFINITIONS } from "@/lib/mcp/catalog";
+import { hasScopes } from "@/lib/scopes";
 import { MCP_SERVER_VERSION } from "@/lib/mcp/server";
 import { describeToolDoor } from "@/lib/tool-door/describe";
 
@@ -20,7 +21,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request): Promise<Response> {
   return withErrorEnvelope(async () => {
-    await requireApiKey(request);
+    const key = await requireApiKey(request);
     return apiJson(
       describeToolDoor({
         product: LAB_KEY,
@@ -29,8 +30,8 @@ export async function GET(request: Request): Promise<Response> {
         toolPrefix: TOOL_PREFIX,
         appUrl: process.env.NEXT_PUBLIC_APP_URL ?? null,
         tools: TOOL_DEFINITIONS,
-        // The template has no key scopes: every tool is open to every accepted credential.
-        isAvailable: () => true,
+        // Available = the caller's credential carries every scope the tool declares.
+        isAvailable: (name) => hasScopes(key.scopes, TOOLS_BY_NAME.get(name)?.scopes ?? []),
       }),
     );
   });

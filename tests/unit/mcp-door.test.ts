@@ -22,6 +22,7 @@ import { hashApiKey } from "@/lib/api-keys";
 import { OBO_REQUESTS_PER_MINUTE, __resetOboDoorForTests } from "@/lib/tool-door/obo-door";
 import { __resetReleaseGateForTests } from "@/lib/tool-door/release-gate";
 import { __clearAccessCacheForTests, workerAccessContext } from "@/lib/platform/access";
+import { __resetRateLimitForTests } from "@/lib/rate-limit";
 
 /**
  * The token path through the Lab's one machine entry `requireApiKey`, the
@@ -133,6 +134,9 @@ beforeEach(() => {
   vi.stubEnv("MCP_SELF_BASE_URL", "");
   vi.stubEnv("PORT", "");
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://examplelab-staging.beyondles.ai");
+  // These tests pin the shared tool door's own token limit (1200); the Lab's
+  // limit (src/lib/rate-limit.ts) is switched off here and tested on its own.
+  vi.stubEnv("ON_BEHALF_RATE_LIMIT_PER_MINUTE", "0");
   vi.stubGlobal("fetch", fakeFetch());
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
   vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -150,6 +154,7 @@ afterEach(() => {
   __resetOboDoorForTests();
   __resetReleaseGateForTests();
   __clearAccessCacheForTests();
+  __resetRateLimitForTests();
 });
 
 describe("requireApiKey: the token path (2.4)", () => {
@@ -455,6 +460,8 @@ describe("POST /api/mcp", () => {
       "examplelab_list_notes",
       "examplelab_get_note",
       "examplelab_create_note",
+      "examplelab_update_note",
+      "examplelab_delete_note",
     ]);
     expect(body.result.tools[0]).toMatchObject({
       title: "List notes",
@@ -529,6 +536,8 @@ describe("GET /api/mcp/describe", () => {
       ["examplelab_list_notes", "read", true, null, true],
       ["examplelab_get_note", "read", true, null, true],
       ["examplelab_create_note", "write", false, null, true],
+      ["examplelab_update_note", "write", true, null, true],
+      ["examplelab_delete_note", "destructive", false, null, true],
     ]);
     expect(body.tools[2].title).toEqual({ de: "Notiz anlegen", en: "Create a note" });
   });

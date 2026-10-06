@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { ServiceError, toApiError } from "@/lib/service-errors";
+
 /**
  * The one shape in which the HTTP door `/api/v1` reports errors: a stable
  * `code` for programs and a `message` for people. No internals leak out —
@@ -30,6 +32,10 @@ export type ApiErrorCode =
   /** Machine key: the Lab is not released for the key's organisation in the Suite. */
   | "lab_not_released"
   | "release_check_unavailable"
+  /** Machine credential: the key (or token mapping) lacks a scope the function needs. */
+  | "insufficient_scope"
+  /** A worker-triggered route called with anything but a WORKER key. */
+  | "worker_only"
   | "internal_error";
 
 export interface ApiErrorBody {
@@ -73,6 +79,7 @@ export async function withErrorEnvelope(handler: () => Promise<Response>): Promi
     return await handler();
   } catch (error) {
     if (error instanceof ApiError) return apiErrorResponse(error);
+    if (error instanceof ServiceError) return apiErrorResponse(toApiError(error));
     console.error("[api/v1] unexpected error:", error);
     return apiErrorResponse(new ApiError(500, "internal_error", "Unexpected error."));
   }
