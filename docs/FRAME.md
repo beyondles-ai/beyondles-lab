@@ -377,6 +377,15 @@ it true by construction; `npm run check:frame` and the unit tests keep it so.
   runs `tests/db`. Make it a required check next to `Quality Gates · app`
   (a ruleset setting, done by a human). No Windows job: nothing in the
   template is OS-specific; a Lab with a Windows part adds one for it.
+- **Contract test per platform edge.** `npm run contract:check`
+  (`src/server/jobs/contract-edges.ts`) makes one real, cheap call per edge
+  against staging: door `/api/llm/complete` and `/api/media`, Suite
+  `auth/me`, the export key (Brain: add an edge when used). Daily via
+  `.github/workflows/contract-check.yml`; a missing setting fails, it is
+  never skipped. The repo secrets it needs are listed in that file and are
+  set by a human.
+- **Simulation with a judge before handover.** `npm run simulate [-- N]`
+  (default 20), see `docs/SIMULATION.md`. Not in CI (costs money).
 - **Locale.** `tests/unit/locale.test.ts` checks every key the UI uses exists
   in de and en. Dates are stored as ISO `YYYY-MM-DD` (`src/lib/dates.ts`);
   formats whose day/month order is a guess are refused.
