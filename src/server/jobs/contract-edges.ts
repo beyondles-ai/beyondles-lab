@@ -53,24 +53,29 @@ export function buildEdges(): Edge[] {
         status === 200 && isObject(body) && body.success === true && isObject(body.data) && typeof body.data.text === "string",
     },
     {
-      // Reachability and key of the media door. The media contract is young;
-      // tighten `accept` to a real cheap call once it is final.
-      name: "door-media",
-      needs: ["PLATFORM_API_URL", "PLATFORM_API_KEY"],
+      // The media door's routing for this organisation: free (no generation),
+      // but it proves key, organisation and media catalogue. A real image would
+      // cost money every day. `/api/media` itself has no GET (404).
+      name: "door-media-route",
+      needs: ["PLATFORM_API_URL", "PLATFORM_API_KEY", "CONTRACT_ORGANISATION_ID"],
       request: (env) => ({
-        url: `${trim(env.PLATFORM_API_URL)}/api/media`,
+        url: `${trim(env.PLATFORM_API_URL)}/api/llm/route?organisationId=${encodeURIComponent(env.CONTRACT_ORGANISATION_ID)}&useCase=image&level=economy`,
         init: { method: "GET", headers: { "X-API-Key": env.PLATFORM_API_KEY } },
       }),
-      accept: (status) => status < 500 && ![401, 403, 404].includes(status),
+      accept: (status, body) =>
+        status === 200 && isObject(body) && body.success === true && isObject(body.data) && typeof body.data.model === "string",
     },
     {
+      // Without a session the Suite must answer 401 as JSON: that proves the
+      // login edge is there and speaks the contract. A stored session token
+      // would expire after 24 hours and turn this check red for good.
       name: "suite-auth-me",
-      needs: ["NEXT_PUBLIC_PLATFORM_URL", "CONTRACT_SUITE_TOKEN"],
+      needs: ["NEXT_PUBLIC_PLATFORM_URL"],
       request: (env) => ({
         url: `${trim(env.NEXT_PUBLIC_PLATFORM_URL)}/api/auth/me`,
-        init: { method: "GET", headers: { cookie: `platform-auth-token=${env.CONTRACT_SUITE_TOKEN}` } },
+        init: { method: "GET" },
       }),
-      accept: (status, body) => status === 200 && isObject(body) && "user" in body,
+      accept: (status, body) => status === 401 && isObject(body) && !("unparsable" in body),
     },
     {
       // The platform reads OUR export with PLATFORM_EXPORT_KEY. Checked

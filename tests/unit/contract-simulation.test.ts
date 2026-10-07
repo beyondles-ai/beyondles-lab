@@ -10,7 +10,6 @@ const env = {
   PLATFORM_EXPORT_KEY: "e",
   CONTRACT_LAB_URL: "https://lab.test",
   CONTRACT_ORGANISATION_ID: "00000000-0000-4000-8000-000000000000",
-  CONTRACT_SUITE_TOKEN: "t",
 };
 
 const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
@@ -20,8 +19,8 @@ describe("contract edges (fake fetch, no network)", () => {
     const fetchImpl = vi.fn(async (url: string | URL | Request) => {
       const u = String(url);
       if (u.endsWith("/api/llm/complete")) return reply(200, { success: true, data: { text: "OK" } });
-      if (u.endsWith("/api/media")) return reply(405, {});
-      if (u.endsWith("/api/auth/me")) return reply(200, { user: { id: "u" } });
+      if (u.includes("/api/llm/route?")) return reply(200, { success: true, data: { model: "gpt-image-2" } });
+      if (u.endsWith("/api/auth/me")) return reply(401, { error: "Not authenticated" });
       return reply(200, { success: true });
     }) as unknown as typeof fetch;
     const results = await checkEdges(buildEdges(), env, fetchImpl);
@@ -39,9 +38,17 @@ describe("contract edges (fake fetch, no network)", () => {
 
   it("a 502 from the door fails, a missing setting is 'missing' (never skipped)", async () => {
     const fetchImpl = vi.fn(async () => reply(502, {})) as unknown as typeof fetch;
-    const results = await checkEdges(buildEdges(), { ...env, CONTRACT_SUITE_TOKEN: "" }, fetchImpl);
+    const results = await checkEdges(buildEdges(), { ...env, PLATFORM_EXPORT_KEY: "" }, fetchImpl);
     expect(results.find((r) => r.name === "door-llm-complete")).toMatchObject({ status: "failed", http: 502 });
-    expect(results.find((r) => r.name === "suite-auth-me")).toMatchObject({ status: "missing" });
+    expect(results.find((r) => r.name === "lab-export-key")).toMatchObject({ status: "missing" });
+  });
+
+  it("the Suite edge needs no stored session: a signed-in 200 is not the contract, a JSON 401 is", async () => {
+    const suite = buildEdges().find((e) => e.name === "suite-auth-me")!;
+    expect(suite.needs).toEqual(["NEXT_PUBLIC_PLATFORM_URL"]);
+    expect(suite.accept(401, { error: "Not authenticated" })).toBe(true);
+    expect(suite.accept(401, { unparsable: "SyntaxError" })).toBe(false);
+    expect(suite.accept(502, {})).toBe(false);
   });
 
   it("a network error is a failure", async () => {

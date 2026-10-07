@@ -10,12 +10,11 @@ can decide instead of guessing. Remove entries when done.
 - **Retention periods are placeholders.** `RETENTION_NOTES_DAYS` defaults to
   365 for the example table. The period is the customer's decision; a Lab
   keeps this entry until the customer signed its periods off.
-- **Contract check secrets are not set.** `.github/workflows/contract-check.yml`
-  lists them; until a human sets them the daily run is red on purpose.
-  The `door-media` edge only checks reachability and key until the media
-  door contract is final.
-- **The "Migrations · postgres" job is not yet a required check.** Adding it
-  to the branch ruleset is a GitHub setting a human makes.
+- **Contract check secrets, per Lab.** `.github/workflows/contract-check.yml`
+  lists them. The job does not run in the template repo itself (no staging Lab
+  there); a Lab created from the template sets them for its own staging, until
+  then its daily run is red on purpose. The `door-media-route` edge asks the
+  door for its image routing (free); a real generation would cost money daily.
 
 - **Worker keys are never re-checked.** They skip the platform on purpose
   (no person behind them). A product admin who is later demoted keeps the
