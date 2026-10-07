@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
@@ -24,11 +27,13 @@ const h = vi.hoisted(() => {
     count: vi.fn(),
   };
   const organisation = { upsert: vi.fn() };
+  const jobRun = { upsert: vi.fn() };
   return {
     apiKey,
     note,
     organisation,
-    dbMock: { apiKey, note, organisation },
+    jobRun,
+    dbMock: { apiKey, note, organisation, jobRun },
     session: { current: null as unknown },
   };
 });
@@ -204,6 +209,9 @@ beforeEach(() => {
   );
   h.note.delete.mockResolvedValue(stored());
   h.note.deleteMany.mockResolvedValue({ count: 2 });
+  // expire-notes counts first: 2 expired of 40 organisation notes (5 %).
+  h.note.count.mockImplementation(async ({ where }: { where: { AND: unknown[] } }) => (where.AND.length > 2 ? 2 : 40));
+  h.jobRun.upsert.mockResolvedValue({});
   h.note.findMany.mockResolvedValue([]);
   h.session.current = {
     organisationId: ORG,
@@ -471,11 +479,11 @@ describe("service errors map the same way at every door", () => {
 });
 
 describe("worker-triggered route POST /api/v1/worker/expire-notes", () => {
-  const run = (key: string) =>
+  const run = (key: string, body: Record<string, unknown> = { olderThanDays: 30, dryRun: false }) =>
     expireRoute(
       req("/api/v1/worker/expire-notes", key, {
         method: "POST",
-        body: { olderThanDays: 30 },
+        body,
       }),
     );
 
@@ -494,7 +502,10 @@ describe("worker-triggered route POST /api/v1/worker/expire-notes", () => {
   it("runs with a worker key that has the scopes, on organisation rows only, audited as System", async () => {
     const res = await run("worker_job");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ data: { deleted: 2 } });
+    expect(await res.json()).toEqual({ data: { deleted: 2, expired: 2, dryRun: false } });
+    expect(h.jobRun.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { name: "expire-notes" }, update: expect.objectContaining({ lastStatus: "complete" }) }),
+    );
     const where = h.note.deleteMany.mock.calls[0][0].where.AND;
     expect(where[1]).toEqual({ visibility: "ORGANISATION" });
     expect(audit).toEqual([
@@ -507,6 +518,40 @@ describe("worker-triggered route POST /api/v1/worker/expire-notes", () => {
         },
       },
     ]);
+  });
+
+  it("the scheduled caller (ops/cron/expire-notes.sh) sends dryRun: false and really deletes", async () => {
+    const script = readFileSync(path.resolve(__dirname, "..", "..", "ops", "cron", "expire-notes.sh"), "utf8");
+    const body = JSON.parse(/^BODY='(.+)'$/m.exec(script)?.[1] ?? "null") as Record<string, unknown>;
+    expect(body.dryRun).toBe(false);
+    const res = await run("worker_job", body);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ data: { deleted: 2, expired: 2, dryRun: false } });
+    expect(h.note.deleteMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("is a dry run unless the body says dryRun: false", async () => {
+    const res = await run("worker_job", { olderThanDays: 30 });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ data: { deleted: 0, expired: 2, dryRun: true } });
+    expect(h.note.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses through the deletion guard when one run would delete more than 10 %, and the job is incomplete", async () => {
+    h.note.count.mockImplementation(async ({ where }: { where: { AND: unknown[] } }) => (where.AND.length > 2 ? 5 : 10));
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const lines = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const res = await run("worker_job");
+    expect(res.status).toBe(409);
+    expect(h.note.deleteMany).not.toHaveBeenCalled();
+    expect(lines.mock.calls.map((c) => String(c[0]))).toContain(
+      "job=expire-notes status=incomplete counts=none error=conflict",
+    );
+    expect(h.jobRun.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: expect.objectContaining({ lastStatus: "incomplete" }) }),
+    );
+    errors.mockRestore();
+    lines.mockRestore();
   });
 });
 

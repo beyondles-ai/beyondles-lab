@@ -64,6 +64,20 @@ for (const rel of [
   "mcp/server.mjs",
   "docs/OFFEN.md",
   "README.md",
+  // Lab learnings (Masoud, 30.09.2026): job frame, alert, heartbeat,
+  // deletion guards, retention, handover with "Not tested".
+  "src/server/jobs/run-job.ts",
+  "src/server/jobs/alert.ts",
+  "src/server/jobs/heartbeat.ts",
+  "src/server/jobs/deletion-guard.ts",
+  "src/server/retention/registry.ts",
+  "src/server/retention/redaction.ts",
+  "tests/unit/jobs.test.ts",
+  "tests/unit/retention.test.ts",
+  "tests/unit/locale.test.ts",
+  "docs/RETENTION.md",
+  "docs/HANDOVER.md",
+  "ops/cron/expire-notes.sh",
 ]) {
   if (!exists(rel)) fail(`missing mandatory file: ${rel}`);
 }
@@ -241,6 +255,83 @@ if (!IS_TEMPLATE_REPO) {
   if (pkg.name === TEMPLATE_KEY)
     fail(`package.json still carries the template name "${TEMPLATE_KEY}" — run \`npm run rename\``);
 }
+
+// 9. No swallowed failure (lab learnings, rule 2): no empty catch block, no
+//    `.catch(() => {})`, no `|| true` in code and scripts. A failure is
+//    handled, logged with a reason, or it propagates.
+{
+  const SWALLOW = [
+    [/catch\s*(\([^)]*\))?\s*\{\s*\}/, "empty catch block"],
+    [/\.catch\(\s*(\(\s*\w*\s*\)|\w+)\s*=>\s*(\{\s*\}|undefined\s*\))/, "promise error swallowed by .catch"],
+    [/\|\|\s*true\b/, "`|| true` hides a failed command"],
+  ];
+  const generated = [
+    `${path.sep}src${path.sep}lib${path.sep}platform-client${path.sep}`,
+    `${path.sep}src${path.sep}components${path.sep}share${path.sep}`,
+    `${path.sep}node_modules${path.sep}`,
+  ];
+  const files = ["src", "scripts", "ops", "mcp", "docker"]
+    .flatMap((d) => walk(path.join(root, d)))
+    .filter((f) => /\.(ts|tsx|mjs|js|sh)$/.test(f) || path.basename(f) === "Dockerfile")
+    .filter((f) => !f.endsWith("check-frame.mjs") && !generated.some((g) => f.includes(g)));
+  for (const file of files) {
+    readFileSync(file, "utf8")
+      .split("\n")
+      .forEach((line, i) => {
+        if (/^\s*(#|\/\/|\*|\/\*)/.test(line)) return;
+        for (const [pattern, what] of SWALLOW) {
+          if (pattern.test(line)) fail(`${path.relative(root, file)}:${i + 1}: ${what}`);
+        }
+      });
+  }
+}
+
+// 10. Every doc is generated or dated (lab learnings, rule 9): a
+//     "Checked on: YYYY-MM-DD" line, or a `<!-- GENERATED` marker (a test
+//     compares it with its source). A doc nobody re-read is a doc that lies
+//     (it said four assistants, there were three). docs/OFFEN.md stays the
+//     ONE open-items file.
+for (const file of walk(path.join(root, "docs")).filter((f) => f.endsWith(".md"))) {
+  const text = readFileSync(file, "utf8");
+  if (!/^Checked on: \d{4}-\d{2}-\d{2}\s*$/m.test(text) && !text.includes("<!-- GENERATED"))
+    fail(`${path.relative(root, file)} is neither generated nor has a "Checked on: YYYY-MM-DD" line`);
+  if (/^(todo|open|open-items|backlog)\b/i.test(path.basename(file)))
+    fail(`${path.relative(root, file)}: open items belong in docs/OFFEN.md only`);
+}
+if (exists("docs/HANDOVER.md") && !/^## Not tested\s*$/m.test(read("docs/HANDOVER.md")))
+  fail('docs/HANDOVER.md has no "## Not tested" section');
+
+// 11. Labs never hold provider keys (lab learnings, rule 10): no
+//     PLATFORM_LLM_* setting outside the door client (src/lib/platform/).
+//     Model choice and keys live on the platform; a Lab sends useCase/level.
+for (const file of sourceFiles) {
+  if (file.includes(`${path.sep}src${path.sep}lib${path.sep}platform${path.sep}`)) continue;
+  const hit = readFileSync(file, "utf8")
+    .split("\n")
+    .find((line) => !/^\s*(#|\/\/|\*|\/\*)/.test(line) && /\bPLATFORM_LLM_[A-Z0-9_]+/.test(line));
+  if (hit) fail(`${path.relative(root, file)} names a PLATFORM_LLM_* setting outside the door client: ${hit.trim()}`);
+}
+
+// 12. Third-party images pinned by digest (lab learnings, rule 10). A WARNING,
+//     not a failure: renewing a digest is a deliberate act, and the Lab's own
+//     images (built here) have no digest to pin.
+const warnings = [];
+{
+  const dockerfile = read("docker/Dockerfile");
+  const stages = new Set([...dockerfile.matchAll(/^FROM\s+\S+\s+AS\s+(\S+)/gim)].map((m) => m[1].toLowerCase()));
+  for (const m of dockerfile.matchAll(/^FROM\s+(\S+)/gim)) {
+    if (!stages.has(m[1].toLowerCase()) && !m[1].includes("@sha256:"))
+      warnings.push(`docker/Dockerfile: FROM ${m[1]} is not pinned by digest`);
+  }
+  for (const rel of ["docker/docker-compose.yml", "docker/compose.staging.yml", ".github/workflows/ci.yml"]) {
+    if (!exists(rel)) continue;
+    for (const m of read(rel).matchAll(/^\s+image:\s*(\S+)/gm)) {
+      const own = m[1].startsWith("${") || m[1].startsWith(`${pkg.name}-`);
+      if (!own && !m[1].includes("@sha256:")) warnings.push(`${rel}: image ${m[1]} is not pinned by digest`);
+    }
+  }
+}
+if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((w) => `  - ${w}`).join("\n"));
 
 if (findings.length > 0) {
   console.error("Frame check FAILED:\n" + findings.map((f) => `  - ${f}`).join("\n"));

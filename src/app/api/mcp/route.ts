@@ -105,8 +105,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     console.error("[mcp] request failed:", error);
     return jsonRpcError(500, -32603, "Internal error in the MCP endpoint.");
   } finally {
-    await server.close().catch(() => undefined);
-    await transport.close().catch(() => undefined);
+    await server.close().catch((error: unknown) => console.error("[mcp] server close failed:", error));
+    await transport.close().catch((error: unknown) => console.error("[mcp] transport close failed:", error));
   }
 }
 
