@@ -30,7 +30,19 @@
     "create": "Notiz anlegen",
     "empty": "Noch keine Notizen für dich sichtbar.",
     "ownerYou": "du",
-    "created": "Angelegt {date}"
+    "created": "Angelegt {date}",
+    "back": "Zurück zu den Notizen",
+    "save": "Speichern",
+    "delete": "Endgültig löschen",
+    "readOnly": "Du kannst diese Notiz sehen, aber nicht ändern.",
+    "errors": {
+      "not_found": "Diese Notiz gibt es nicht oder du kannst sie nicht sehen.",
+      "forbidden": "Das darfst du mit dieser Notiz nicht tun.",
+      "invalid_request": "Bitte prüfe deine Eingaben.",
+      "conflict": "Die Notiz wurde zwischendurch geändert. Bitte neu laden.",
+      "container_required": "Bitte wähle, wer die Notiz sehen darf.",
+      "internal_error": "Etwas ist schiefgegangen. Bitte versuche es noch einmal."
+    }
   },
   "settings": {
     "title": "Einstellungen",
@@ -48,7 +60,11 @@
     "noKeys": "Noch keine Schlüssel.",
     "teamTitle": "Team",
     "teamBody": "Wer in deiner Organisation ist und wer dieses Lab benutzen darf, wird in der Beyondles Suite verwaltet, nicht hier.",
-    "teamLink": "Suite öffnen"
+    "teamLink": "Suite öffnen",
+    "scopeRead": "Lesen",
+    "scopeWrite": "Anlegen und ändern",
+    "scopeFull": "Voller Zugriff (älterer Schlüssel, bitte ersetzen)",
+    "keyScopes": "Erlaubt (neue Schlüssel: nur lesen)"
   },
   "noAccess": {
     "title": "Kein Zugriff auf ExampleLab",

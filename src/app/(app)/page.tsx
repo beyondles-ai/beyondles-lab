@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 
+import { uiActor } from "@/lib/actor";
 import { requireAccess } from "@/lib/rbac";
 import { accessDoorState } from "@/lib/platform/door";
 import { countVisibleNotes } from "@/server/services/notes";
@@ -9,9 +10,10 @@ import { countVisibleNotes } from "@/server/services/notes";
  * page in between: a signed-in person lands in the app.
  */
 export default async function DashboardPage() {
-  const { session, access } = await requireAccess();
+  const ctx = await requireAccess();
+  const { session } = ctx;
   const t = await getTranslations("dashboard");
-  const count = await countVisibleNotes(access);
+  const count = await countVisibleNotes(uiActor(ctx));
 
   return (
     <div className="space-y-4">

@@ -59,7 +59,13 @@ server — see `src/lib/jwt-guard.ts`.
 | `src/app/api/mcp/route.ts`, `src/app/api/mcp/describe/route.ts`, `src/lib/mcp/` | MCP door for agents and its description |
 | `src/lib/tool-door/`, `src/lib/platform/on-behalf.ts` | Shared tool-door files (copied verbatim into every Lab) |
 | `src/app/api/platform/reassign-owner/route.ts` | Hand-over when a person leaves |
-| `src/app/(app)/notes` + `src/server/…` | the worked example of a tenant object |
+| `src/app/(app)/notes` + `src/server/…` | the worked example of a tenant object: list, read, create, change, delete, and a worker job |
+| `src/server/functions.manifest.ts` | every function and its three doors (or the reason one is left out) |
+| `src/server/machine-door.ts`, `src/lib/actor.ts` | the door for one function, and who acts through which door |
+| `src/lib/audit.ts`, `src/lib/service-errors.ts` | the audit line (written by services) and the one error mapping |
+| `src/lib/scopes.ts`, `src/lib/rate-limit.ts` | key scopes and the rate limit of the machine doors |
+| `src/app/api/v1/openapi.json/route.ts`, `src/lib/openapi.ts` | the OpenAPI document of `/api/v1`, generated from the manifest |
+| `docs/EXCLUSIONS.md`, `docs/HEADLESS-MIGRATION.md` | the generated exclusions list; how an existing Lab adopts the headless pieces |
 | `src/components/share/`, `.beyondles-shared.json` | the share blocks (picker, badge, people picker, dialog): **generated from `beyondles-ai/beyondles-shared`, never edited here** |
 | `src/lib/platform-client/` | the access client, decisions and container rules behind `platform-access.ts`, `platform/access.ts`, `access-rules.ts`, `rbac.ts` and `api-auth.ts`: **generated from `beyondles-ai/beyondles-shared`, never edited here** |
 | `src/components/ui/share-primitives/` | the four small components the share blocks draw with (this Lab's own look) |
@@ -79,7 +85,8 @@ server — see `src/lib/jwt-guard.ts`.
 - `src/components/share/` and the `share` part of `messages/*.json` are generated from `beyondles-ai/beyondles-shared` and never edited locally: the CI step "Shared code is unchanged" fails on any difference. To change them, change the shared repo, tag a version, and run its `sync/sync.mjs --target <this repo>` from a checkout of that tag (what a Lab must provide: `share-ui/HOST-CONTRACT.md` there).
 - `messages/de.json` and `messages/en.json` carry the same keys.
 - `JWT_SECRET` never on a server; a production process refuses to start with it (unless `ALLOW_LOCAL_JWT=true`, the E2E exception, which is logged loudly).
-- Rule that no check enforces and every review must: each UI action also exists under `/api/v1` and as an MCP tool.
+- **Headless by construction:** every function exists once in a service and is reachable through the screen, `/api/v1` and an MCP tool, or carries a written exclusion. `src/server/functions.manifest.ts` lists them; `tests/unit/parity.test.ts` fails the build when a service export, route, tool or action is missing from it or it points at something that does not exist, and when `docs/EXCLUSIONS.md` (generated, `npm run docs:exclusions`) is stale. Audit and container choice happen in the service, never in a door (docs/FRAME.md section 5).
+- Every `/api/v1` handler opens its door with `openMachineDoor(request, "<functionId>")`: credential, rate limit, the function's scopes, the worker-only rule.
 
 ## Where it runs
 

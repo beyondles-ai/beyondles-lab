@@ -30,7 +30,19 @@
     "create": "Add note",
     "empty": "No notes visible to you yet.",
     "ownerYou": "you",
-    "created": "Created {date}"
+    "created": "Created {date}",
+    "back": "Back to notes",
+    "save": "Save",
+    "delete": "Delete permanently",
+    "readOnly": "You can see this note but not change it.",
+    "errors": {
+      "not_found": "This note does not exist or is not visible to you.",
+      "forbidden": "You are not allowed to do that with this note.",
+      "invalid_request": "Please check your input.",
+      "conflict": "The note was changed in the meantime. Please reload.",
+      "container_required": "Please choose who may see the note.",
+      "internal_error": "Something went wrong. Please try again."
+    }
   },
   "settings": {
     "title": "Settings",
@@ -48,7 +60,11 @@
     "noKeys": "No keys yet.",
     "teamTitle": "Team",
     "teamBody": "Who is in your organisation and who may use this Lab is managed in the Beyondles Suite, not here.",
-    "teamLink": "Open the Suite"
+    "teamLink": "Open the Suite",
+    "scopeRead": "Read",
+    "scopeWrite": "Create and change",
+    "scopeFull": "Full access (older key, please replace)",
+    "keyScopes": "Allowed (new keys: read only)"
   },
   "noAccess": {
     "title": "No access to ExampleLab",

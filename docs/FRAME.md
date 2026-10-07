@@ -63,12 +63,83 @@ and a way back to the Suite. The Suite tile points at `/`, which IS the app.
   `PLATFORM_EXPORT_KEY`, `PLATFORM_DELETE_KEY`, `NEXT_PUBLIC_PLATFORM_URL`,
   `ON_BEHALF_ISSUER`. `PLATFORM_SSO_URL` is retired and refused by the frame check.
 
-## 5. Headless: API and MCP (the machine door)
+## 5. Headless: one function, three doors
 
-- Every action a person can click exists under `/api/v1/...`; `POST /api/mcp`
-  serves the tool catalogue (`src/lib/mcp/catalog.ts`) over Streamable HTTP;
-  tools call the own `/api/v1`, never the database. `mcp/server.mjs` is the
-  stdio bridge for Claude Desktop/Code.
+**The rule (owner, 06.10.2026):** every function of a Lab exists ONCE in the
+code and is reachable through the screen AND two machine doors: REST
+`/api/v1` (API key, for programs) and the tool door `/api/mcp` (MCP, for
+agents). Same function, same permission checks, same audit trail, whichever
+door is used. Since 06.10.2026 the template makes this true by construction;
+the parity test fails the build when it is not.
+
+### 5.1 The shape of a function
+
+- **One service function per operation** (`src/server/services/<object>.ts`).
+  It takes an `Actor` (`src/lib/actor.ts`: who acts and through which door,
+  `ui` | `api-key` | `on-behalf` | `worker`) and does everything that must be
+  identical across doors: the permission check (container rules,
+  `src/lib/access-rules.ts`), the container choice for new rows
+  (`chooseContainer`), the write, and the audit line (`recordAudit`,
+  `src/lib/audit.ts`). "No person behind it" (worker key, organisation or
+  collection agent) is decided once, in `Actor.personUserId`.
+- **Doors are thin adapters**: parse with the shared zod schema
+  (`src/server/schemas/<object>.ts`), build the actor (`uiActor` in a server
+  action or page, `openMachineDoor` in a route), call the service, map errors.
+  A server action or route that writes an audit line or chooses a container
+  itself is a review finding.
+- **One error mapping** (`src/lib/service-errors.ts`): a service throws
+  `ServiceError(code, message)`; `withErrorEnvelope` turns it into the HTTP
+  envelope, `actionErrorCode` into `?error=<code>` for the screen, and a tool
+  sees `<code> (HTTP <status>): <message>` (`toolErrorFromHttp` over HTTP,
+  `toToolResult` when it calls a service directly). Not found and "not yours"
+  answer the same.
+- **Container default: private to the acting person.** A wider container is
+  always an explicit choice. A credential without a person (worker key,
+  organisation agent) has no private container and must name `organisation`;
+  without it the answer is `400 invalid_request` (`container_required`), never
+  a silent widening. A collection agent creates in its own collection only.
+  One function, `chooseContainer`; there is no second default in any door.
+- **Audit**: the line (action, object, title, details) is identical across
+  doors. Only the actor form differs, as the platform requires: the screen
+  sends the person's Suite token, a key or token with a person sends
+  `actorUserId` (the key's creator or the token's person, never anyone taken
+  from the data), and a credential without a person sends `system: true` (the
+  Suite shows "System"). A protocol line never throws and never blocks the
+  write. Action names: `object.created|updated|visibility_changed|deleted`,
+  otherwise `<LAB_KEY>.<what>`.
+
+### 5.2 The functions manifest and the parity check
+
+`src/server/functions.manifest.ts` lists every service export with its
+scopes, its screen door (`action`, `page`), its REST route, its MCP tool, or
+`{ excluded: "<reason>" }` per door. `tests/unit/parity.test.ts` reads
+`src/server/services`, `src/server/actions`, `src/app/api/v1` and the MCP
+catalogue and fails when:
+
+1. a service export is missing from the manifest;
+2. an entry names an action, page, route or tool that does not exist (or a
+   route opens the door for another function, or a tool declares other scopes
+   or calls another route than its entry);
+3. a route, tool or action exists that the manifest does not know;
+4. an entry lacks a door without an `excluded` reason.
+
+Whole service files outside the rule (the platform's export, deletion and
+hand-over calls) are listed in `FRAME_SERVICES`, screen mechanics such as
+"dismiss the new key" in `SCREEN_HELPERS`, `/api/v1/openapi.json` in
+`INFRASTRUCTURE_ROUTES`, each with a reason.
+
+**Deliberate exclusions** live in the manifest, nowhere else.
+`docs/EXCLUSIONS.md` is generated from it (`npm run docs:exclusions`) and a
+test fails when it is stale. `docs/OFFEN.md` no longer lists missing doors.
+
+### 5.3 The machine doors
+
+- `POST /api/mcp` serves the tool catalogue (`src/lib/mcp/catalog.ts`) over
+  Streamable HTTP; `mcp/server.mjs` is the stdio bridge for Claude Desktop/Code.
+- **`openMachineDoor(request, "<functionId>")`** (`src/server/machine-door.ts`)
+  is the first line of every `/api/v1` handler: credential (`requireApiKey`),
+  release gate, rate limit, the function's scopes from the manifest, the
+  worker-only rule, and the `Actor`.
 - **Two credentials, one entry** (`requireApiKey`, `src/lib/api-auth.ts`):
   - `x-api-key`: a key of this Lab. USER keys act as their creator (asked at
     the platform per request), WORKER keys see organisation rows only.
@@ -100,7 +171,8 @@ and a way back to the Suite. The Suite tile points at `/`, which IS the app.
   tool name starts with it, is at most 48 characters and unique.
   `tests/unit/tool-catalog.test.ts` runs `catalogProblems` on the catalogue.
 - **Describe route.** `GET /api/mcp/describe` (same credentials and checks as
-  `/api/mcp`) lists every tool with markers, titles and `available`.
+  `/api/mcp`) lists every tool with markers, titles, `scopes` and
+  `available` (the caller's credential carries the tool's scopes).
 - One log line per `tools/call`: `[tool-door] via=… cp=… org=… sub=… agent=…
   tool=… outcome=… jti=…`, never arguments or results.
 - `GET /api/health` reports `onBehalf: "ok" | "unconfigured"`.
@@ -109,6 +181,91 @@ and a way back to the Suite. The Suite tile points at `/`, which IS the app.
 - The shared files under `src/lib/tool-door/` (except `lab-client.ts`) and
   `src/lib/platform/on-behalf.ts` are copied verbatim into every Lab; change
   them here, never in a copy.
+
+### 5.4 Scopes on machine credentials
+
+`src/lib/scopes.ts`. A key carries `read`, `write` and the Lab's own extra
+scopes (`LAB_SCOPES`, named `<object>:<verb>`, one for every operation that
+deletes data, reaches a person outside the organisation, or spends money or
+credits; the example has `notes:delete`). A function needs ALL scopes its
+manifest entry names; no scope implies another.
+
+- **New keys: read only.** The key form offers every scope as a tick box; the
+  list shows each key's scopes.
+- **Keys from before scopes** carry `*` (full access, also to scopes added
+  later), set by migration `0002_api_key_scopes`. Their owners narrow them by
+  creating a new key and revoking the old one; the list marks them.
+- **On-behalf tokens** carry no scopes; `onBehalfScopes` is the one mapping:
+  a token that names a person gets every scope (the person is checked at the
+  platform per request, and the calling product's agent safety asks a human
+  before a `destructive` tool); a token without a person gets `read` and
+  `write` only.
+- **People in the screen** are not scoped: their limit is the container rule
+  in the service, which every door shares.
+- `requireScope` (`api-auth.ts`) answers `403 insufficient_scope` and names
+  the missing scopes. Every tool declares `scopes` in the catalogue (the
+  parity test compares them with the manifest); `/api/mcp/describe` shows
+  them and sets `available` from the caller's credential.
+
+### 5.5 Rate limit
+
+In `requireApiKey`, after the credential is known, for `/api/v1` and
+`/api/mcp` separately (`src/lib/rate-limit.ts`). Per key (`key:<id>`) or per
+calling product and organisation (`cp:<product>:<org>`). Defaults per
+minute: 120 per key on `/api/v1`, 60 per key on `/api/mcp`, 600 per calling
+product on each door; `API_RATE_LIMIT_PER_MINUTE`,
+`MCP_RATE_LIMIT_PER_MINUTE`, `ON_BEHALF_RATE_LIMIT_PER_MINUTE` (empty =
+default, `0` = off). Over the limit: `429 rate_limited` with `Retry-After`
+(JSON-RPC `-32029` on `/api/mcp`). A tool call also passes `/api/v1`, so keep
+the v1 limit above the MCP limit.
+
+**Per process.** The default store is in memory: each container and each
+restart counts from zero. Right for one container per environment (the
+Playground). A Lab with several replicas calls `setRateLimitStore` once at
+start-up with a shared store. The shared tool door keeps its own coarser
+token limit (1200 per minute), unchanged.
+
+### 5.6 OpenAPI for `/api/v1`
+
+`GET /api/v1/openapi.json` (OpenAPI 3.1) is generated by `src/lib/openapi.ts`
+from the manifest and the same zod schemas the routes parse with, with zod's
+built-in `z.toJSONSchema` (no extra dependency). Every operation carries
+`x-required-scopes`, worker routes `x-worker-only`. **Public**, like
+`/api/health`: it describes the Lab's surface, never tenant data, and a
+program needs it before it holds a key; every operation still needs its
+credential. `/api/mcp/describe` keeps describing the tools.
+
+### 5.7 How a tool reaches the function (decided once)
+
+- **Default, recommended: tool → `/api/v1` over HTTP with the caller's
+  credential** (`src/lib/mcp/server.ts`). One authorisation path; a tool can
+  never do more than the API, and the scope, rate limit, error and audit of
+  the route apply unchanged.
+- **Calling the service directly from the tool** is acceptable when the
+  self-call is a real cost (large payloads, many calls per tool, a runtime
+  without a reachable own address). It must then share the adapter helpers:
+  `openMachineDoor` for credential, scopes and actor (the tool passes the
+  incoming request), the same zod schema, `toToolResult` for errors. Its
+  catalogue entry has no `toCall` route check, so review it by hand.
+- **Screen calls `/api/v1` (AdvisorLab style)** is allowed and even preferred
+  for new screens: exactly one path per function, the screen is a client like
+  any other. Trade-offs: the browser needs a credential for `/api/v1` (a
+  session-to-actor bridge in `openMachineDoor` that accepts the Suite cookie
+  as door `ui`), no server actions and so no progressive enhancement, and an
+  extra hop on server-rendered pages. Until a Lab builds that bridge, server
+  actions as thin adapters are the template's default.
+
+### 5.8 Worker-triggered routes
+
+Cron-style triggers ("send due", "sync", "expire") live under
+`/api/v1/worker/<job>` and are REST only by design: no screen, no tool. In the
+manifest they carry `trigger: "worker"`, `screen` and `mcp` excluded with a
+reason, and the scopes the job needs. `openMachineDoor` accepts only a WORKER
+key of this Lab (`via === "api-key"`, `kind === "worker"`): a USER key, an
+on-behalf token or an organisation agent gets `403 worker_only`. The service
+sees `actor.door === "worker"` and audits as System. The parity test enforces
+the path prefix and the excluded MCP door. Example:
+`POST /api/v1/worker/expire-notes` (`expireNotes`).
 
 ## 6. Tenant export
 
@@ -182,6 +339,7 @@ handled per Lab, and is not part of the profile deletion.
 ## 8. What the frame does NOT do
 
 It does not write your product. Replace `Note` with your objects, keep the
-three container columns, add a `/api/v1` route and an MCP tool per action,
-add every new tenant table to the export. `npm run check:frame` and the unit
+three container columns, add each function to the functions manifest with
+its route and tool (or a written exclusion), add every new tenant table to
+the export. `npm run check:frame` and the unit
 tests tell you when you drifted.

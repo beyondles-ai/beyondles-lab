@@ -301,6 +301,35 @@ describe("createOnBehalfVerifier: the key cache", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
+  it("parallel first calls all wait for the one key fetch in flight", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const { fetchImpl, verifier } = setup(async () => {
+      await gate;
+      return Response.json(vectors.keyDocument);
+    });
+    const first = verifier.verify(tokens.VALID);
+    const second = verifier.verify(tokens.VALID_AGENT);
+    release();
+    expect(await first).toMatchObject({ ok: true });
+    expect(await second).toMatchObject({ ok: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("parallel first calls still fail closed when the key fetch fails", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const { verifier } = setup(async () => {
+      await gate;
+      return new Response("down", { status: 502 });
+    });
+    const first = verifier.verify(tokens.VALID);
+    const second = verifier.verify(tokens.VALID);
+    release();
+    expect(await first).toEqual({ ok: false, reason: "keys_unavailable" });
+    expect(await second).toEqual({ ok: false, reason: "keys_unavailable" });
+  });
+
   it("reset forgets the fetched keys", async () => {
     const { fetchImpl, verifier } = setup();
     await verifier.verify(tokens.VALID);

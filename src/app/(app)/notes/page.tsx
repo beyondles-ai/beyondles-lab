@@ -1,23 +1,28 @@
+import Link from "next/link";
 import { getFormatter, getTranslations } from "next-intl/server";
 
 import { VisibilityBadge, type Visibility } from "@/components/share";
 import { NoteVisibilityField } from "@/components/notes/note-visibility-field";
+import { NoteError } from "@/components/notes/note-error";
+import { uiActor } from "@/lib/actor";
 import { requireAccess } from "@/lib/rbac";
 import { allowedVisibilities } from "@/lib/access-rules";
 import { listNotes } from "@/server/services/notes";
 import { createNoteAction } from "@/server/actions/notes";
 
 /**
- * Worked example of a tenant object: list + create. The form posts to a
- * server action which calls the SAME service as `/api/v1/notes`. There is no
- * second path to the data.
+ * Worked example of a tenant object: list + create; each note links to its
+ * page (read, change, delete). The page and the form call the SAME service
+ * functions as `/api/v1/notes` and the MCP tools (functions manifest).
  */
-export default async function NotesPage() {
-  const { access } = await requireAccess();
+export default async function NotesPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const ctx = await requireAccess();
+  const { access } = ctx;
   const t = await getTranslations("notes");
   const format = await getFormatter();
-  const notes = await listNotes(access, { limit: 50 });
+  const notes = await listNotes(uiActor(ctx), { limit: 50 });
   const allowed = allowedVisibilities(access);
+  const { error } = await searchParams;
 
   return (
     <div className="space-y-6">
@@ -25,6 +30,8 @@ export default async function NotesPage() {
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
         <p className="text-zinc-600">{t("intro")}</p>
       </div>
+
+      <NoteError code={error} />
 
       <form action={createNoteAction} className="space-y-3 rounded-lg border bg-white p-4">
         <label className="block text-sm">
@@ -50,7 +57,9 @@ export default async function NotesPage() {
         <ul className="space-y-2">
           {notes.map((note) => (
             <li key={note.id} className="rounded-lg border bg-white p-3">
-              <p className="font-medium">{note.title}</p>
+              <Link href={`/notes/${note.id}`} className="font-medium underline-offset-2 hover:underline">
+                {note.title}
+              </Link>
               {note.body ? <p className="whitespace-pre-wrap text-sm text-zinc-700">{note.body}</p> : null}
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
                 <VisibilityBadge

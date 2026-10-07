@@ -136,6 +136,7 @@ describe("listTools (tools/list)", () => {
       name: `${LAB_KEY}_send_note`,
       description: "Test entry: sends a note by mail to a person outside the organisation.",
       inputSchema: { type: "object", properties: {} },
+      scopes: ["write"],
       access: "destructive",
       idempotent: false,
       title: { de: "Notiz senden", en: "Send a note" },

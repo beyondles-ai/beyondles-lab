@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:frame": "node scripts/check-frame.mjs",
+    "docs:exclusions": "tsx scripts/write-exclusions.ts",
     "rename": "node scripts/rename-lab.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

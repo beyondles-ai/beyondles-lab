@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { NEW_KEY_COOKIE } from "@/lib/api-keys";
+import { normaliseKeyScopes } from "@/lib/scopes";
 import { requireAccessOrNull, requireFreshAccessOrNull } from "@/lib/rbac";
 import { createApiKey, revokeApiKey } from "@/server/services/api-keys";
 
@@ -24,6 +25,8 @@ export async function createApiKeyAction(formData: FormData): Promise<void> {
   if (!ctx || !ctx.isAdmin) redirect("/kein-zugriff");
 
   const parsed = createSchema.safeParse({ name: formData.get("name"), kind: formData.get("kind") ?? "user" });
+  // Scopes: the ticked boxes; none = read only (`normaliseKeyScopes`).
+  const scopes = normaliseKeyScopes(formData.getAll("scopes"));
   if (!parsed.success) redirect("/settings?error=invalid");
 
   const { plaintext } = await createApiKey({
@@ -31,6 +34,7 @@ export async function createApiKeyAction(formData: FormData): Promise<void> {
     name: parsed.data.name,
     kind: parsed.data.kind,
     createdByUserId: ctx.session.userId,
+    scopes,
   });
   const jar = await cookies();
   jar.set(NEW_KEY_COOKIE, plaintext, {

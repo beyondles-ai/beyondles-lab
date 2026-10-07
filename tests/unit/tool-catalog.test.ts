@@ -37,6 +37,8 @@ describe("the template's catalogue", () => {
       ["examplelab_list_notes", "read", true],
       ["examplelab_get_note", "read", true],
       ["examplelab_create_note", "write", false],
+      ["examplelab_update_note", "write", true],
+      ["examplelab_delete_note", "destructive", false],
     ]);
   });
 

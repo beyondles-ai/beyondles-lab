@@ -91,6 +91,10 @@ model ApiKey {
   /// acts. `null` = worker key (no person behind it).
   createdByUserId String?
   kind            ApiKeyKind @default(USER)
+  /// What the key may do (`src/lib/scopes.ts`): `read`, `write`, the Lab's
+  /// extra scopes. New keys: read only. `*` = full access, set by migration
+  /// 0002 on every key that existed before scopes; never stored by the form.
+  scopes          String[]   @default(["read"])
   createdAt       DateTime   @default(now())
   lastUsedAt      DateTime?
   revokedAt       DateTime?

@@ -1,29 +1,23 @@
 import "server-only";
 
-import { z } from "zod";
-
+import type { Actor } from "@/lib/actor";
+import { canEdit, chooseContainer, visibleWhere } from "@/lib/access-rules";
+import { recordAudit } from "@/lib/audit";
+import { LAB_KEY } from "@/lib/lab";
+import { ServiceError } from "@/lib/service-errors";
+import type { ExpireNotesInput, ListNotesQuery, NoteInput, NoteUpdate } from "@/server/schemas/notes";
 import { db } from "@/lib/db";
-import { ApiError } from "@/lib/api-errors";
-import { allowedVisibilities, visibleWhere } from "@/lib/access-rules";
-import type { AccessContext } from "@/lib/platform/access";
 
 /**
- * Service layer for the example object. EVERY function takes the access
- * context and filters by `organisationId` AND the container rules. UI, HTTP
- * door and MCP all call these functions; there is no second path.
+ * The notes functions — each exists ONCE and does everything that must be
+ * identical across the screen, `/api/v1` and MCP:
+ *   permission (container rules), container choice (`chooseContainer`, one
+ *   default), the write, and the audit line (`recordAudit`).
+ * Doors only parse input, build the `Actor`, call here and map errors
+ * (`src/lib/service-errors.ts`). Scopes are the door's part
+ * (`src/server/machine-door.ts`); every export is listed in
+ * `src/server/functions.manifest.ts` (the parity test fails otherwise).
  */
-
-/**
- * `visibility` is optional: a person who names none creates a private note.
- * A collection agent (on-behalf token, `source: "agent"`) must name none: its
- * notes always land in its own collection.
- */
-export const noteInputSchema = z.object({
-  title: z.string().trim().min(1).max(200),
-  body: z.string().max(20_000).default(""),
-  visibility: z.enum(["private", "organisation"]).optional(),
-});
-export type NoteInput = z.infer<typeof noteInputSchema>;
 
 const select = {
   id: true,
@@ -36,65 +30,118 @@ const select = {
   updatedAt: true,
 } as const;
 
-export async function listNotes(ctx: AccessContext, options: { search?: string; limit?: number }) {
-  const search = options.search?.trim();
+const NOT_FOUND = "Note not found.";
+
+export async function listNotes(actor: Actor, query: Partial<ListNotesQuery> = {}) {
+  const search = query.search?.trim();
   return db.note.findMany({
     where: {
       AND: [
-        visibleWhere(ctx, "note"),
+        visibleWhere(actor.access, "note"),
         search
           ? { OR: [{ title: { contains: search, mode: "insensitive" } }, { body: { contains: search, mode: "insensitive" } }] }
           : {},
       ],
     },
     orderBy: { createdAt: "desc" },
-    take: Math.min(Math.max(options.limit ?? 50, 1), 100),
+    take: Math.min(Math.max(query.limit ?? 50, 1), 100),
     select,
   });
 }
 
-export async function countVisibleNotes(ctx: AccessContext): Promise<number> {
-  return db.note.count({ where: visibleWhere(ctx, "note") });
+export async function countVisibleNotes(actor: Actor): Promise<number> {
+  return db.note.count({ where: visibleWhere(actor.access, "note") });
 }
 
-export async function getNote(ctx: AccessContext, noteId: string) {
-  return db.note.findFirst({ where: { AND: [{ id: noteId }, visibleWhere(ctx, "note")] }, select });
+/** "Does not exist" and "belongs to somebody else" answer the same. */
+export async function getNote(actor: Actor, noteId: string) {
+  const note = await db.note.findFirst({ where: { AND: [{ id: noteId }, visibleWhere(actor.access, "note")] }, select });
+  if (!note) throw new ServiceError("not_found", NOT_FOUND);
+  return note;
 }
 
-export async function createNote(ctx: AccessContext, input: NoteInput) {
-  if (ctx.source === "agent") {
-    // A collection agent creates in its own collection and nowhere else: no
-    // private rows (it is no person), no organisation-wide rows.
-    const collectionId = ctx.collections[0]?.id;
-    if (input.visibility !== undefined || !collectionId) {
-      throw new ApiError(403, "forbidden", "A collection agent creates notes in its own collection only; do not name a visibility.");
-    }
-    return db.note.create({
-      data: {
-        organisationId: ctx.organisationId,
-        title: input.title,
-        body: input.body,
-        visibility: "COLLECTION",
-        collectionId,
-        ownerUserId: ctx.userId,
-      },
-      select,
-    });
-  }
-
-  const wanted = input.visibility ?? "private";
-  const visibility = wanted === "organisation" ? "ORGANISATION" : "PRIVATE";
-  if (!allowedVisibilities(ctx).includes(visibility)) {
-    throw new ApiError(403, "forbidden", `This key or person may not create ${wanted} notes.`);
-  }
-  return db.note.create({
+export async function createNote(actor: Actor, input: NoteInput) {
+  const container = chooseContainer(actor.access, input.visibility);
+  const note = await db.note.create({
     data: {
-      organisationId: ctx.organisationId,
+      organisationId: actor.organisationId,
       title: input.title,
       body: input.body,
-      visibility,
-      ownerUserId: ctx.userId,
+      visibility: container.visibility,
+      ...(container.collectionId ? { collectionId: container.collectionId } : {}),
+      ownerUserId: actor.access.userId,
     },
     select,
   });
+  await recordAudit(actor, {
+    action: "object.created",
+    objectId: note.id,
+    objectTitle: note.title,
+    details: { visibility: note.visibility.toLowerCase() },
+  });
+  return note;
+}
+
+export async function updateNote(actor: Actor, noteId: string, patch: NoteUpdate) {
+  const current = await getNote(actor, noteId);
+  if (!canEdit(actor.access, "note", current)) throw new ServiceError("forbidden", "You may see this note but not change it.");
+
+  let visibility = current.visibility;
+  if (patch.visibility !== undefined) {
+    if (current.ownerUserId !== actor.access.userId || !actor.personUserId) {
+      throw new ServiceError("forbidden", "Only the owner of a note changes who sees it.");
+    }
+    visibility = chooseContainer(actor.access, patch.visibility).visibility;
+  }
+
+  const note = await db.note.update({
+    where: { id: current.id, organisationId: actor.organisationId },
+    data: {
+      ...(patch.title !== undefined ? { title: patch.title } : {}),
+      ...(patch.body !== undefined ? { body: patch.body } : {}),
+      visibility,
+    },
+    select,
+  });
+  if (patch.title !== undefined || patch.body !== undefined) {
+    await recordAudit(actor, { action: "object.updated", objectId: note.id, objectTitle: note.title });
+  }
+  if (visibility !== current.visibility) {
+    await recordAudit(actor, {
+      action: "object.visibility_changed",
+      objectId: note.id,
+      objectTitle: note.title,
+      details: { from: current.visibility.toLowerCase(), to: visibility.toLowerCase() },
+    });
+  }
+  return note;
+}
+
+export async function deleteNote(actor: Actor, noteId: string): Promise<{ id: string; deleted: true }> {
+  const current = await getNote(actor, noteId);
+  if (!canEdit(actor.access, "note", current)) throw new ServiceError("forbidden", "You may see this note but not delete it.");
+  await db.note.delete({ where: { id: current.id, organisationId: actor.organisationId } });
+  await recordAudit(actor, { action: "object.deleted", objectId: current.id, objectTitle: current.title });
+  return { id: current.id, deleted: true };
+}
+
+/**
+ * WORKER-TRIGGERED (cron-style): delete organisation-wide notes older than N
+ * days. Reachable only through `POST /api/v1/worker/expire-notes` with a
+ * WORKER key (`trigger: "worker"` in the manifest); no screen, no tool.
+ * Organisation rows only, by construction: a worker sees nothing else.
+ */
+export async function expireNotes(actor: Actor, input: ExpireNotesInput): Promise<{ deleted: number }> {
+  if (actor.door !== "worker") throw new ServiceError("forbidden", "Only a worker key runs this job.");
+  const cutoff = new Date(Date.now() - input.olderThanDays * 86_400_000);
+  const result = await db.note.deleteMany({
+    where: { AND: [visibleWhere(actor.access, "note"), { visibility: "ORGANISATION" }, { createdAt: { lt: cutoff } }] },
+  });
+  if (result.count > 0) {
+    await recordAudit(actor, {
+      action: `${LAB_KEY}.notes_expired`,
+      details: { deleted: result.count, olderThanDays: input.olderThanDays },
+    });
+  }
+  return { deleted: result.count };
 }

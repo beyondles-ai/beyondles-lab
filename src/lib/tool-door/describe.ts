@@ -18,6 +18,8 @@ export interface DescribedTool {
   idempotent: boolean;
   capability: ToolCapability | null;
   available: boolean;
+  /** The scopes a credential needs for this tool; `[]` when the Lab declares none. */
+  scopes: string[];
   inputSchema: Record<string, unknown>;
 }
 
@@ -37,7 +39,9 @@ export function describeToolDoor(input: {
   version: string;
   toolPrefix: string;
   appUrl: string | null;
-  tools: ReadonlyArray<{ name: string; description: string; inputSchema: Record<string, unknown> } & ToolMarker>;
+  tools: ReadonlyArray<
+    { name: string; description: string; inputSchema: Record<string, unknown>; scopes?: readonly string[] } & ToolMarker
+  >;
   isAvailable: (toolName: string) => boolean;
 }): ToolDoorDescription {
   const base = input.appUrl?.trim().replace(/\/+$/, "") ?? "";
@@ -56,6 +60,7 @@ export function describeToolDoor(input: {
       idempotent: tool.idempotent,
       capability: tool.capability ?? null,
       available: input.isAvailable(tool.name),
+      scopes: [...(tool.scopes ?? [])],
       inputSchema: tool.inputSchema,
     })),
   };
