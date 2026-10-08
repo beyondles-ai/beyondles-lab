@@ -32,15 +32,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
+      # Inside beyondles-ai: the shared quality gates (named gates, score,
+      # soft gates PLACEHOLDER/AUDIT/ANY). The action lives in a PRIVATE repo,
+      # so a Lab built OUTSIDE the organisation (docs/BUILDING.md) runs the
+      # same hard gates as plain steps below instead. Both paths block on
+      # TYPE, BUILD, LINT and UNIT.
       - uses: beyondles-ai/beyondles-ci/quality-gates@v1
+        if: github.repository_owner == 'beyondles-ai'
         with:
           label: app
           install-cmd: npm ci
-          # HARD = TYPE, BUILD, LINT, UNIT. The unit tests ARE the frame (export
-          # coverage, compose vs code, jwt guard, access rules), so they block.
-          # PLACEHOLDER/AUDIT/ANY only report.
-          # No MIGRATIONS/DESTRUCTIVE gates: Labs use Prisma folder migrations,
-          # not the numbered .sql files those gates were written for.
           gates: TYPE,BUILD,LINT,UNIT,PLACEHOLDER,AUDIT,ANY
           soft-gates: PLACEHOLDER,AUDIT,ANY
           type-cmd: npm run typecheck
@@ -54,9 +55,27 @@ jobs:
             DATABASE_URL=postgresql://build:build@localhost:5432/build
             JWT_SECRET=build-only-placeholder
             ALLOW_LOCAL_JWT=true
+      - name: Install (outside beyondles-ai)
+        if: github.repository_owner != 'beyondles-ai'
+        run: npm ci
+      - name: Type check (outside beyondles-ai)
+        if: github.repository_owner != 'beyondles-ai'
+        run: npm run typecheck
+      - name: Lint (outside beyondles-ai)
+        if: github.repository_owner != 'beyondles-ai'
+        run: npm run lint
+      - name: Unit tests (outside beyondles-ai)
+        if: github.repository_owner != 'beyondles-ai'
+        run: npm test
+      - name: Build (outside beyondles-ai)
+        if: github.repository_owner != 'beyondles-ai'
+        run: npm run build
       - name: Frame self-check
         run: npm run check:frame
+      # The shared-code check needs the private beyondles-shared repo; outside
+      # the organisation the generated files are compared on intake instead.
       - name: Shared code is unchanged
+        if: github.repository_owner == 'beyondles-ai'
         uses: beyondles-ai/beyondles-shared/check@v1.1.1
 
   # Lab learnings (Masoud, 30.09.2026, rule 6): migrations had never run on a
