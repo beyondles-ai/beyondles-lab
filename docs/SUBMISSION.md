@@ -1,108 +1,109 @@
 # Submitting a Lab into the Beyondles ecosystem
 
-Checked on: 2026-10-07
+Checked on: 2026-10-08
 
-Status 2026-09-23: **concept, not yet operated.** This is the written sequence
-for Part 2 of the "Lab template" initiative. Nothing here is a promise to a
-customer until the legal questions at the end are answered.
+Status: **decided 2026-10-08 (Niclas), build in progress.** This is the
+process behind "Build your own Lab" in the Suite. `docs/BUILDING.md` is the
+same path told to the builder; this file is the Beyondles side.
 
-## The idea in one paragraph
+## The decision
 
-A customer wants a capability. The capability needs a Lab. The customer (or
-a partner, or we on their behalf) builds that Lab from this template, submits
-it, it gets checked, and it lands in our ecosystem: hosted by Beyondles on the
-Playground, a tile in the Beyondles Suite, connected to Beyondles HorAIzon as
-a tool. Beyondles remains the place where the Lab lives, is owned and is
-operated. The customer contributes code; Beyondles owns and hosts.
+The builder (customer, partner) builds **in their own GitHub account** from
+this template. Beyondles neither pays seats nor CI minutes for it, and the
+builder's code stays private to them. At submission Beyondles takes a
+**copy** of a tagged commit into `beyondles-ai/<name>`; from then on the copy
+is what is reviewed, deployed and operated. Beyondles never pushes into the
+builder's repository, the builder never pushes into Beyondles'.
 
-## Who does what
+Why not a repository in `beyondles-ai` from day one: on the Team plan every
+outside collaborator in a private repository is a paid seat and every CI run
+is paid from Beyondles' minutes. A public repository would avoid both but
+exposes the builder's code. A copy on submission keeps ownership of the
+operated code with Beyondles and the cost with the builder.
 
-- **Contributor** (customer, partner, Beyondles developer): builds the Lab
-  from the template in a repo inside the `beyondles-ai` organisation, opens
-  pull requests against `develop`.
-- **Beyondles reviewer** (a developer on the Developer board): reviews every
-  PR, owns the release to `main`.
-- **Beyondles operator** (Jens / Niclas): Suite row, platform keys, tunnel,
-  DNS, Access app — the server side of `/lab-pipeline`.
+Consequence: this template repository is **public**. It contains the frame,
+no secrets, no customer data. It also serves as the technical description of
+"what a Lab is".
 
-## The sequence
+## Two consent moments
 
-1. **Request.** Contributor asks for a Lab: name (one word, ends in `lab`),
-   one sentence what it does, for whom, and the yes/no list (mail? files?
-   background jobs? personal data? legal peculiarity?). This is phase 0 of
-   `/lab-pipeline`. Entry point later: a "Build your own Lab" button in the
-   Toolbox that opens exactly this form.
-2. **Repo.** Beyondles creates `beyondles-ai/<name>` from the template
-   (`gh repo create --template beyondles-ai/beyondles-lab --private`), runs
-   `npm run rename`, sets the rulesets (`protect-main`,
-   `require-quality-gates`), gives the contributor `write` (never `admin`).
-   The repo is Beyondles' from the first commit.
-3. **Build.** Contributor works on branches, PRs to `develop`. Automated
-   gates run on every PR: quality gates (type, build, lint), unit tests,
-   `npm run check:frame`. A PR that fails the frame check cannot be merged.
-4. **Review.** Beyondles reviewer reads every PR with the frame checklist
-   in the PR template. Special attention: tenant filter on every query,
-   no provider keys, every UI action also API + MCP, every tenant table in
-   the export, both languages.
-5. **Staging.** Merged `develop` deploys itself to
-   `https://<name>-staging.beyondles.ai` behind the team login. Contributor
-   and Beyondles test there. The Suite row exists with `enabled = FALSE` and
-   the testing organisations as exceptions.
-6. **Acceptance.** Beyondles runs `/lab-pipeline check <name>` (repo + host)
-   and the golden path once by hand. Findings go back to step 3.
-7. **Release.** Release PR `develop` → `main`, merge commit, the production
-   watcher deploys within 5 minutes. Suite tile, platform export source and
-   HorAIzon tool registration follow the standard pipeline (phase 8).
-8. **Go-live.** Niclas flips the Suite switch for the Lab (or adds the
-   customer's organisation as an exception). Nothing before that is visible
-   to anyone outside Beyondles.
+1. **At the request** (Suite form, before the builder gets the template link):
+   Beyondles hosts and operates accepted Labs and holds the right to run the
+   code; the builder keeps the right to reuse their own contribution; the Lab
+   must pass the checks and a review.
+2. **At the submission** (Suite form, before "Submit a Lab"): hosting, review,
+   data protection (per-Lab annex), liability for the builder's code, exit.
+
+Both texts come from legal review (see "Open legal questions"). The Suite
+stores who ticked what and when; until the texts exist, the boxes carry a
+placeholder and the submission path is enabled for Beyondles' own
+organisation only.
+
+## The states a submission goes through
+
+`received → checking → in_review → changes_requested → on_staging → accepted → live`
+(`rejected` from any state, with a written reason). The builder sees the state
+and the reviewer's list on the Suite page; every transition mails the builder
+and `development@beyondles.ai` through the platform mail door.
+
+## What Beyondles does per state
+
+- **received:** the Suite stores repository, tag, name, sentence, the four
+  answers and the consent. Beyondles needs read access (collaborator or
+  public repo); the page names the GitHub user to add.
+- **checking:** `ops/submission/intake.sh <repo> <tag> <name>` clones the
+  tag, creates `beyondles-ai/<name>` from it (private, `develop` default,
+  rulesets mirrored, team `developers` push, squash/rebase off), pushes, and
+  lets CI run. Red CI = `changes_requested` with the CI link, automatically.
+- **in_review:** a developer reviews with the frame checklist
+  (`.github/pull_request_template.md`) and `docs/HANDOVER.md`, starting at
+  "Not tested". Findings go to the builder as a list on the Suite page.
+- **changes_requested:** the builder fixes in their repository and submits a
+  new tag; intake replaces `develop` of the copy with the new tag (a merge
+  commit, history kept).
+- **on_staging:** the server side of `/lab-pipeline` (phases 4 to 7): host,
+  tunnel, DNS, Suite row with `enabled = FALSE`, platform keys, two test
+  accounts for the builder.
+- **accepted:** release PR `develop → main` (Niclas' click), Suite tile,
+  platform export/delete registration, HorAIzon tool registration.
+- **live:** Niclas switches the Lab on for the builder's organisation.
 
 ## What the template already enforces (so the review can be short)
 
-- Suite login, three-level access model, platform door, export endpoint,
-  API + MCP, two languages, Docker layout, CI, deploy scripts, icons,
-  "Back to Suite" link.
-- `npm run check:frame` fails the PR on: missing frame files, provider or
-  mail SDKs, forbidden variables, hard-coded Suite address, `next start`,
-  `ecosystem.config.js`, unequal language files, retired variable names.
-- Unit tests fail on: a tenant table missing from the export, a variable read
-  by the code but not passed by Compose, a sign-in that accepts an empty
-  organisation, `JWT_SECRET` in production.
+- Suite login, three-level access model, platform door, export and deletion
+  endpoints, API + MCP with manifest and parity test, scopes, rate limits,
+  jobs with exit codes and alerts, retention, two languages, Docker layout,
+  CI, deploy scripts, icons, "Back to Suite" link.
+- `npm run check:frame` fails on: missing frame files, provider or mail
+  SDKs, forbidden variables, hard-coded Suite address, empty `catch`,
+  `|| true`, undated docs, unknown root files, template name leftovers.
+- The unit tests fail on: a tenant table missing from export, deletion plans
+  or retention, a function missing a door or a manifest entry, a variable
+  read by the code but not passed by Compose, locale gaps.
 
 ## What the template cannot enforce (so the review must look)
 
-- The tenant filter on every new query (the pattern is there, following it is
-  a human decision).
-- What the Lab does with personal data.
-- Quality of the product itself.
+- The tenant filter on every new query (the pattern is there; following it
+  is a human decision).
+- What the Lab does with personal data, and whether the retention periods
+  are the ones the customer agreed.
+- Quality and purpose of the product itself, overlap with existing Labs.
+- Anything in "Not tested".
 
-## Open legal questions — for Hans (or a lawyer) BEFORE the first external submission
+## Open legal questions — before the first external submission
 
-1. **IP and licence.** The repo is in Beyondles' organisation from day one.
-   Under which licence does the contributor grant their code? Proposal: a
-   short contributor agreement (assignment or a broad licence to Beyondles,
-   contributor keeps the right to reuse their own contribution).
-2. **Liability.** Who is liable when a customer-built Lab loses or leaks data
-   of that customer's organisation? Beyondles hosts and reviews; the customer
-   wrote it. Proposal: contributor bears product liability for their code,
-   Beyondles for the platform and hosting, spelled out in the same agreement.
-3. **Data protection.** A Lab processes personal data of the customer's
-   organisation on Beyondles' server. The existing AVV (data processing
-   agreement) covers the Suite and HorAIzon; does it cover a Lab the customer
-   wrote? Likely an annex per Lab.
-4. **Third parties.** Can a customer build a Lab for OTHER customers (partner
-   model)? If yes, the access model already isolates tenants, but the
-   contracts must say who sells what to whom.
-5. **Exit.** If the customer leaves, the Lab stays with Beyondles (it is our
-   repo). May we keep operating it for others? May we delete it? The
-   contributor agreement must answer this.
+1. **IP and licence.** Which licence does the builder grant on the copy?
+   Proposal: a broad licence to Beyondles to run, modify and operate; the
+   builder keeps the right to reuse their own contribution.
+2. **Liability.** Builder for their code, Beyondles for platform and hosting.
+3. **Data protection.** The existing AVV covers Suite and HorAIzon; a Lab the
+   customer wrote needs an annex per Lab.
+4. **Partner model.** May a builder submit a Lab for OTHER customers? The
+   access model isolates tenants; the contracts must say who sells to whom.
+5. **Exit.** The copy stays with Beyondles. May Beyondles keep operating it
+   for others, must it delete it?
 
 ## Not in scope of this document
 
-- Rewriting the existing Labs onto the template (follow-up decision once the
-  template has proven itself on one new Lab).
-- The shared skill collection (Part 3 of the initiative). Findings from
-  2026-09-23: skills live in the-agent as 18 global files plus per-organisation
-  database rows; there is no cross-organisation store and nothing in the Suite.
-  The smallest building block is a shared table in the-agent with
-  publish/import routes; the Suite part comes after.
+- Rewriting the existing Labs onto the template.
+- The shared skill collection (card #309).
