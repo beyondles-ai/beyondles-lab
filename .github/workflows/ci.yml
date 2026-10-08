@@ -51,10 +51,13 @@ jobs:
   # soft gates PLACEHOLDER/AUDIT/ANY via beyondles-ai/beyondles-ci/quality-gates@v1)
   # and the check that the generated shared code is unchanged. Both actions
   # live in private repositories, so the whole job is skipped elsewhere; on
-  # intake Beyondles runs them on its copy.
+  # intake Beyondles runs them on its copy. The template repository itself is
+  # PUBLIC since 2026-10-08, and a public repository may not use private
+  # actions either (GitHub rule), so the job is skipped there too; Labs
+  # created inside the organisation are private and run it.
   shared:
     name: Quality Gates · shared
-    if: github.repository_owner == 'beyondles-ai'
+    if: github.repository_owner == 'beyondles-ai' && github.repository != 'beyondles-ai/beyondles-lab'
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://build:build@localhost:5432/build
