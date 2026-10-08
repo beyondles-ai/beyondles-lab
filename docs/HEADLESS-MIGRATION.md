@@ -1,5 +1,7 @@
 # Adopting "headless by construction" in an existing Lab
 
+Checked on: 2026-10-07
+
 The template enforces since 06.10.2026 what it used to only state: every
 function exists once, in a service, and is reachable through the screen,
 `/api/v1` and an MCP tool, or carries a written exclusion (docs/FRAME.md

@@ -1,9 +1,20 @@
 # Open items
 
+Checked on: 2026-10-07
+
 What is deliberately not finished. Every entry says WHY, so the next person
 can decide instead of guessing. Remove entries when done.
 
 ## In the template itself
+
+- **Retention periods are placeholders.** `RETENTION_NOTES_DAYS` defaults to
+  365 for the example table. The period is the customer's decision; a Lab
+  keeps this entry until the customer signed its periods off.
+- **Contract check secrets, per Lab.** `.github/workflows/contract-check.yml`
+  lists them. The job does not run in the template repo itself (no staging Lab
+  there); a Lab created from the template sets them for its own staging, until
+  then its daily run is red on purpose. The `door-media-route` edge asks the
+  door for its image routing (free); a real generation would cost money daily.
 
 - **Worker keys are never re-checked.** They skip the platform on purpose
   (no person behind them). A product admin who is later demoted keeps the
