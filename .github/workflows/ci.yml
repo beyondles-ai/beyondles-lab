@@ -57,7 +57,7 @@ jobs:
       - name: Frame self-check
         run: npm run check:frame
       - name: Shared code is unchanged
-        uses: beyondles-ai/beyondles-shared/check@v1.1.0
+        uses: beyondles-ai/beyondles-shared/check@v1.1.1
 
   # Lab learnings (Masoud, 30.09.2026, rule 6): migrations had never run on a
   # database at merge time. This job applies every migration to a real,
