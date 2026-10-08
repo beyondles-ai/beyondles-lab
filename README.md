@@ -11,11 +11,18 @@ The product itself is yours. `docs/FRAME.md` lists what the frame guarantees.
 
 ## Start a new Lab (5 minutes)
 
+**Outside Beyondles** (customer, partner): use **Use this template** on GitHub
+in your own account, then read `docs/BUILDING.md` — it takes you from the
+first commit to the submission in the Beyondles Suite. `CLAUDE.md` tells
+your AI coding agent what to build and what to leave alone.
+
+**Inside Beyondles:**
+
 ```bash
 gh repo create beyondles-ai/<name> --private --template beyondles-ai/beyondles-lab --clone
 cd <name>
 npm run rename -- <name> "<Display Name>"     # e.g. bookinglab "BookingLab"
-npm install
+npm ci
 npm run check:frame && npm test
 ```
 

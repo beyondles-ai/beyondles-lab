@@ -64,6 +64,13 @@ for (const rel of [
   "mcp/server.mjs",
   "docs/OFFEN.md",
   "README.md",
+  // Builder guidance (submission path, 2026-10-08): the template is the
+  // teacher for people and for AI agents building a Lab outside Beyondles.
+  "CLAUDE.md",
+  "AGENTS.md",
+  "docs/BUILDING.md",
+  "docs/SUBMISSION.md",
+  "docs/HANDOVER.md",
   // Lab learnings (Masoud, 30.09.2026): job frame, alert, heartbeat,
   // deletion guards, retention, handover with "Not tested".
   "src/server/jobs/run-job.ts",
@@ -151,7 +158,7 @@ const ROOT_ALLOWED = new Set([
   ".beyondles-shared.json", ".dockerignore", ".env.example", ".gitattributes", ".gitignore", ".prettierignore", ".prettierrc.json",
   "README.md", "eslint.config.mjs", "next.config.ts", "next-env.d.ts", "package-lock.json", "package.json",
   "postcss.config.mjs", "prisma.config.ts", "tsconfig.json", "tsconfig.tsbuildinfo", "vitest.config.ts",
-  "CLAUDE.md", "LICENSE",
+  "CLAUDE.md", "AGENTS.md", "LICENSE",
   // In a `git worktree` checkout `.git` is a file pointing at the main clone.
   ".git",
 ]);
