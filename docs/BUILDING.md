@@ -1,6 +1,6 @@
 # Building a Lab from this template — the guide for people
 
-Checked on: 2026-10-08
+Checked on: 2026-10-11
 
 This is the path from "I want a Lab" to "my Lab is live in the Beyondles
 Suite", for anyone outside Beyondles who builds one. Beyondles developers use
@@ -17,21 +17,17 @@ agents as a tool. All of that is already wired in this template. You build the
 product: your data, your screens, your functions. `docs/FRAME.md` says what
 the frame guarantees and what it expects of you.
 
-Two things to accept before the first commit (the Suite asks you to tick them
-when you request a Lab):
-
-1. Beyondles hosts and operates accepted Labs and holds the right to run the
-   code; you keep the right to reuse your own contribution.
-2. The Lab must pass the automated checks of this template and a review by
-   Beyondles before it is accepted. A Lab that leaves the frame is not
-   accepted.
+There is no request step: anyone can start from this public template. What
+you agree to is asked once, when you submit (section 4): Beyondles hosts and
+operates accepted Labs and holds the right to run the code; you keep the
+right to reuse your own contribution; the Lab must pass the automatic check
+and a review by Beyondles. A Lab that leaves the frame is not accepted.
 
 ## 1. Create your repository
 
-In the Beyondles Suite, open the Toolbox and choose **Build your own Lab**.
-The page gives you the link to this template. On GitHub, use
-**Use this template → Create a new repository** in your own account or
-organisation; private is fine. Then:
+Open this template on GitHub (the Suite page **Toolbox › Build your own Lab**
+links to it) and use **Use this template → Create a new repository** in your
+own account or organisation; private is fine. Then:
 
 ```bash
 git clone <your repo>
@@ -73,22 +69,31 @@ Keep these green at every step: `npm run check:frame`, `npm test`,
   people whose data it is, and put them into `src/server/retention/registry.ts`.
 - Make sure the repository contains no secret, no customer data and no
   password (also not in `docs/`).
-- Tag the commit you submit (`git tag submit-1`).
+- Tag the commit you submit and push the tag
+  (`git tag submit-1 && git push --tags`). Wait until the CI job
+  `Quality Gates · app` is green on exactly that commit.
 
 ## 4. Submit
 
-Back in the Suite, on **Build your own Lab**, press **Submit a Lab** and
-enter: the repository address, the tag, the Lab name, the one sentence, and
-answer the four questions (mail? files? background jobs? personal data or a
-legal peculiarity?). Tick the second agreement (hosting, review, data
-protection). Beyondles needs **read access** to your repository: add the
-GitHub user named on that page as a collaborator with read permission, or
-make the repository public.
+In the Suite, on **Toolbox › Build your own Lab**, fill in the one form: the
+repository address, the tag, the Lab name, the display name, the one
+sentence, the four questions (mail? files? background jobs? personal data or
+a legal peculiarity?) and the agreement. If the repository is private, first
+add the GitHub user named on that page as a collaborator with read
+permission.
 
-What happens then, and what you see on the same page:
+**The automatic check runs immediately**, once, against that tag. It reads
+your repository and runs nothing of your code. It checks: repository
+readable, tag exists, built from this template, frame files present, Lab
+renamed to the name you entered, no `.env` file, no AI or mail provider
+packages, the **Not tested** section of `docs/HANDOVER.md` filled, CI green
+on that commit. If anything fails, nothing is submitted: the page lists every
+failed point with what to do. Fix it, push a new tag, submit again.
+
+What happens after a passed check, and what you see on the same page:
 
 1. **Received.** Beyondles clones the tag into its own organisation
-   (`beyondles-ai/<name>`), runs the checks and the tests on its own CI.
+   (`beyondles-ai/<name>`) and runs the checks and tests on its own CI.
 2. **In review.** A Beyondles developer reviews the code against the frame
    checklist. Findings come back to you as a list; you fix them in your
    repository and submit a new tag.

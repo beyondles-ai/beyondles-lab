@@ -1,8 +1,8 @@
 # Submitting a Lab into the Beyondles ecosystem
 
-Checked on: 2026-10-08
+Checked on: 2026-10-11
 
-Status: **decided 2026-10-08 (Niclas), build in progress.** This is the
+Status: **decided 2026-10-08, self-service since 2026-10-11 (Niclas).** This is the
 process behind "Build your own Lab" in the Suite. `docs/BUILDING.md` is the
 same path told to the builder; this file is the Beyondles side.
 
@@ -25,19 +25,27 @@ Consequence: this template repository is **public**. It contains the frame,
 no secrets, no customer data. It also serves as the technical description of
 "what a Lab is".
 
-## Two consent moments
+## One consent moment, one automatic check
 
-1. **At the request** (Suite form, before the builder gets the template link):
-   Beyondles hosts and operates accepted Labs and holds the right to run the
-   code; the builder keeps the right to reuse their own contribution; the Lab
-   must pass the checks and a review.
-2. **At the submission** (Suite form, before "Submit a Lab"): hosting, review,
-   data protection (per-Lab annex), liability for the builder's code, exit.
+There is no request step. The template is public; the builder starts on
+their own and comes to the Suite only to submit.
 
-Both texts come from legal review (see "Open legal questions"). The Suite
-stores who ticked what and when; until the texts exist, the boxes carry a
-placeholder and the submission path is enabled for Beyondles' own
-organisation only.
+**Consent** is given once, in the submission form: Beyondles hosts and
+operates accepted Labs and holds the right to run the code; the builder keeps
+the right to reuse their own contribution; review, data protection (per-Lab
+annex), liability for the builder's code, exit. The text comes from legal
+review (see "Open legal questions"); the Suite stores who ticked it, when and
+which version. Until the final text exists the box carries a placeholder
+version.
+
+**Automatic check** (Suite, `lib/lab-submission-check.ts`): on submit the
+Suite reads the repository at the tag through the GitHub API (token
+`LAB_INTAKE_GITHUB_TOKEN` for private repositories) and never runs the
+builder's code. Nine checks: repo_readable, tag_exists, from_template,
+frame_files, lab_key, no_env_file, no_provider_sdk, handover_not_tested,
+ci_green (`Quality Gates · app` green on exactly that commit). A failed check
+stores nothing and shows the builder every failed point with its fix. Only a
+passed check creates the submission, with the report and the checked commit.
 
 ## The states a submission goes through
 
@@ -48,9 +56,9 @@ and `development@beyondles.ai` through the platform mail door.
 
 ## What Beyondles does per state
 
-- **received:** the Suite stores repository, tag, name, sentence, the four
-  answers and the consent. Beyondles needs read access (collaborator or
-  public repo); the page names the GitHub user to add.
+- **received:** the automatic check passed; the Suite stored repository,
+  tag, checked commit, name, sentence, the four answers, the consent and the
+  check report.
 - **checking:** `ops/submission/intake.sh <repo> <tag> <name>` clones the
   tag, creates `beyondles-ai/<name>` from it (private, `develop` default,
   rulesets mirrored, team `developers` push, squash/rebase off), pushes, and
@@ -64,9 +72,10 @@ and `development@beyondles.ai` through the platform mail door.
 - **on_staging:** the server side of `/lab-pipeline` (phases 4 to 7): host,
   tunnel, DNS, Suite row with `enabled = FALSE`, platform keys, two test
   accounts for the builder.
-- **accepted:** release PR `develop → main` (Niclas' click), Suite tile,
+- **accepted:** the Suite creates the Lab row (switched off). Release PR `develop → main` (Niclas' click), Suite tile,
   platform export/delete registration, HorAIzon tool registration.
-- **live:** Niclas switches the Lab on for the builder's organisation.
+- **live:** the Suite switches the Lab on for the builder's organisation
+  (organisation exception); for everyone else it stays off.
 
 ## What the template already enforces (so the review can be short)
 
