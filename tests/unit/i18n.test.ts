@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import de from "../../messages/de.json";
 import en from "../../messages/en.json";
 import { LOCALES } from "@/i18n/config";
-import { parseAcceptLanguage } from "@/i18n/locale";
 
 /** Both shipped languages must carry EXACTLY the same keys and placeholders. */
 function collectKeys(obj: Record<string, unknown>, prefix = ""): string[] {
@@ -58,13 +57,5 @@ describe("messages", () => {
       return JSON.stringify(placeholders(a)) !== JSON.stringify(placeholders(b));
     });
     expect(diffs).toEqual([]);
-  });
-});
-
-describe("parseAcceptLanguage", () => {
-  it("picks the highest weighted supported language", () => {
-    expect(parseAcceptLanguage("de-DE,de;q=0.9,en;q=0.8")).toBe("de");
-    expect(parseAcceptLanguage("fr;q=0.9,en;q=0.8")).toBe("en");
-    expect(parseAcceptLanguage("fr")).toBeNull();
   });
 });

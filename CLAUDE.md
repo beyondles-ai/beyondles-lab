@@ -33,7 +33,8 @@ Change freely (this is the product):
   `platform-delete-member.ts`, `src/server/retention/registry.ts` — add every
   new table there (tests fail until you do).
 - `messages/de.json`, `messages/en.json` — all user-facing text, both
-  languages, same keys.
+  languages, same keys. The language comes from the Suite setting via the
+  `NEXT_LOCALE` cookie, default English; there is no language switcher in the Lab.
 - `README.md` (the one sentence and the product description), `docs/OFFEN.md`.
 
 Never change (this is the frame, reviewed centrally):

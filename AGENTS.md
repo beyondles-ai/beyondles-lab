@@ -13,6 +13,7 @@ Short form:
   `src/server/functions.manifest.ts`, `prisma/`, `messages/`.
 - Never change the frame files listed in `CLAUDE.md`, section 1.
 - English code, user text in `messages/de.json` and `messages/en.json`.
+  The language comes from the Suite setting via the `NEXT_LOCALE` cookie, default English; no language switcher in the Lab.
 - No provider keys or SDKs; AI and mail go through `src/lib/platform/`.
 - Every function: one service, three doors (screen, REST, MCP), one manifest entry.
 - Every new tenant table: export, deletion plans, retention registry.
