@@ -1,0 +1,61 @@
+Beyondles Lab Template License, version 1.0 (11 October 2026)
+
+Copyright (c) 2026 Beyondles UG (haftungsbeschränkt), Bahnhofstraße 44,
+14612 Falkensee, Germany. All rights reserved except as granted below.
+
+1. Definitions
+
+   The "Beyondles ecosystem" is software that is provided and operated
+   exclusively through Beyondles Suite (beyondles.ai) and the platform behind
+   it, including Labs that Beyondles has accepted and operates.
+
+2. What this licence covers
+
+   This licence covers the repository "beyondles-lab" (the "Template") as
+   published by Beyondles, in every version. It does not cover what you add to
+   the Template yourself (your "Contribution"); your Contribution is yours.
+
+3. What you may do
+
+   Beyondles grants you a free, non-exclusive, non-transferable right to
+   copy, run and modify the Template, solely in order to develop, test and
+   submit Labs for the Beyondles ecosystem and to operate them there. To that
+   end you may create repositories from the Template, public or private, in
+   your own account.
+
+4. What you may not do
+
+   You may not use the Template or any part of it outside the purpose in
+   section 3, in particular not to build, operate, sell or license software
+   that runs outside the Beyondles ecosystem, and not to offer the Template
+   or parts of it to others as a template, framework or library. You may not
+   remove or change this licence or the copyright notice.
+
+5. Submitting a Lab
+
+   When you submit a Lab to Beyondles, the Lab Submission Terms published at
+   https://beyondles.ai/lab-einreichung apply. Under them you grant Beyondles
+   rights of use in your Contribution. Read them before you submit.
+
+6. Your Contribution outside Beyondles
+
+   You may use your Contribution as you wish, including outside the Beyondles
+   ecosystem, provided you remove the parts of the Template from it or obtain
+   separate permission in text form from Beyondles.
+
+7. No warranty, limited liability
+
+   The Template is provided free of charge and "as is", without any warranty.
+   Beyondles is liable only for intent and gross negligence, for injury to
+   life, body or health and under the German Product Liability Act.
+
+8. Termination
+
+   If you breach this licence, your rights under it end automatically. Rights
+   Beyondles has received from you under the Lab Submission Terms remain.
+
+9. Law and jurisdiction
+
+   German law applies, excluding the UN Convention on Contracts for the
+   International Sale of Goods. Place of jurisdiction for merchants is
+   Potsdam, Germany.

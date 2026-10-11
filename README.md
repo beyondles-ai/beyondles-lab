@@ -102,3 +102,10 @@ environment (`/opt/<name>/staging`, `/opt/<name>/production`), public only
 through the Cloudflare tunnel under `<name>.beyondles.ai` and
 `<name>-staging.beyondles.ai`. Operating description:
 `beyondles-ci/docs/SIDE-PROJECTS.md`.
+
+## Licence
+
+The template is free to use for building Labs for the Beyondles ecosystem, under the
+Beyondles Lab Template License (`LICENSE`). What you add yourself is yours. When you
+submit a Lab, the [Lab Submission Terms](https://beyondles.ai/lab-einreichung) apply:
+you grant Beyondles rights of use in your contribution. Read them before you submit.
