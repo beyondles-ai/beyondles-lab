@@ -7,13 +7,16 @@
  * that all files carry the same keys.
  *
  * Deliberately no URL prefix (`/de/...`): a Lab is a signed-in workspace,
- * not a public website. The language hangs on the person (cookie).
+ * not a public website. The language hangs on the person: the Beyondles Suite
+ * (Settings > Profile > Language) writes the cookie `NEXT_LOCALE`; without it
+ * the default applies. This product never writes the cookie and has no
+ * language switcher.
  */
 export const LOCALES = ["de", "en"] as const;
 
 export type Locale = (typeof LOCALES)[number];
 
-export const DEFAULT_LOCALE: Locale = "de";
+export const DEFAULT_LOCALE: Locale = "en";
 
 /** Cookie name of the chosen language — next-intl convention. */
 export const LOCALE_COOKIE = "NEXT_LOCALE";

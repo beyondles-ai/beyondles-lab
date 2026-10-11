@@ -338,7 +338,8 @@ handled per Lab, and is not part of the profile deletion.
   `npm run check:frame`.
 - Deploy scripts in `ops/deploy/` (copied to `/opt/scripts/` on the host).
 - `GET /api/health` answers without a database and reports the door state.
-- Two languages (`messages/de.json`, `messages/en.json`), same keys, checked.
+- Two languages (`messages/de.json`, `messages/en.json`), same keys, checked. The language comes from the Suite setting via the
+  `NEXT_LOCALE` cookie, default English; no language switcher in the Lab.
 - Beyondles icons in `src/app/`, "Back to Suite" link above the menu.
 
 ## 7a. Lab learnings built in (Masoud, 30.09.2026)
