@@ -17,11 +17,22 @@ agents as a tool. All of that is already wired in this template. You build the
 product: your data, your screens, your functions. `docs/FRAME.md` says what
 the frame guarantees and what it expects of you.
 
-There is no request step: anyone can start from this public template. What
-you agree to is asked once, when you submit (section 4): Beyondles hosts and
-operates accepted Labs and holds the right to run the code; you keep the
-right to reuse your own contribution; the Lab must pass the automatic check
-and a review by Beyondles. A Lab that leaves the frame is not accepted.
+There is no request step: anyone can start from this public template, under
+its licence (`LICENSE`). What you agree to is asked once, when you submit
+(section 4), in the [Lab Submission Terms](https://beyondles.ai/lab-einreichung).
+Read them before you start building, because they matter: **with the
+submission you grant Beyondles a comprehensive, non-exclusive right of use in
+your contribution to the Lab, irrevocably and free of charge, also if the Lab
+is not accepted.** Beyondles may use, modify, operate, pass on and sell it. You
+keep using your own contribution; outside the Beyondles ecosystem only without
+the template parts. You warrant that you are entitled to grant these rights
+(you have agreements with everyone who worked on it, open-source parts are
+under licences without copyleft, so no GPL, AGPL or SSPL without asking, and
+the repository contains no secrets and no personal data), and you indemnify
+Beyondles against third-party claims. Only owners and admins of your
+organisation in the Suite can submit. The
+Lab must pass the automatic check and a review by Beyondles; a Lab that leaves
+the frame is not accepted.
 
 ## 1. Create your repository
 
@@ -101,7 +112,7 @@ What happens after a passed check, and what you see on the same page:
    behind the Beyondles team login. You get two test accounts and try it
    with real data.
 4. **Accepted.** Release to production, Suite tile, platform registration,
-   HorAIzon tool registration. Beyondles switches the Lab on for your
+   Beyondles HorAIzon tool registration. Beyondles switches the Lab on for your
    organisation.
 
 From "Received" to "Accepted" the copy in `beyondles-ai/<name>` is the one
