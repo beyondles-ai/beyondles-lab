@@ -71,6 +71,8 @@ for (const rel of [
   "src/app/(app)/loading.tsx",
   "src/app/(app)/error.tsx",
   "src/app/(app)/not-found.tsx",
+  "src/app/not-found.tsx",
+  "src/lib/lab-nav.tsx",
   "src/app/kein-zugriff/layout.tsx",
   "src/app/globals.css",
   "src/lib/frame.ts",
@@ -386,6 +388,16 @@ if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((
       fail(`${layout} does not render AppShell from @/components/app-shell (the shared frame)`);
     if (!/["']@\/components\/app-shell\/app-shell\.css["']/.test(text))
       fail(`${layout} does not import @/components/app-shell/app-shell.css`);
+  }
+  // An address that matches no page must not fall back to Next's own
+  // unstyled, English-only 404 page.
+  const rootNotFound = "src/app/not-found.tsx";
+  if (exists(rootNotFound)) {
+    const text = code(rootNotFound);
+    if (!/<PageState\b/.test(text) || !/["']@\/components\/app-shell\/app-shell\.css["']/.test(text))
+      fail(`${rootNotFound} does not render PageState with @/components/app-shell/app-shell.css (the styled not-found state)`);
+    if (!/getTranslations\(\s*["']states["']\s*\)/.test(text))
+      fail(`${rootNotFound} does not take its texts from the "states" messages (English and German)`);
   }
   const noAccessPage = "src/app/kein-zugriff/page.tsx";
   if (exists(noAccessPage) && !/<NoAccess\b/.test(code(noAccessPage)))
