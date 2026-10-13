@@ -61,6 +61,28 @@ describe("frame context (src/lib/frame.ts)", () => {
   });
 });
 
+describe("root not-found page", () => {
+  const page = source("src/app/not-found.tsx");
+
+  it("exists, so an unknown address never shows Next's unstyled 404 page", () => {
+    expect(page).toMatch(/<PageState\b/);
+    expect(page).toContain('import "@/components/app-shell/app-shell.css"');
+    expect(page).toMatch(/getTranslations\("states"\)/);
+  });
+
+  it("renders the frame for a signed-in person without redirecting or writing", () => {
+    expect(page).toMatch(/<AppShell\b/);
+    expect(page).toMatch(/getSession\(\)/);
+    expect(page).toMatch(/links=\{frame\.links\}/);
+    expect(page).not.toMatch(/requireAccess\(\)|requireAccessOrNull\(\)|ensureOrganisation|redirect\(/);
+  });
+
+  it("shares the sidebar with the signed-in layout", () => {
+    expect(page).toMatch(/labNavGroups\(/);
+    expect(source("src/app/(app)/layout.tsx")).toMatch(/labNavGroups\(/);
+  });
+});
+
 describe("no-access page", () => {
   it("renders the shared NoAccess page with the server-side links", () => {
     const page = source("src/app/kein-zugriff/page.tsx");

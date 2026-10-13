@@ -1,9 +1,8 @@
-import { getTranslations } from "next-intl/server";
-
 import "@/components/app-shell/app-shell.css";
-import { AppShell, IconCog, IconHome, IconPen, type NavGroup } from "@/components/app-shell";
+import { AppShell } from "@/components/app-shell";
 import { db } from "@/lib/db";
 import { LAB_PRODUCT, frameContext } from "@/lib/frame";
+import { labNavGroups } from "@/lib/lab-nav";
 import { requireAccess } from "@/lib/rbac";
 
 /**
@@ -17,13 +16,12 @@ import { requireAccess } from "@/lib/rbac";
  * visit. Every page and action still checks again: a layout is not a security
  * boundary, server actions run without it.
  *
- * The sidebar only leads to pages of this Lab. Back to Suite, profile,
+ * The sidebar (src/lib/lab-nav.tsx) only leads to pages of this Lab. Back to Suite, profile,
  * organisation settings, help and sign out are in the frame's topbar and
  * person menu, built from the Suite URL of the running environment.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { session, organisationId, isAdmin, access } = await requireAccess();
-  const t = await getTranslations("nav");
   const frame = await frameContext(access.orgRole);
 
   const organisation = await db.organisation.findUnique({
@@ -31,22 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     select: { name: true },
   });
 
-  const navGroups: NavGroup[] = [
-    {
-      items: [
-        { id: "overview", href: "/", label: t("dashboard"), icon: <IconHome />, match: "exact" },
-        { id: "notes", href: "/notes", label: t("notes"), icon: <IconPen /> },
-      ],
-    },
-  ];
-  // Settings of this Lab (API keys) are for its admins only; the page checks
-  // again on its own.
-  if (isAdmin) {
-    navGroups.push({
-      label: t("groupLab"),
-      items: [{ id: "settings", href: "/settings", label: t("settings"), icon: <IconCog /> }],
-    });
-  }
+  const navGroups = await labNavGroups(isAdmin);
 
   return (
     <AppShell
