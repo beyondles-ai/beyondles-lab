@@ -63,7 +63,7 @@ Every page behind the login looks the same in every Beyondles product
 (design system "closed pages v1", approved 2026-10-13, card #350). The frame
 is not built here; it comes from `beyondles-ai/beyondles-shared`, module
 `app-shell`, as a generated copy in `src/components/app-shell/` (manifest
-`.beyondles-shared.json`, version 1.3.0). Never edit the copy: the CI step
+`.beyondles-shared.json`, version 1.3.3). Never edit the copy: the CI step
 "Shared code is unchanged" fails on any difference. What a host must do is
 in `app-shell/HOST-CONTRACT.md` in the shared repo.
 
@@ -94,6 +94,14 @@ in `app-shell/HOST-CONTRACT.md` in the shared repo.
   back afterwards.
 - **Sidebar entries** live in `src/lib/lab-nav.tsx`: the signed-in layout and
   the root not-found page both use it.
+- **Organisation chip = display name.** The Suite's `/api/auth/me` answers
+  with `organisation: { id, name }`; `src/lib/auth.ts` keeps the name as
+  `session.organisationName` when its id equals the token's organisation.
+  Show it through `organisationDisplayName(session)`, which falls back to the
+  slug when the name is missing. The organisation mirror row stores the same
+  value.
+- **No-access page** passes `signedInAs` (the session's e-mail), so a person
+  with several Beyondles accounts sees which one is signed in.
 - **Language** from the Suite (`NEXT_LOCALE`), English by default, every text
   in English and German. No language switch in the Lab.
 - **Page structure.** Every top-level page starts with `PageHeader` (kicker,

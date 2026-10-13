@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { resolvePersonAccess } from "@/lib/platform-client/core/decide";
 import type { AccessDenyReason, DoorState } from "@/lib/platform-client/core/types";
-import { getAuthToken, getSession, type PlatformSession } from "@/lib/auth";
+import { getAuthToken, getSession, organisationDisplayName, type PlatformSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getLabGate, type LabGate } from "@/lib/platform-access";
 import { door, platformUrl } from "@/lib/platform/door";
@@ -145,16 +145,20 @@ export async function requireFreshAccessOrNull(): Promise<AccessGrantedContext |
   return { ...ctx, access: ctx.access, isAdmin: isProductAdmin(ctx.access) };
 }
 
-/** Mirror row of the Suite organisation; name and slug follow the Suite. */
+/**
+ * Mirror row of the Suite organisation; name and slug follow the Suite. The
+ * name is the display name when the Suite sent one, otherwise the slug.
+ */
 export async function ensureOrganisation(session: PlatformSession): Promise<void> {
+  const name = organisationDisplayName(session);
   await db.organisation.upsert({
     where: { id: session.organisationId },
     create: {
       id: session.organisationId,
       slug: session.organisationSlug,
-      name: session.organisationSlug,
+      name,
     },
-    update: { slug: session.organisationSlug, name: session.organisationSlug },
+    update: { slug: session.organisationSlug, name },
   });
 }
 

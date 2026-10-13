@@ -69,6 +69,7 @@ export type {
   PageStateVariant,
   PanelProps,
   ProductKind,
+  ProductTone,
   ShellLinks,
   ShellLocale,
   ShellOrganisation,

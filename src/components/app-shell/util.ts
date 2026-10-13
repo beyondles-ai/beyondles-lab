@@ -4,6 +4,13 @@
  * Pure module.
  */
 
+import type { ProductKind, ProductTone } from './types';
+
+/** The sidebar tone of a product kind: white for Labs and services, navy for the main products. */
+export function productTone(kind: ProductKind): ProductTone {
+  return kind === 'lab' || kind === 'service' ? 'white' : 'navy';
+}
+
 /** Joins class names, skipping empty ones. */
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter((part): part is string => typeof part === 'string' && part !== '').join(' ');

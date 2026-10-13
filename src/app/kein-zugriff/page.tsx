@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import { AppShell, IconAlert, IconCheck, NoAccess, PageState } from "@/components/app-shell";
+import { organisationDisplayName } from "@/lib/auth";
 import { LAB_PRODUCT, frameContext } from "@/lib/frame";
 import { requireOrg } from "@/lib/rbac";
 import { hasProductAccess } from "@/lib/platform/access";
@@ -45,8 +46,8 @@ export default async function NoAccessPage() {
         : "not-assigned";
 
   // From the session only: this page must render even when the database is
-  // the reason something failed (the mirror row carries the slug as its name).
-  const organisation = { name: session.organisationSlug };
+  // the reason something failed. Display name from the Suite, slug as fallback.
+  const organisation = { name: organisationDisplayName(session) };
 
   if (reason === "not-assigned" || reason === "blocked") {
     return (
@@ -55,6 +56,7 @@ export default async function NoAccessPage() {
         product={LAB_PRODUCT}
         variant="access"
         organisation={organisation}
+        signedInAs={session.email}
         links={{ suite: frame.links.suite, switchAccount: frame.links.switchAccount }}
         sessionHint={frame.sessionHint}
       />

@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { IconBolt, IconPen, IconUsers, PageHeader, StatCard, StatGrid } from "@/components/app-shell";
 import { uiActor } from "@/lib/actor";
+import { organisationDisplayName } from "@/lib/auth";
 import { requireAccess } from "@/lib/rbac";
 import { accessDoorState } from "@/lib/platform/door";
 import { countVisibleNotes } from "@/server/services/notes";
@@ -48,7 +49,7 @@ export default async function DashboardPage() {
         <StatCard
           icon={<IconUsers />}
           label={t("statOrganisation")}
-          value={session.organisationSlug}
+          value={organisationDisplayName(session)}
           hint={t("signedInAs", { email: session.email })}
         />
       </StatGrid>

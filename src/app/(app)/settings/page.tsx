@@ -33,8 +33,12 @@ export default async function SettingsPage() {
         ? LAB_SCOPES[scope as keyof typeof LAB_SCOPES][locale]
         : t(scope === "write" ? "scopeWrite" : "scopeRead");
 
-  // The stored kind ("user", "worker") as before; the form explains it.
-  const kindLabel = (kind: string): string => kind.toLowerCase();
+  // The stored kind ("user", "worker") in the form's translated words; an
+  // unknown kind is shown as stored.
+  const kindLabel = (kind: string): string => {
+    const k = kind.toLowerCase();
+    return k === "user" ? t("keyKindUser") : k === "worker" ? t("keyKindWorker") : k;
+  };
 
   return (
     <div className="space-y-6">

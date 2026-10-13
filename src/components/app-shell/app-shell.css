@@ -134,6 +134,12 @@
   --by-app-acc-grad: var(--by-app-acc-lab-grad);
 }
 
+/* A service (Beyondles Connections) looks exactly like a Lab, only without the "LAB" tag. */
+.by-app[data-by-app-kind="service"] {
+  --by-app-acc: var(--by-app-acc-lab);
+  --by-app-acc-grad: var(--by-app-acc-lab-grad);
+}
+
 /* ===================== Root and own resets ===================== */
 
 .by-app {
@@ -236,13 +242,13 @@
   pointer-events: none;
 }
 
-.by-app[data-by-app-kind="lab"] .by-app-side {
+.by-app[data-by-app-tone="white"] .by-app-side {
   background: var(--by-app-card);
   color: var(--by-app-text-heading);
   border-right: 1px solid var(--by-app-line);
 }
 
-.by-app[data-by-app-kind="lab"] .by-app-side::before {
+.by-app[data-by-app-tone="white"] .by-app-side::before {
   display: none;
 }
 
@@ -271,9 +277,7 @@
   width: auto;
 }
 
-.by-app[data-by-app-kind="suite"] .by-app-mark,
-.by-app[data-by-app-kind="horaizon"] .by-app-mark,
-.by-app[data-by-app-kind="brain"] .by-app-mark {
+.by-app[data-by-app-tone="navy"] .by-app-mark {
   filter: var(--by-app-mark-glow);
 }
 
@@ -286,15 +290,25 @@
   text-overflow: ellipsis;
 }
 
+/* In the sidebar a long full name ("Beyondles Connections") wraps to a second line, never cut. */
 .by-app-lockup .by-app-lockup-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   padding: 2px 0;
+  white-space: normal;
   background: var(--by-app-acc-name);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
-.by-app[data-by-app-kind="lab"] .by-app-lockup .by-app-lockup-name {
+/* A long one-word name ("SummarizeLab") cannot wrap; a smaller size keeps it whole next to the tag. */
+.by-app-lockup .by-app-lockup-name[data-long="true"] {
+  font-size: 15px;
+}
+
+.by-app[data-by-app-tone="white"] .by-app-lockup .by-app-lockup-name {
   background: none;
   color: var(--by-app-text-heading);
 }
@@ -445,29 +459,29 @@
   margin-left: 6px;
 }
 
-.by-app[data-by-app-kind="lab"] .by-app-nav-link {
+.by-app[data-by-app-tone="white"] .by-app-nav-link {
   color: var(--by-app-text-body);
 }
 
-.by-app[data-by-app-kind="lab"] .by-app-nav-link:hover {
+.by-app[data-by-app-tone="white"] .by-app-nav-link:hover {
   background: var(--by-app-canvas);
 }
 
-.by-app[data-by-app-kind="lab"] .by-app-nav-link[aria-current="page"] {
+.by-app[data-by-app-tone="white"] .by-app-nav-link[aria-current="page"] {
   background: var(--by-app-tint-lavender);
   color: var(--by-app-label-purple);
 }
 
-.by-app[data-by-app-kind="lab"] .by-app-nav-link[aria-current="page"] .by-app-nav-icon {
+.by-app[data-by-app-tone="white"] .by-app-nav-link[aria-current="page"] .by-app-nav-icon {
   color: inherit;
 }
 
-.by-app[data-by-app-kind="lab"] .by-app-nav-tag {
+.by-app[data-by-app-tone="white"] .by-app-nav-tag {
   background: var(--by-app-tint-lavender);
   color: var(--by-app-label-purple);
 }
 
-.by-app[data-by-app-kind="lab"] .by-app-nav-badge {
+.by-app[data-by-app-tone="white"] .by-app-nav-badge {
   background: var(--by-app-canvas);
   color: var(--by-app-text-muted);
 }
@@ -512,18 +526,18 @@
   text-overflow: ellipsis;
 }
 
-.by-app[data-by-app-kind="lab"] .by-app-org {
+.by-app[data-by-app-tone="white"] .by-app-org {
   border-top-color: var(--by-app-line);
   color: var(--by-app-text-muted);
 }
 
-.by-app[data-by-app-kind="lab"] .by-app-org-chip {
+.by-app[data-by-app-tone="white"] .by-app-org-chip {
   background: var(--by-app-canvas);
   color: var(--by-app-text-heading);
   box-shadow: inset 0 0 0 1px var(--by-app-line);
 }
 
-.by-app[data-by-app-kind="lab"] .by-app-org-name {
+.by-app[data-by-app-tone="white"] .by-app-org-name {
   color: var(--by-app-text-heading);
 }
 
@@ -567,6 +581,7 @@
   display: none;
   align-items: center;
   gap: 8px;
+  flex: 1 1 auto;
   min-width: 0;
   color: var(--by-app-text-heading);
   font: 600 15px var(--by-app-ff-head);
@@ -579,6 +594,16 @@
 
 .by-app-mlock .by-app-lockup-name {
   font-size: 15px;
+}
+
+/* In the phone topbar a long full name wraps to a second line before it would be cut
+   ("Beyondles / Connections"), so the product name is always written in full. */
+.by-app-mlock .by-app-lockup-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.15;
+  white-space: normal;
 }
 
 .by-app-crumb {
@@ -604,8 +629,51 @@
 
 .by-app-top-actions {
   display: flex;
+  flex: none;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
+}
+
+/* A product button in headerActions: a white pill like Back to Suite. On a phone the label
+   (by-app-top-label) is hidden and the button becomes a 36 px icon button, so the actions
+   stay in the topbar row. */
+.by-app-top-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: none;
+  min-width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--by-app-line);
+  border-radius: var(--by-app-radius-pill);
+  background: var(--by-app-card);
+  color: var(--by-app-text-heading);
+  font: 500 13.5px var(--by-app-ff);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  appearance: none;
+}
+
+.by-app-top-btn:hover {
+  border-color: var(--by-app-hover-line);
+  box-shadow: var(--by-app-shadow-soft);
+}
+
+.by-app-top-btn > svg {
+  display: block;
+  flex: none;
+}
+
+.by-app-top-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .by-app-back {
@@ -778,7 +846,7 @@
   pointer-events: none;
 }
 
-.by-app[data-by-app-kind="lab"] .by-app-glow {
+.by-app[data-by-app-tone="white"] .by-app-glow {
   display: none;
 }
 
@@ -1267,6 +1335,20 @@
   gap: 8px;
 }
 
+/* "Signed in as <email>" on the no-access card, right under the sentence */
+.by-app-state-who {
+  margin: -12px 0 22px;
+  color: var(--by-app-text-muted);
+  font-size: 13.5px;
+  line-height: var(--by-app-leading-body);
+  overflow-wrap: anywhere;
+}
+
+.by-app-state-email {
+  color: var(--by-app-text-heading);
+  font-weight: 500;
+}
+
 .by-app-state-note {
   margin: 18px 0 0;
   color: var(--by-app-text-muted);
@@ -1475,6 +1557,7 @@
 .by-app-nav-link:focus-visible,
 .by-app-burger:focus-visible,
 .by-app-back:focus-visible,
+.by-app-top-btn:focus-visible,
 .by-app-avatar:focus-visible,
 .by-app-menu-item:focus-visible,
 .by-app-foot-link:focus-visible,
@@ -1491,7 +1574,9 @@
 
 /* ===================== Phone ===================== */
 /* Below 760 px wide, and always with data-by-app-layout="mobile" (forceMobile).
-   The two blocks are identical apart from the selector prefix (tests/css.test.ts). */
+   The two blocks are identical apart from the selector prefix (tests/css.test.ts).
+   With headerActions the topbar row makes room for the full product name: labels of
+   by-app-top-btn hide, gaps get tighter and Back to Suite shows only the arrow. */
 
 /* phone:start */
 @media (max-width: 759.98px) {
@@ -1506,6 +1591,14 @@
   .by-app[data-by-app-layout="auto"] .by-app-crumb { display: none; }
   .by-app[data-by-app-layout="auto"] .by-app-back { padding: 0 11px; }
   .by-app[data-by-app-layout="auto"] .by-app-back-text { display: none; }
+  .by-app[data-by-app-layout="auto"] .by-app-grow { display: none; }
+  .by-app[data-by-app-layout="auto"] .by-app-top-actions { gap: 4px; }
+  .by-app[data-by-app-layout="auto"] .by-app-top-btn { padding: 0 8px; }
+  .by-app[data-by-app-layout="auto"] .by-app-top-label { display: none; }
+  .by-app[data-by-app-layout="auto"] .by-app-top:has(.by-app-top-actions) { gap: 6px; }
+  .by-app[data-by-app-layout="auto"] .by-app-top:has(.by-app-top-actions) .by-app-mlock { gap: 6px; }
+  .by-app[data-by-app-layout="auto"] .by-app-top:has(.by-app-top-actions) .by-app-back { gap: 0; padding: 0 10px; }
+  .by-app[data-by-app-layout="auto"] .by-app-top:has(.by-app-top-actions) .by-app-back .by-app-ext { display: none; }
   .by-app[data-by-app-layout="auto"] .by-app-menu { left: 10px; right: 10px; width: auto; }
   .by-app[data-by-app-layout="auto"] .by-app-content { padding: var(--by-app-pad-y-mobile) var(--by-app-pad-x-mobile); }
   .by-app[data-by-app-layout="auto"] .by-app-head { flex-wrap: wrap; }
@@ -1538,6 +1631,14 @@
 .by-app[data-by-app-layout="mobile"] .by-app-crumb { display: none; }
 .by-app[data-by-app-layout="mobile"] .by-app-back { padding: 0 11px; }
 .by-app[data-by-app-layout="mobile"] .by-app-back-text { display: none; }
+.by-app[data-by-app-layout="mobile"] .by-app-grow { display: none; }
+.by-app[data-by-app-layout="mobile"] .by-app-top-actions { gap: 4px; }
+.by-app[data-by-app-layout="mobile"] .by-app-top-btn { padding: 0 8px; }
+.by-app[data-by-app-layout="mobile"] .by-app-top-label { display: none; }
+.by-app[data-by-app-layout="mobile"] .by-app-top:has(.by-app-top-actions) { gap: 6px; }
+.by-app[data-by-app-layout="mobile"] .by-app-top:has(.by-app-top-actions) .by-app-mlock { gap: 6px; }
+.by-app[data-by-app-layout="mobile"] .by-app-top:has(.by-app-top-actions) .by-app-back { gap: 0; padding: 0 10px; }
+.by-app[data-by-app-layout="mobile"] .by-app-top:has(.by-app-top-actions) .by-app-back .by-app-ext { display: none; }
 .by-app[data-by-app-layout="mobile"] .by-app-menu { left: 10px; right: 10px; width: auto; }
 .by-app[data-by-app-layout="mobile"] .by-app-content { padding: var(--by-app-pad-y-mobile) var(--by-app-pad-x-mobile); }
 .by-app[data-by-app-layout="mobile"] .by-app-head { flex-wrap: wrap; }
@@ -1556,6 +1657,19 @@
 .by-app[data-by-app-layout="mobile"] .by-app-foot { padding: 12px 16px; }
 .by-app[data-by-app-layout="mobile"] .by-app-foot-ai { margin-left: 0; }
 /* phone-forced:end */
+
+/* Narrow phones (below 380 px, for example 360 px): a little more room for the full product
+   name. Back to Suite shows only the arrow (the design rule for phones), the gaps and buttons get tighter,
+   the name is 13.5 px. */
+@media (max-width: 379.98px) {
+  .by-app[data-by-app-layout] .by-app-top { gap: 6px; padding: 0 10px; }
+  .by-app[data-by-app-layout] .by-app-mlock { gap: 6px; }
+  .by-app[data-by-app-layout] .by-app-mlock .by-app-lockup-name { font-size: 13.5px; }
+  .by-app[data-by-app-layout] .by-app-back { gap: 0; padding: 0 10px; }
+  .by-app[data-by-app-layout] .by-app-back .by-app-ext { display: none; }
+  .by-app[data-by-app-layout] .by-app-burger { width: 34px; }
+  .by-app[data-by-app-layout] .by-app-top-btn { min-width: 34px; height: 34px; padding: 0 7px; }
+}
 
 /* ===================== Reduced motion ===================== */
 

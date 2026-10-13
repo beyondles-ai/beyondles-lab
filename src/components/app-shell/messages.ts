@@ -43,6 +43,7 @@ export interface ShellMessages {
   noAccessBody: string;
   noAccessBodyNoOrganisation: string;
   wrongAccount: string;
+  signedInAs: string;
   sessionTitle: string;
   sessionBody: string;
   signInAgain: string;
@@ -91,6 +92,7 @@ const en: ShellMessages = {
   noAccessBodyNoOrganisation:
     'Your organisation has not enabled it for you. An admin of your organisation can switch it on in the Beyondles Suite.',
   wrongAccount: 'Signed in with the wrong Beyondles account?',
+  signedInAs: 'Signed in as {email}',
   sessionTitle: 'Your sign-in has expired',
   sessionBody: 'For your security, a sign-in ends after a while. Sign in again to continue where you left off.',
   signInAgain: 'Sign in again',
@@ -140,6 +142,7 @@ const de: ShellMessages = {
   noAccessBodyNoOrganisation:
     'Die Organisation hat den Zugang noch nicht freigeschaltet. Ein Admin der Organisation kann ihn in der Beyondles Suite einschalten.',
   wrongAccount: 'Mit dem falschen Beyondles-Konto angemeldet?',
+  signedInAs: 'Angemeldet als {email}',
   sessionTitle: 'Anmeldung abgelaufen',
   sessionBody:
     'Aus Sicherheitsgründen endet eine Anmeldung nach einiger Zeit. Nach einer neuen Anmeldung geht es hier weiter.',
