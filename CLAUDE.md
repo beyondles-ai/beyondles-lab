@@ -48,7 +48,12 @@ Never change (this is the frame, reviewed centrally):
   (generated from `beyondles-ai/beyondles-shared`), `src/server/machine-door.ts`,
   `src/server/jobs/**` (add jobs, do not change the frame files),
   `src/app/api/platform/**`, `src/app/api/mcp/**`, `src/app/api/health/**`,
-  `src/app/kein-zugriff/**`, `scripts/check-frame.mjs`, `scripts/rename-lab.mjs`,
+  `src/app/kein-zugriff/**`, `src/components/app-shell/**` (the shared frame,
+  generated from `beyondles-ai/beyondles-shared`), `src/app/(app)/layout.tsx`
+  (add your own sidebar entries there, nothing else), `src/app/(app)/loading.tsx`,
+  `src/app/(app)/error.tsx`, `src/app/(app)/not-found.tsx`, `src/app/error.tsx`,
+  `src/lib/frame.ts`, `src/lib/suite-url.ts`, the theme mapping in
+  `src/app/globals.css`, `scripts/check-frame.mjs`, `scripts/rename-lab.mjs`,
   `.github/workflows/ci.yml`, `docker/**`, `ops/**`, `.env.example` (add your
   own variables below the frame block, never remove a frame variable).
 - If a frame file truly blocks you, write the reason in `docs/OFFEN.md` and
@@ -75,6 +80,18 @@ Never change (this is the frame, reviewed centrally):
 - **Jobs end with one line and an exit code** (`src/server/jobs/run-job.ts`).
   No empty `catch`, no `|| true`. Anything that deletes stops on empty input
   and on more than 10 % of a table, and is a dry run unless told otherwise.
+- **Closed-pages design.** Every page behind the login sits inside the shared
+  frame (`AppShell`); you only fill the content. Start every page with
+  `PageHeader` (kicker, two-tone title, one sentence, at most one primary
+  action); use `Panel`, `StatCard`, `StatusPill`, `PageState` and the
+  `by-app-*` classes. Light only: no `dark:` classes, no
+  `prefers-color-scheme`, no `next-themes`. Colours only from the Beyondles
+  names in `src/app/globals.css` (`text-heading`, `text-body`, `text-muted`,
+  `bg-canvas`, `bg-card`, `border-line`, `bg-lavender`, `text-err`, ...),
+  never `zinc-`/`slate-`/... classes, raw hex or `bg-[#...]`. No own "Back to
+  Suite" link and no language switch: the frame and the Suite cover them.
+  The sidebar lists only pages of this Lab. Block 13 of `check:frame` fails
+  otherwise.
 - **Docs are dated.** Every file in `docs/` carries `Checked on: YYYY-MM-DD`
   (today's date when you touch it) or is generated.
 - **Secrets never in git.** `.env` is ignored; `.env.example` has names only.

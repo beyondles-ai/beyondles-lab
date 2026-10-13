@@ -1,6 +1,6 @@
 # Building a Lab from this template — the guide for people
 
-Checked on: 2026-10-11
+Checked on: 2026-10-13
 
 This is the path from "I want a Lab" to "my Lab is live in the Beyondles
 Suite", for anyone outside Beyondles who builds one. Beyondles developers use
@@ -67,6 +67,15 @@ and `ALLOW_LOCAL_JWT=true`, a local Postgres, `npm run db:migrate`,
 `npm run dev`, then `node scripts/dev-login.mjs` for a sign-in cookie
 (`README.md`, "Run locally"). The platform door is off locally; AI and mail
 calls answer "door not configured" until Beyondles provides keys on staging.
+
+Screens: the frame around your pages (sidebar, topbar with "Back to Suite",
+person menu, footer, no-access page, loading, error and empty states) is the
+shared Beyondles frame in `src/components/app-shell/` and is never rebuilt or
+edited (`docs/FRAME.md`, section 3a). Your pages only fill the content area:
+start each with `PageHeader`, use `Panel`, `StatCard`, `StatusPill`,
+`PageState` and the `by-app-*` classes, and take colours only from the names
+in `src/app/globals.css`. Light only, no dark mode, every text in English and
+German. Look at every page at 1440 px and 390 px wide before you call it done.
 
 Keep these green at every step: `npm run check:frame`, `npm test`,
 `npm run build`. Every message names the rule and the file.

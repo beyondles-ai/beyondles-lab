@@ -1,6 +1,6 @@
 # Submitting a Lab into the Beyondles ecosystem
 
-Checked on: 2026-10-11
+Checked on: 2026-10-13
 
 Status: **decided 2026-10-08, self-service since 2026-10-11 (Niclas).** This is the
 process behind "Build your own Lab" in the Suite. `docs/BUILDING.md` is the
@@ -85,10 +85,15 @@ and `development@beyondles.ai` through the platform mail door.
 - Suite login, three-level access model, platform door, export and deletion
   endpoints, API + MCP with manifest and parity test, scopes, rate limits,
   jobs with exit codes and alerts, retention, two languages, Docker layout,
-  CI, deploy scripts, icons, "Back to Suite" link.
+  CI, deploy scripts, icons, and the shared Beyondles frame for every page
+  behind the login (`src/components/app-shell/`: sidebar, topbar with
+  "Back to Suite", person menu, footer, no-access page and states).
 - `npm run check:frame` fails on: missing frame files, provider or mail
   SDKs, forbidden variables, hard-coded Suite address, empty `catch`,
-  `|| true`, undated docs, unknown root files, template name leftovers.
+  `|| true`, undated docs, unknown root files, template name leftovers, and
+  (block 13) a signed-in layout without the shared frame, dark mode or theme
+  switching, colours outside the Beyondles names, an own "Back to Suite"
+  link, a language switch.
 - The unit tests fail on: a tenant table missing from export, deletion plans
   or retention, a function missing a door or a manifest entry, a variable
   read by the code but not passed by Compose, locale gaps.
@@ -100,6 +105,9 @@ and `development@beyondles.ai` through the platform mail door.
 - What the Lab does with personal data, and whether the retention periods
   are the ones the customer agreed.
 - Quality and purpose of the product itself, overlap with existing Labs.
+- Whether the pages follow the closed-pages design inside the frame (one
+  `PageHeader` per page, at most one primary action, states for empty lists),
+  looked at in a browser at 1440 px and 390 px.
 - Anything in "Not tested".
 
 ## Legal limits that remain
