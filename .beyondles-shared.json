@@ -7,6 +7,6 @@
   ],
   "messages": {
     "en": { "file": "messages/en.json" },
-    "de": { "file": "messages/de.json", "variant": "du" }
+    "de": { "file": "messages/de.json", "variant": "sie" }
   }
 }

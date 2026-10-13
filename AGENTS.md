@@ -13,6 +13,8 @@ Short form:
   `src/server/functions.manifest.ts`, `prisma/`, `messages/`.
 - Never change the frame files listed in `CLAUDE.md`, section 1.
 - English code, user text in `messages/de.json` and `messages/en.json`.
+  German addresses the reader with the formal "Sie" (never "du", never the
+  informal plural "ihr"); `check:frame` block 7b fails otherwise.
   The language comes from the Suite setting via the `NEXT_LOCALE` cookie, default English; no language switcher in the Lab.
 - No provider keys or SDKs; AI and mail go through `src/lib/platform/`.
 - Pages behind the login sit inside the shared frame (`src/components/app-shell/`,
