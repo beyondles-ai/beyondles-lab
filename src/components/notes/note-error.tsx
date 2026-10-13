@@ -14,10 +14,7 @@ export async function NoteError({ code }: { code?: string }) {
   const t = await getTranslations("notes.errors");
   const key = KNOWN.has(code) ? code : "internal_error";
   return (
-    <p
-      role="alert"
-      className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-800"
-    >
+    <p role="alert" className="rounded-md bg-err-soft px-4 py-3 text-sm text-err">
       {t(key)}
     </p>
   );

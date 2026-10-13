@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
+import { IconBolt, IconPen, IconUsers, PageHeader, StatCard, StatGrid } from "@/components/app-shell";
 import { uiActor } from "@/lib/actor";
 import { requireAccess } from "@/lib/rbac";
 import { accessDoorState } from "@/lib/platform/door";
@@ -14,16 +16,42 @@ export default async function DashboardPage() {
   const { session } = ctx;
   const t = await getTranslations("dashboard");
   const count = await countVisibleNotes(uiActor(ctx));
+  const state = accessDoorState();
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">{t("title")}</h1>
-      <p className="text-zinc-600">{t("intro")}</p>
-      <p className="text-sm text-zinc-500">
-        {t("signedInAs", { email: session.email, organisation: session.organisationSlug })}
-      </p>
-      <p className="text-sm text-zinc-500">{t("doorState", { state: accessDoorState() })}</p>
-      <p className="text-sm">{t("notesCount", { count })}</p>
-    </div>
+    <>
+      <PageHeader
+        kicker={t("kicker")}
+        title={t("title")}
+        titleMuted={t("titleMuted")}
+        description={t("intro")}
+        actions={
+          <Link className="by-app-btn by-app-btn-primary" href="/notes">
+            {t("openNotes")}
+          </Link>
+        }
+      />
+      <StatGrid>
+        <StatCard
+          icon={<IconPen />}
+          label={t("statNotes")}
+          value={count}
+          hint={t("notesCount", { count })}
+        />
+        <StatCard
+          icon={<IconBolt />}
+          label={t("statDoor")}
+          value={t("doorValue", { state })}
+          hint={t("doorHint", { state })}
+          hintTone={state === "ok" ? "positive" : "neutral"}
+        />
+        <StatCard
+          icon={<IconUsers />}
+          label={t("statOrganisation")}
+          value={session.organisationSlug}
+          hint={t("signedInAs", { email: session.email })}
+        />
+      </StatGrid>
+    </>
   );
 }

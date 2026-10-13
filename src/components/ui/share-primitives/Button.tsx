@@ -7,13 +7,13 @@ import type { ShareButtonProps } from "@/components/share/types";
 /**
  * Adapter for the share blocks (contract: share-ui/HOST-CONTRACT.md in
  * beyondles-ai/beyondles-shared). Same look as the template's own buttons
- * (`rounded bg-zinc-900 text-white`). `isLoading` shows a spinner and makes
+ * (the brand gradient for primary, white with a line for secondary). `isLoading` shows a spinner and makes
  * the button unclickable.
  */
 const VARIANTS = {
-  primary: "bg-zinc-900 text-white hover:bg-zinc-700",
-  secondary: "border border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-100",
-  danger: "bg-red-600 text-white hover:bg-red-700",
+  primary: "bg-linear-120 from-brand via-brand-blue to-brand-turquoise text-white hover:opacity-90",
+  secondary: "border border-line bg-card text-heading hover:border-brand-light",
+  danger: "border border-err bg-card text-err hover:bg-err-soft",
 } as const;
 
 export function Button({
@@ -34,8 +34,8 @@ export function Button({
       aria-busy={isLoading || undefined}
       onClick={onClick}
       className={[
-        "inline-flex items-center justify-center gap-1.5 rounded font-medium transition-colors",
-        "focus-visible:ring-2 focus-visible:ring-zinc-900/40 focus-visible:outline-none",
+        "inline-flex items-center justify-center gap-1.5 rounded-full font-medium transition-colors",
+        "focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none",
         "disabled:cursor-not-allowed disabled:opacity-50",
         VARIANTS[variant],
         scale,
