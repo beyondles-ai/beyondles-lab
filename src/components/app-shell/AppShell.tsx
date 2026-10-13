@@ -20,7 +20,7 @@ import { parseSessionHint } from './session-hint';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import type { AppShellProps } from './types';
-import { domId } from './util';
+import { domId, productTone } from './util';
 
 export function AppShell({
   locale,
@@ -73,7 +73,12 @@ export function AppShell({
 
   return (
     <ShellContext.Provider value={{ locale, kind: product.kind }}>
-      <div className="by-app" data-by-app-kind={product.kind} data-by-app-layout={forceMobile ? 'mobile' : 'auto'}>
+      <div
+        className="by-app"
+        data-by-app-kind={product.kind}
+        data-by-app-tone={productTone(product.kind)}
+        data-by-app-layout={forceMobile ? 'mobile' : 'auto'}
+      >
         <div className="by-app-frame" ref={frameRef}>
           <a className="by-app-skip" href={`#${mainId}`}>
             {t.skipToContent}

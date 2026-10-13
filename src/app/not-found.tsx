@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 
 import "@/components/app-shell/app-shell.css";
 import { AppShell, IconSearch, PageState } from "@/components/app-shell";
-import { getSession } from "@/lib/auth";
+import { getSession, organisationDisplayName } from "@/lib/auth";
 import { LAB_PRODUCT, frameContext } from "@/lib/frame";
 import { labNavGroups } from "@/lib/lab-nav";
 import { hasProductAccess, isProductAdmin } from "@/lib/platform/access";
@@ -63,7 +63,7 @@ async function inFrame(content: React.ReactNode): Promise<React.ReactNode | null
         product={LAB_PRODUCT}
         navGroups={navGroups}
         user={{ name: session.name || session.email, email: session.email }}
-        organisation={{ name: session.organisationSlug }}
+        organisation={{ name: organisationDisplayName(session) }}
         links={frame.links}
         sessionHint={frame.sessionHint}
       >

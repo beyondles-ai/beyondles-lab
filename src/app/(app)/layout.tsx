@@ -1,6 +1,6 @@
 import "@/components/app-shell/app-shell.css";
 import { AppShell } from "@/components/app-shell";
-import { db } from "@/lib/db";
+import { organisationDisplayName } from "@/lib/auth";
 import { LAB_PRODUCT, frameContext } from "@/lib/frame";
 import { labNavGroups } from "@/lib/lab-nav";
 import { requireAccess } from "@/lib/rbac";
@@ -21,13 +21,8 @@ import { requireAccess } from "@/lib/rbac";
  * person menu, built from the Suite URL of the running environment.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { session, organisationId, isAdmin, access } = await requireAccess();
+  const { session, isAdmin, access } = await requireAccess();
   const frame = await frameContext(access.orgRole);
-
-  const organisation = await db.organisation.findUnique({
-    where: { id: organisationId },
-    select: { name: true },
-  });
 
   const navGroups = await labNavGroups(isAdmin);
 
@@ -37,7 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       product={LAB_PRODUCT}
       navGroups={navGroups}
       user={{ name: session.name || session.email, email: session.email }}
-      organisation={{ name: organisation?.name ?? session.organisationSlug }}
+      organisation={{ name: organisationDisplayName(session) }}
       links={frame.links}
       sessionHint={frame.sessionHint}
     >

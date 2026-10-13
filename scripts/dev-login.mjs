@@ -42,6 +42,7 @@ const token = jwt.sign(
     role,
     organisationId,
     organisationSlug: "dev-org",
+    organisationName: "Dev Organisation",
   },
   secret,
   { issuer: "company-brain", audience: "brain-app", expiresIn: "12h" },

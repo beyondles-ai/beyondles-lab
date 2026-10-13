@@ -5,8 +5,9 @@
  * OUTSIDE the product's logged-in layout (for example on /kein-zugriff): the frame without
  * navigation (lockup, organisation chip when known, footer) and the centred card.
  *
- * - `access`: "You do not have access to <product> yet", who can switch it on, "Back to Suite ↗"
- *   and, when given, "Switch account" for the wrong-account case.
+ * - `access`: "You do not have access to <product> yet", who can switch it on, when given the
+ *   line "Signed in as <email>", "Back to Suite ↗" and, when given, "Switch account" for the
+ *   wrong-account case.
  * - `session`: the sign-in has expired, "Sign in again".
  */
 import type { JSX } from 'react';
@@ -20,12 +21,15 @@ import { parseSessionHint } from './session-hint';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import type { NoAccessProps } from './types';
-import { domId } from './util';
+import { domId, productTone } from './util';
 
 export function NoAccess({
   locale,
   product,
   variant = 'access',
+  title,
+  description,
+  signedInAs,
   organisation = null,
   links,
   sessionHint,
@@ -40,12 +44,16 @@ export function NoAccess({
   // Same rule as the person menu: only when the session hint says switching is visible.
   const switchAccount = links.switchAccount && hint !== null && hint.switching ? links.switchAccount : null;
   const session = variant === 'session';
+  // An expired sign-in has no active account to name, so the line is for `access` only.
+  const email = !session && typeof signedInAs === 'string' ? signedInAs.trim() : '';
+  const [whoBefore, whoAfter = ''] = t.signedInAs.split('{email}');
 
   return (
     <ShellContext.Provider value={{ locale, kind: product.kind }}>
       <div
         className="by-app"
         data-by-app-kind={product.kind}
+        data-by-app-tone={productTone(product.kind)}
         data-by-app-layout={forceMobile ? 'mobile' : 'auto'}
         data-by-app-bare="true"
       >
@@ -81,15 +89,23 @@ export function NoAccess({
                         <span className="by-app-state-tile">{session ? <IconUser size={28} /> : <IconLock size={28} />}</span>
                       </div>
                       <h1 className="by-app-state-title" id={titleId}>
-                        {session ? t.sessionTitle : fillMessage(t.noAccessTitle, { product: product.name })}
+                        {title || (session ? t.sessionTitle : fillMessage(t.noAccessTitle, { product: product.name }))}
                       </h1>
                       <p className="by-app-state-desc">
-                        {session
-                          ? t.sessionBody
-                          : organisation
-                            ? fillMessage(t.noAccessBody, { organisation: organisation.name })
-                            : t.noAccessBodyNoOrganisation}
+                        {description ||
+                          (session
+                            ? t.sessionBody
+                            : organisation
+                              ? fillMessage(t.noAccessBody, { organisation: organisation.name })
+                              : t.noAccessBodyNoOrganisation)}
                       </p>
+                      {email ? (
+                        <p className="by-app-state-who">
+                          {whoBefore}
+                          <span className="by-app-state-email">{email}</span>
+                          {whoAfter}
+                        </p>
+                      ) : null}
                       <div className="by-app-state-actions">
                         {session ? (
                           <a className="by-app-btn by-app-btn-primary" href={links.signIn || product.homeHref}>

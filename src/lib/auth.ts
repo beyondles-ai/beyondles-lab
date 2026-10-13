@@ -29,8 +29,9 @@ import { platformUrl } from "@/lib/platform/door";
  * - Organisation data comes from `jwt.decode` of the EXACT confirmed token
  *   (decode checks no signature — /api/auth/me already did) plus a cross
  *   check: the decoded userId must equal the user the Suite confirmed.
- * - `organisationId` is a claim of the token, NOT a field of the answer:
- *   `/api/auth/me` returns `{ user, products, mfa }` and no organisation.
+ * - `organisationId` is a claim of the token. The answer's `organisation`
+ *   (`{ id, name }`, Suite #350) only supplies the display NAME, and only
+ *   when its id equals the token's organisation.
  * - Results are cached 60 s per token hash. Network errors are NOT cached.
  */
 
@@ -52,6 +53,17 @@ export interface PlatformSession {
   role: string;
   organisationId: string;
   organisationSlug: string;
+  /**
+   * Display name of the organisation ("Acme GmbH"), from the Suite's
+   * `/api/auth/me`. Missing when the Suite did not send it (older Suite,
+   * local token without the claim): use `organisationDisplayName()`.
+   */
+  organisationName?: string;
+}
+
+/** What people see for the organisation: its name, the slug only as fallback. */
+export function organisationDisplayName(session: PlatformSession): string {
+  return session.organisationName?.trim() || session.organisationSlug;
 }
 
 export async function getAuthToken(): Promise<string | undefined> {
@@ -73,6 +85,11 @@ export function sessionFromPayload(payload: JwtPayload): PlatformSession | null 
     return null;
   }
 
+  const organisationName =
+    typeof payload.organisationName === "string" && payload.organisationName.trim()
+      ? payload.organisationName.trim()
+      : undefined;
+
   return {
     userId: String(payload.userId ?? ""),
     email: String(payload.email ?? ""),
@@ -83,6 +100,7 @@ export function sessionFromPayload(payload: JwtPayload): PlatformSession | null 
       typeof payload.organisationSlug === "string"
         ? payload.organisationSlug
         : organisationId,
+    ...(organisationName ? { organisationName } : {}),
   };
 }
 
@@ -153,15 +171,22 @@ export async function introspect(
     try {
       const body = (await res.json()) as {
         user?: { id?: string; email?: string; name?: string };
+        organisation?: { id?: unknown; name?: unknown } | null;
       };
       const decoded = jwt.decode(token);
       if (body.user?.id && decoded && typeof decoded === "object") {
         const candidate = sessionFromPayload(decoded as JwtPayload);
         if (candidate && candidate.userId === body.user.id) {
+          const org = body.organisation;
+          const organisationName =
+            org && org.id === candidate.organisationId && typeof org.name === "string" && org.name.trim()
+              ? org.name.trim()
+              : candidate.organisationName;
           session = {
             ...candidate,
             email: body.user.email ?? candidate.email,
             name: body.user.name ?? candidate.name,
+            ...(organisationName ? { organisationName } : {}),
           };
         }
       }

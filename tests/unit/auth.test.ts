@@ -4,7 +4,12 @@ import jwt from "jsonwebtoken";
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
 
-import { __clearIntrospectionCacheForTests, introspect, sessionFromPayload } from "@/lib/auth";
+import {
+  __clearIntrospectionCacheForTests,
+  introspect,
+  organisationDisplayName,
+  sessionFromPayload,
+} from "@/lib/auth";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 
@@ -60,6 +65,25 @@ describe("introspect", () => {
       throw new Error("ECONNREFUSED");
     }) as unknown as typeof fetch;
     expect(await introspect(t, failing)).toBeNull();
+  });
+
+  it("takes the organisation's display name from the Suite, only for the token's organisation", async () => {
+    const t = token({ type: "access", userId: "u1", organisationId: ORG, organisationSlug: "acme" });
+    const named = await introspect(t, fakeFetch(200, { user: { id: "u1" }, organisation: { id: ORG, name: " Acme GmbH " } }));
+    expect(named?.organisationName).toBe("Acme GmbH");
+    expect(named && organisationDisplayName(named)).toBe("Acme GmbH");
+
+    __clearIntrospectionCacheForTests();
+    const foreign = await introspect(
+      t,
+      fakeFetch(200, { user: { id: "u1" }, organisation: { id: "22222222-2222-4222-8222-222222222222", name: "Other" } }),
+    );
+    expect(foreign?.organisationName).toBeUndefined();
+    expect(foreign && organisationDisplayName(foreign)).toBe("acme");
+
+    __clearIntrospectionCacheForTests();
+    const older = await introspect(t, fakeFetch(200, { user: { id: "u1" }, organisation: { id: ORG, name: "  " } }));
+    expect(older && organisationDisplayName(older)).toBe("acme");
   });
 
   it("returns nobody when no Suite is configured", async () => {

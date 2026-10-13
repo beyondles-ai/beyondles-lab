@@ -92,6 +92,20 @@ describe("no-access page", () => {
     expect(page).not.toMatch(/requireAccess\(\)/);
     expect(source("src/app/kein-zugriff/layout.tsx")).toContain('import "@/components/app-shell/app-shell.css"');
   });
+
+  it("names the signed-in account on the no-access card", () => {
+    expect(source("src/app/kein-zugriff/page.tsx")).toMatch(/signedInAs=\{session\.email\}/);
+  });
+});
+
+describe("organisation chip", () => {
+  it("shows the display name (slug only as fallback) in every frame", () => {
+    for (const file of ["src/app/(app)/layout.tsx", "src/app/kein-zugriff/page.tsx", "src/app/not-found.tsx"]) {
+      const page = source(file);
+      expect(page, file).toMatch(/organisationDisplayName\(session\)/);
+      expect(page, file).not.toMatch(/name:\s*session\.organisationSlug/);
+    }
+  });
 });
 
 describe("suite links", () => {

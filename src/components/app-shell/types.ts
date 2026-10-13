@@ -18,12 +18,23 @@ export type ShellLocale = 'en' | 'de';
  * - `horaizon`: navy sidebar, purple #9652E8 (Beyondles HorAIzon)
  * - `brain`: navy sidebar, turquoise #12B5E8 (The Brain)
  * - `lab`: white sidebar, brand gradient and the "LAB" tag (every Lab and the Lab template)
+ * - `service`: the Lab look (white sidebar, brand gradient) without the "LAB" tag, for platform
+ *   services that are not a Lab (Beyondles Connections)
  */
-export type ProductKind = 'suite' | 'horaizon' | 'brain' | 'lab';
+export type ProductKind = 'suite' | 'horaizon' | 'brain' | 'lab' | 'service';
+
+/**
+ * The sidebar tone a kind uses: `white` for Labs and services, `navy` for the main products
+ * (Beyondles Suite, Beyondles HorAIzon, The Brain). Set as `data-by-app-tone` on the root.
+ */
+export type ProductTone = 'navy' | 'white';
 
 export interface ShellProduct {
   kind: ProductKind;
-  /** Full product name as shown: "Beyondles Suite", "Beyondles HorAIzon", "The Brain", "ContentLab". */
+  /**
+   * Full product name as shown: "Beyondles Suite", "Beyondles HorAIzon", "The Brain",
+   * "ContentLab", "Beyondles Connections".
+   */
   name: string;
   /** The product's start page. The lockup links there, the account-change overlay reloads it. */
   homeHref: string;
@@ -117,6 +128,19 @@ export interface NoAccessProps {
   product: ShellProduct;
   /** `access` (default): no access to this product. `session`: the sign-in has expired or failed. */
   variant?: 'access' | 'session';
+  /**
+   * Replaces the default heading, for a product that knows WHY there is no access (for example
+   * "The platform did not answer"). Already translated. Empty or missing: the default heading.
+   */
+  title?: string;
+  /** Replaces the default sentence under the heading, like `title`. Already translated. */
+  description?: string;
+  /**
+   * The e-mail of the Beyondles account that is signed in. Shown as a small line under the
+   * sentence ("Signed in as <email>"), so a person with several Beyondles accounts sees which
+   * one is active. Variant `access` only; empty or missing: no line.
+   */
+  signedInAs?: string;
   organisation?: ShellOrganisation | null;
   links: NoAccessLinks;
   /** Same as on AppShell: turns on the account-change guard. */
