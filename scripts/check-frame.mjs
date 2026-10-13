@@ -15,6 +15,8 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { informalAddressFindings } from "./support/informal-address.mjs";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const findings = [];
 const fail = (msg) => findings.push(msg);
@@ -60,6 +62,24 @@ for (const rel of [
   "src/app/apple-icon.png",
   "src/app/favicon.ico",
   "src/app/kein-zugriff/page.tsx",
+  // Closed-pages design (card #350, 2026-10-13): the shared frame from
+  // beyondles-shared (app-shell), the signed-in layout that renders it, the
+  // states of the signed-in area, the no-access layout and the server-side
+  // Suite links. Block 13 checks what they must contain.
+  "src/components/app-shell/index.ts",
+  "src/components/app-shell/app-shell.css",
+  "src/components/app-shell/.shared-version",
+  "src/app/(app)/layout.tsx",
+  "src/app/(app)/loading.tsx",
+  "src/app/(app)/error.tsx",
+  "src/app/(app)/not-found.tsx",
+  "src/app/not-found.tsx",
+  "src/lib/lab-nav.tsx",
+  "src/app/kein-zugriff/layout.tsx",
+  "src/app/globals.css",
+  "src/lib/frame.ts",
+  "src/lib/suite-url.ts",
+  "tests/unit/app-shell-frame.test.ts",
   "mcp/package.json",
   "mcp/server.mjs",
   "docs/OFFEN.md",
@@ -249,6 +269,12 @@ const deKeys = keys(de).sort();
 const enKeys = keys(en).sort();
 if (JSON.stringify(deKeys) !== JSON.stringify(enKeys))
   fail("messages/de.json and messages/en.json do not have the same keys");
+// 7b. German addresses the reader with the formal "Sie" (card #350): no
+//     "du/dich/dir/dein...", no informal plural "ihr/euch/euer...". Formal
+//     "Ihr/Ihre/Ihnen" is correct. Rule and allow-list in
+//     scripts/support/informal-address.mjs.
+for (const { key, hits } of informalAddressFindings(de))
+  fail(`messages/de.json "${key}" addresses the reader informally (${hits.join(", ")}); use the formal "Sie"`);
 
 // 8. The Lab still carries the template name? The literals are assembled at
 //    runtime so `npm run rename` cannot rewrite them (it skips this file too);
@@ -345,6 +371,104 @@ const warnings = [];
   }
 }
 if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((w) => `  - ${w}`).join("\n"));
+
+// 13. Closed-pages design (card #350, design system "closed pages v1"). The
+//     signed-in area renders the shared frame (AppShell from
+//     src/components/app-shell, generated from beyondles-shared) and only
+//     fills its content. Light only, Beyondles values only, no own way back
+//     to the Suite (the frame's topbar has it), no language switch (the
+//     language comes from the Suite through the NEXT_LOCALE cookie).
+{
+  const manifest = exists(".beyondles-shared.json") ? JSON.parse(read(".beyondles-shared.json")) : {};
+  if (!(manifest.modules ?? []).some((m) => m.name === "app-shell" && m.dest === "src/components/app-shell"))
+    fail('.beyondles-shared.json has no module { "name": "app-shell", "dest": "src/components/app-shell" }');
+
+  // Code without comment lines, so a comment may NAME a rule.
+  const code = (rel) =>
+    read(rel)
+      .split("\n")
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .join("\n");
+  const layout = "src/app/(app)/layout.tsx";
+  if (exists(layout)) {
+    const text = code(layout);
+    if (!/import\s*\{[^}]*\bAppShell\b[^}]*\}\s*from\s*["']@\/components\/app-shell["']/.test(text) || !/<AppShell\b/.test(text))
+      fail(`${layout} does not render AppShell from @/components/app-shell (the shared frame)`);
+    if (!/["']@\/components\/app-shell\/app-shell\.css["']/.test(text))
+      fail(`${layout} does not import @/components/app-shell/app-shell.css`);
+  }
+  // An address that matches no page must not fall back to Next's own
+  // unstyled, English-only 404 page.
+  const rootNotFound = "src/app/not-found.tsx";
+  if (exists(rootNotFound)) {
+    const text = code(rootNotFound);
+    if (!/<PageState\b/.test(text) || !/["']@\/components\/app-shell\/app-shell\.css["']/.test(text))
+      fail(`${rootNotFound} does not render PageState with @/components/app-shell/app-shell.css (the styled not-found state)`);
+    if (!/getTranslations\(\s*["']states["']\s*\)/.test(text))
+      fail(`${rootNotFound} does not take its texts from the "states" messages (English and German)`);
+  }
+  const noAccessPage = "src/app/kein-zugriff/page.tsx";
+  if (exists(noAccessPage) && !/<NoAccess\b/.test(code(noAccessPage)))
+    fail(`${noAccessPage} does not render NoAccess from @/components/app-shell`);
+  const noAccessLayout = "src/app/kein-zugriff/layout.tsx";
+  if (exists(noAccessLayout) && !/["']@\/components\/app-shell\/app-shell\.css["']/.test(code(noAccessLayout)))
+    fail(`${noAccessLayout} does not import @/components/app-shell/app-shell.css`);
+
+  if (deps["next-themes"]) fail("package.json depends on next-themes: light only, no theme switch");
+
+  const PALETTE =
+    "slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose";
+  const TOKENS = "use the Beyondles names from src/app/globals.css";
+  const DESIGN = [
+    [/(^|[\s"'`{(])dark:/, "dark: class (light only, no dark mode)"],
+    [/prefers-color-scheme/, "prefers-color-scheme (light only)"],
+    [/color-scheme:\s*dark/, "color-scheme: dark (light only)"],
+    [/@custom-variant\s+dark/, "dark variant (light only)"],
+    [/next-themes|\bThemeProvider\b|\buseTheme\b/, "theme switching (light only)"],
+    [new RegExp(`\\b[a-z-]+-(${PALETTE})-\\d{2,3}\\b`), `Tailwind default palette class: ${TOKENS}`],
+    [new RegExp(`--color-(${PALETTE})-\\d{2,3}\\b`), `Tailwind default palette value: ${TOKENS}`],
+    [/\b[a-z-]+-\[(#|rgb|hsl|oklch)/, `arbitrary colour class: ${TOKENS}`],
+    [/(?<![\w&/])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])/, `raw hex colour: ${TOKENS}`],
+    [/\bback\s*to\s*(the\s+)?(beyondles\s+)?suite\b|\bbackToSuite\b|\/toolbox\b/i, "own way back to the Suite: the frame's topbar has it"],
+    [/\b(Language|Locale|Lang)(Switch|Switcher|Select|Selector|Toggle|Picker|Menu)\b/, "language switch: the language comes from the Suite (NEXT_LOCALE)"],
+    [/\.set\(\s*(LOCALE_COOKIE|["']NEXT_LOCALE["'])/, "writes the language cookie: only the Suite does"],
+  ];
+  const generatedDirs = [
+    ["src", "lib", "platform-client"],
+    ["src", "components", "share"],
+    ["src", "components", "app-shell"],
+    ["src", "generated"],
+  ].map((parts) => path.join(root, ...parts) + path.sep);
+  const globalsCss = path.join(root, "src", "app", "globals.css");
+  const blank = (chunk) => chunk.replace(/[^\n]/g, " ");
+  const designFiles = walk(path.join(root, "src"))
+    .filter((f) => /\.(ts|tsx|css|mjs|js)$/.test(f))
+    .filter((f) => !generatedDirs.some((dir) => f.startsWith(dir)));
+  for (const file of designFiles) {
+    // Block comments are blanked (line numbers stay); a comment may name a rule.
+    let text = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, blank);
+    // The theme mapping in globals.css is the one place that names colour
+    // values; it is blanked, the rest of that file is checked like any other.
+    if (file === globalsCss) text = text.replace(/@theme[^{]*\{[^}]*\}/g, blank);
+    text.split("\n").forEach((line, i) => {
+      if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+      for (const [pattern, what] of DESIGN) {
+        if (pattern.test(line)) fail(`${path.relative(root, file)}:${i + 1}: ${what}`);
+      }
+    });
+  }
+  // The same rule for the texts: no own "Back to Suite" entry in the messages.
+  for (const [rel, tree] of [
+    ["messages/en.json", en],
+    ["messages/de.json", de],
+  ]) {
+    const hit = keys(tree).find((k) => {
+      const value = k.split(".").reduce((cur, part) => cur?.[part], tree);
+      return typeof value === "string" && /\bback to (the )?(beyondles )?suite\b|zurück zur (beyondles )?suite/i.test(value);
+    });
+    if (hit) fail(`${rel}: "${hit}" is an own "Back to Suite" text; the frame's topbar has the way back`);
+  }
+}
 
 if (findings.length > 0) {
   console.error("Frame check FAILED:\n" + findings.map((f) => `  - ${f}`).join("\n"));

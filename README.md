@@ -75,7 +75,12 @@ server — see `src/lib/jwt-guard.ts`.
 | `docs/EXCLUSIONS.md`, `docs/HEADLESS-MIGRATION.md` | the generated exclusions list; how an existing Lab adopts the headless pieces |
 | `src/components/share/`, `.beyondles-shared.json` | the share blocks (picker, badge, people picker, dialog): **generated from `beyondles-ai/beyondles-shared`, never edited here** |
 | `src/lib/platform-client/` | the access client, decisions and container rules behind `platform-access.ts`, `platform/access.ts`, `access-rules.ts`, `rbac.ts` and `api-auth.ts`: **generated from `beyondles-ai/beyondles-shared`, never edited here** |
-| `src/components/ui/share-primitives/` | the four small components the share blocks draw with (this Lab's own look) |
+| `src/components/ui/share-primitives/` | the four small components the share blocks draw with (in the Beyondles look) |
+| `src/components/app-shell/` | the shared Beyondles frame for every page behind the login (sidebar, topbar, person menu, footer, no-access page, states, page blocks): **generated from `beyondles-ai/beyondles-shared` (module `app-shell`), never edited here** |
+| `src/app/(app)/layout.tsx`, `src/lib/frame.ts`, `src/lib/suite-url.ts`, `src/lib/lab-nav.tsx` | the signed-in layout that renders the frame, the Suite links, language and session hint it gets from the server, and the sidebar entries |
+| `src/app/(app)/loading.tsx`, `error.tsx`, `not-found.tsx`, `src/app/error.tsx`, `src/app/not-found.tsx` | the loading, error and not-found states of the signed-in area, and the not-found state for an unknown address |
+| `src/app/kein-zugriff/` | the no-access page (shared `NoAccess`), outside the signed-in layout on purpose |
+| `src/app/globals.css`, `src/components/ui/form-classes.ts` | the Beyondles colours, fonts and radii for Tailwind, and the form field styles |
 | `docker/`, `ops/deploy/` | container stack and host scripts |
 | `scripts/check-frame.mjs` | the repo half of `/lab-pipeline check`, runs in CI |
 | `docs/FRAME.md` | what the frame guarantees |
@@ -91,6 +96,7 @@ server — see `src/lib/jwt-guard.ts`.
 - Every variable the code reads is passed by Compose and explained in `.env.example`.
 - `src/components/share/` and the `share` part of `messages/*.json` are generated from `beyondles-ai/beyondles-shared` and never edited locally: the CI step "Shared code is unchanged" fails on any difference. To change them, change the shared repo, tag a version, and run its `sync/sync.mjs --target <this repo>` from a checkout of that tag (what a Lab must provide: `share-ui/HOST-CONTRACT.md` there).
 - `messages/de.json` and `messages/en.json` carry the same keys.
+- **Closed-pages design:** the signed-in layout renders the shared frame `AppShell` from `src/components/app-shell/` (generated from `beyondles-ai/beyondles-shared`, never edited here), `/kein-zugriff` renders `NoAccess`. Light only (no `dark:` classes, no `prefers-color-scheme`, no `next-themes`), colours only from the Beyondles names in `src/app/globals.css` (no `zinc-`/`slate-`/... classes, no raw hex, no `bg-[#...]`), no own "Back to Suite" link (the frame has it), no language switch (the Suite sets `NEXT_LOCALE`). `npm run check:frame` block 13 fails otherwise (docs/FRAME.md section 3a).
 - `JWT_SECRET` never on a server; a production process refuses to start with it (unless `ALLOW_LOCAL_JWT=true`, the E2E exception, which is logged loudly).
 - **Headless by construction:** every function exists once in a service and is reachable through the screen, `/api/v1` and an MCP tool, or carries a written exclusion. `src/server/functions.manifest.ts` lists them; `tests/unit/parity.test.ts` fails the build when a service export, route, tool or action is missing from it or it points at something that does not exist, and when `docs/EXCLUSIONS.md` (generated, `npm run docs:exclusions`) is stale. Audit and container choice happen in the service, never in a door (docs/FRAME.md section 5).
 - Every `/api/v1` handler opens its door with `openMachineDoor(request, "<functionId>")`: credential, rate limit, the function's scopes, the worker-only rule.

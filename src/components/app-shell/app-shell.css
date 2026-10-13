@@ -1,0 +1,1689 @@
+/* =====================================================================
+   app-shell: the frame of every Beyondles page behind the login.
+   Shipped by beyondles-shared (module app-shell). Products carry a checked
+   copy and never edit it. Design: Beyondles Web Design System, closed
+   pages v1 (approved 2026-10-13, card #350), reference mockup Draft-v2.
+
+   Rules of this file (enforced by app-shell/tests/css.test.ts):
+   - plain CSS, no @layer, no @import, no :root, no html or body rules
+   - every selector starts at an own class (.by-app...); an element name
+     only ever follows an own class, so nothing reaches into product content
+   - every value is a --by-app-* variable declared on .by-app (literal
+     values; the brand values equal web-design/src/tokens.css)
+   - the host sets --by-app-font (Inter) and --by-app-font-head (Poppins)
+   - light only, no dark mode
+   ===================================================================== */
+
+.by-app,
+.by-app-guard {
+  /* ---- Brand values: identical to web-design/src/tokens.css ---- */
+  --by-app-purple: #9652E8;
+  --by-app-purple-light: #CA7AFF;
+  --by-app-turquoise: #12B5E8;
+  --by-app-turquoise-light: #4CE9FE;
+  --by-app-navy: #0A0E1A;
+  --by-app-navy-2: #131A2D;
+  --by-app-canvas: #F9FAFB;
+  --by-app-card: #FFFFFF;
+  --by-app-line: #E3E5EB;
+  --by-app-tint-lavender: #F1EAFD;
+  --by-app-tint-ice: #E7F7FD;
+  --by-app-text-heading: #0A0E1A;
+  --by-app-text-body: #4A4F5E;
+  --by-app-text-muted: #6E7382;
+  --by-app-text-on-dark: #FFFFFF;
+  --by-app-text-on-dark-muted: #A7ABB8;
+  --by-app-label-purple: #7A3FC8;
+  --by-app-label-turquoise: #0B7FA6;
+  --by-app-gradient: linear-gradient(120deg, #9652E8 0%, #9652E8 32%, #6E7FE0 66%, #12B5E8 100%);
+  --by-app-gradient-light: linear-gradient(120deg, #CA7AFF 0%, #B58AF5 35%, #7FB8F2 70%, #4CE9FE 100%);
+  --by-app-glow-purple: radial-gradient(circle, rgba(150, 82, 232, .16), transparent 65%);
+  --by-app-glow-turquoise: radial-gradient(circle, rgba(18, 181, 232, .13), transparent 65%);
+  --by-app-tracking-head: -0.025em;
+  --by-app-tracking-hero: -0.03em;
+  --by-app-leading-head: 1.15;
+  --by-app-leading-body: 1.55;
+  --by-app-radius: 14px;
+  --by-app-radius-sm: 10px;
+  --by-app-radius-pill: 999px;
+  --by-app-shadow-soft: 0 6px 20px rgba(10, 14, 26, .08);
+  --by-app-shadow-button-hover: 0 6px 22px rgba(150, 82, 232, .38);
+  --by-app-ease: ease;
+  --by-app-duration: .26s;
+
+  /* ---- App values: identical to beyondles-app-tokens.css (closed pages v1) ---- */
+  --by-app-topbar: 64px;
+  --by-app-sidebar: 256px;
+  --by-app-sidebar-mobile: 290px;
+  /* --by-app-breakpoint: 760px; media queries cannot read variables, see the phone block below */
+  --by-app-pad-y: 36px;
+  --by-app-pad-x: 40px;
+  --by-app-pad-y-mobile: 22px;
+  --by-app-pad-x-mobile: 16px;
+  --by-app-gap: 24px;
+  --by-app-size-title: 30px;
+  --by-app-size-title-mobile: 25px;
+  --by-app-size-nav: 14.5px;
+  --by-app-size-table: 15px;
+  --by-app-side-text: #C9CCD6;
+  --by-app-side-hover: rgba(255, 255, 255, .06);
+  --by-app-side-active: rgba(255, 255, 255, .09);
+  --by-app-side-line: rgba(255, 255, 255, .08);
+  --by-app-acc-suite: #6E7FE0;
+  --by-app-acc-suite-grad: var(--by-app-gradient);
+  --by-app-acc-suite-name: var(--by-app-gradient-light);
+  --by-app-acc-horaizon: #9652E8;
+  --by-app-acc-horaizon-grad: linear-gradient(135deg, #B67CF2, #9652E8 55%, #7A3FC8);
+  --by-app-acc-horaizon-name: linear-gradient(120deg, #FFFFFF, #CA7AFF);
+  --by-app-acc-brain: #12B5E8;
+  --by-app-acc-brain-grad: linear-gradient(135deg, #4CE9FE, #12B5E8 55%, #0B7FA6);
+  --by-app-acc-brain-name: linear-gradient(120deg, #FFFFFF, #4CE9FE);
+  --by-app-acc-lab: #9652E8;
+  --by-app-acc-lab-grad: var(--by-app-gradient);
+  --by-app-status-ok-bg: #E8F7EF;
+  --by-app-status-ok: #17734A;
+  --by-app-status-run-bg: #E7F7FD;
+  --by-app-status-run: #0B7FA6;
+  --by-app-status-wait-bg: #F1EAFD;
+  --by-app-status-wait: #7A3FC8;
+  --by-app-status-err-bg: #FDECEC;
+  --by-app-status-err: #B42318;
+  --by-app-scrim: rgba(10, 14, 26, .40);
+  --by-app-menu-shadow: 0 24px 60px -20px rgba(10, 14, 26, .30);
+
+  /* ---- Frame details from the reference mockup ---- */
+  --by-app-topbar-bg: rgba(255, 255, 255, .85);
+  --by-app-row-hover: #FBFBFD;
+  --by-app-hover-line: #C9B3F2;
+  --by-app-staff-bg: rgba(202, 122, 255, .16);
+  --by-app-chip-on-dark: rgba(255, 255, 255, .1);
+  --by-app-mark-glow: drop-shadow(0 4px 12px rgba(150, 82, 232, .45));
+  --by-app-drawer-shadow: 0 0 60px rgba(10, 14, 26, .35);
+  --by-app-skeleton: linear-gradient(90deg, #EEF0F4 0%, #F7F8FA 50%, #EEF0F4 100%);
+
+  /* ---- Fonts: set by the host (next/font variables or loaded families) ---- */
+  --by-app-ff: var(--by-app-font, 'Inter', system-ui, sans-serif);
+  --by-app-ff-head: var(--by-app-font-head, 'Poppins', var(--by-app-font, 'Inter'), sans-serif);
+
+  /* ---- Product accent: Beyondles Suite by default, the kinds below override ---- */
+  --by-app-acc: var(--by-app-acc-suite);
+  --by-app-acc-grad: var(--by-app-acc-suite-grad);
+  --by-app-acc-name: var(--by-app-acc-suite-name);
+  --by-app-acc-tint: var(--by-app-tint-lavender);
+  --by-app-acc-text: var(--by-app-label-purple);
+  --by-app-acc-glow: var(--by-app-glow-purple);
+}
+
+.by-app[data-by-app-kind="horaizon"] {
+  --by-app-acc: var(--by-app-acc-horaizon);
+  --by-app-acc-grad: var(--by-app-acc-horaizon-grad);
+  --by-app-acc-name: var(--by-app-acc-horaizon-name);
+}
+
+.by-app[data-by-app-kind="brain"] {
+  --by-app-acc: var(--by-app-acc-brain);
+  --by-app-acc-grad: var(--by-app-acc-brain-grad);
+  --by-app-acc-name: var(--by-app-acc-brain-name);
+  --by-app-acc-tint: var(--by-app-tint-ice);
+  --by-app-acc-text: var(--by-app-label-turquoise);
+  --by-app-acc-glow: var(--by-app-glow-turquoise);
+}
+
+.by-app[data-by-app-kind="lab"] {
+  --by-app-acc: var(--by-app-acc-lab);
+  --by-app-acc-grad: var(--by-app-acc-lab-grad);
+}
+
+/* A service (Beyondles Connections) looks exactly like a Lab, only without the "LAB" tag. */
+.by-app[data-by-app-kind="service"] {
+  --by-app-acc: var(--by-app-acc-lab);
+  --by-app-acc-grad: var(--by-app-acc-lab-grad);
+}
+
+/* ===================== Root and own resets ===================== */
+
+.by-app {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--by-app-canvas);
+  color: var(--by-app-text-heading);
+  font-family: var(--by-app-ff);
+  font-size: 16px;
+  line-height: var(--by-app-leading-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Own elements only: products without a CSS reset (AdvisorLab, InsightLab) get the same box model. */
+.by-app,
+.by-app-guard,
+[class^="by-app-"],
+[class*=" by-app-"] {
+  box-sizing: border-box;
+}
+
+.by-app-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.by-app-skip {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 80;
+  padding: 10px 16px;
+  border-radius: var(--by-app-radius-pill);
+  background: var(--by-app-card);
+  color: var(--by-app-text-heading);
+  font: 500 14px var(--by-app-ff);
+  text-decoration: none;
+  box-shadow: var(--by-app-shadow-soft);
+}
+
+.by-app-skip:focus {
+  top: 12px;
+}
+
+/* ===================== Frame ===================== */
+
+.by-app-frame {
+  display: grid;
+  grid-template-columns: var(--by-app-sidebar) minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.by-app-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.by-app-banner {
+  flex: none;
+}
+
+/* ===================== Sidebar ===================== */
+
+.by-app-side {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--by-app-navy);
+  color: var(--by-app-text-on-dark);
+}
+
+/* Soft purple and turquoise light on the navy sidebar */
+.by-app-side::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    var(--by-app-glow-purple) -120px -160px / 420px 420px no-repeat,
+    var(--by-app-glow-turquoise) 60px 100% / 380px 380px no-repeat;
+  opacity: .9;
+  pointer-events: none;
+}
+
+.by-app[data-by-app-tone="white"] .by-app-side {
+  background: var(--by-app-card);
+  color: var(--by-app-text-heading);
+  border-right: 1px solid var(--by-app-line);
+}
+
+.by-app[data-by-app-tone="white"] .by-app-side::before {
+  display: none;
+}
+
+/* Lockup: mark + full product name */
+.by-app-lockup {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex: none;
+  height: var(--by-app-topbar);
+  padding: 0 20px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.by-app-mark {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+
+.by-app-mark > svg {
+  display: block;
+  height: 20px;
+  width: auto;
+}
+
+.by-app[data-by-app-tone="navy"] .by-app-mark {
+  filter: var(--by-app-mark-glow);
+}
+
+.by-app-lockup-name {
+  min-width: 0;
+  overflow: hidden;
+  font: 600 17px/1.1 var(--by-app-ff-head);
+  letter-spacing: var(--by-app-tracking-head);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* In the sidebar a long full name ("Beyondles Connections") wraps to a second line, never cut. */
+.by-app-lockup .by-app-lockup-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  padding: 2px 0;
+  white-space: normal;
+  background: var(--by-app-acc-name);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* A long one-word name ("SummarizeLab") cannot wrap; a smaller size keeps it whole next to the tag. */
+.by-app-lockup .by-app-lockup-name[data-long="true"] {
+  font-size: 15px;
+}
+
+.by-app[data-by-app-tone="white"] .by-app-lockup .by-app-lockup-name {
+  background: none;
+  color: var(--by-app-text-heading);
+}
+
+.by-app-lab-tag {
+  flex: none;
+  margin-left: auto;
+  padding: 3px 8px;
+  border: 1px solid var(--by-app-line);
+  border-radius: var(--by-app-radius-pill);
+  color: var(--by-app-text-muted);
+  font: 600 10px/1.2 var(--by-app-ff-head);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+/* Navigation */
+.by-app-nav {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+}
+
+.by-app-nav-space {
+  flex: 1;
+}
+
+.by-app-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.by-app-nav-label {
+  padding: 18px 12px 6px;
+  opacity: .55;
+  font: 600 10.5px/1.55 var(--by-app-ff-head);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.by-app-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.by-app-nav-item {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.by-app-nav-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 12px;
+  border-radius: var(--by-app-radius-sm);
+  color: var(--by-app-side-text);
+  font-family: var(--by-app-ff);
+  font-size: var(--by-app-size-nav);
+  font-weight: 400;
+  line-height: var(--by-app-leading-body);
+  text-decoration: none;
+}
+
+.by-app-nav-link:hover {
+  background: var(--by-app-side-hover);
+  color: var(--by-app-text-on-dark);
+}
+
+.by-app-nav-link[aria-current="page"] {
+  background: var(--by-app-side-active);
+  color: var(--by-app-text-on-dark);
+  font-weight: 500;
+}
+
+/* 3 px bar in the product gradient on the active entry */
+.by-app-nav-link[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--by-app-acc-grad);
+}
+
+.by-app-nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.by-app-nav-icon > svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.by-app-nav-link[aria-current="page"] .by-app-nav-icon {
+  color: var(--by-app-acc);
+}
+
+.by-app-nav-text {
+  min-width: 0;
+}
+
+.by-app-nav-tag,
+.by-app-nav-badge {
+  flex: none;
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: var(--by-app-radius-pill);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.by-app-nav-tag {
+  background: var(--by-app-staff-bg);
+  color: var(--by-app-purple-light);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.by-app-nav-badge {
+  background: var(--by-app-chip-on-dark);
+  color: var(--by-app-text-on-dark);
+  font-size: 11.5px;
+}
+
+.by-app-nav-tag + .by-app-nav-badge {
+  margin-left: 6px;
+}
+
+.by-app[data-by-app-tone="white"] .by-app-nav-link {
+  color: var(--by-app-text-body);
+}
+
+.by-app[data-by-app-tone="white"] .by-app-nav-link:hover {
+  background: var(--by-app-canvas);
+}
+
+.by-app[data-by-app-tone="white"] .by-app-nav-link[aria-current="page"] {
+  background: var(--by-app-tint-lavender);
+  color: var(--by-app-label-purple);
+}
+
+.by-app[data-by-app-tone="white"] .by-app-nav-link[aria-current="page"] .by-app-nav-icon {
+  color: inherit;
+}
+
+.by-app[data-by-app-tone="white"] .by-app-nav-tag {
+  background: var(--by-app-tint-lavender);
+  color: var(--by-app-label-purple);
+}
+
+.by-app[data-by-app-tone="white"] .by-app-nav-badge {
+  background: var(--by-app-canvas);
+  color: var(--by-app-text-muted);
+}
+
+/* Organisation chip at the bottom */
+.by-app-org {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--by-app-side-line);
+  color: var(--by-app-text-on-dark-muted);
+  font-size: 12.5px;
+  line-height: var(--by-app-leading-body);
+}
+
+.by-app-org-chip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--by-app-chip-on-dark);
+  color: var(--by-app-text-on-dark);
+  font: 600 12px var(--by-app-ff-head);
+}
+
+.by-app-org-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.by-app-org-name {
+  overflow: hidden;
+  color: var(--by-app-text-on-dark);
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.by-app[data-by-app-tone="white"] .by-app-org {
+  border-top-color: var(--by-app-line);
+  color: var(--by-app-text-muted);
+}
+
+.by-app[data-by-app-tone="white"] .by-app-org-chip {
+  background: var(--by-app-canvas);
+  color: var(--by-app-text-heading);
+  box-shadow: inset 0 0 0 1px var(--by-app-line);
+}
+
+.by-app[data-by-app-tone="white"] .by-app-org-name {
+  color: var(--by-app-text-heading);
+}
+
+/* ===================== Topbar ===================== */
+
+.by-app-top {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  height: var(--by-app-topbar);
+  padding: 0 28px;
+  background: var(--by-app-topbar-bg);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--by-app-line);
+  font-family: var(--by-app-ff);
+  line-height: var(--by-app-leading-body);
+}
+
+.by-app-burger {
+  display: none;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--by-app-radius-sm);
+  background: none;
+  color: var(--by-app-text-heading);
+  cursor: pointer;
+  appearance: none;
+}
+
+.by-app-mlock {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--by-app-text-heading);
+  font: 600 15px var(--by-app-ff-head);
+  text-decoration: none;
+}
+
+.by-app-mlock .by-app-mark > svg {
+  height: 16px;
+}
+
+.by-app-mlock .by-app-lockup-name {
+  font-size: 15px;
+}
+
+/* In the phone topbar a long full name wraps to a second line before it would be cut
+   ("Beyondles / Connections"), so the product name is always written in full. */
+.by-app-mlock .by-app-lockup-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.by-app-crumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--by-app-text-muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.by-app-crumb-current {
+  overflow: hidden;
+  color: var(--by-app-text-heading);
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.by-app-grow {
+  flex: 1;
+}
+
+.by-app-top-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A product button in headerActions: a white pill like Back to Suite. On a phone the label
+   (by-app-top-label) is hidden and the button becomes a 36 px icon button, so the actions
+   stay in the topbar row. */
+.by-app-top-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: none;
+  min-width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--by-app-line);
+  border-radius: var(--by-app-radius-pill);
+  background: var(--by-app-card);
+  color: var(--by-app-text-heading);
+  font: 500 13.5px var(--by-app-ff);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  appearance: none;
+}
+
+.by-app-top-btn:hover {
+  border-color: var(--by-app-hover-line);
+  box-shadow: var(--by-app-shadow-soft);
+}
+
+.by-app-top-btn > svg {
+  display: block;
+  flex: none;
+}
+
+.by-app-top-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.by-app-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--by-app-line);
+  border-radius: var(--by-app-radius-pill);
+  background: var(--by-app-card);
+  color: var(--by-app-text-heading);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.by-app-back:hover {
+  border-color: var(--by-app-hover-line);
+  box-shadow: var(--by-app-shadow-soft);
+}
+
+.by-app-back > svg {
+  display: block;
+  flex: none;
+}
+
+.by-app-ext {
+  font-size: 11px;
+  opacity: .6;
+}
+
+.by-app-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--by-app-gradient);
+  color: var(--by-app-text-on-dark);
+  font: 600 13px var(--by-app-ff-head);
+  box-shadow: 0 0 0 2px var(--by-app-card), 0 0 0 3px var(--by-app-line);
+  cursor: pointer;
+  appearance: none;
+}
+
+/* Person menu */
+.by-app-menu {
+  position: absolute;
+  right: 20px;
+  top: calc(100% + 8px);
+  z-index: 40;
+  width: 272px;
+  padding: 8px;
+  border-radius: var(--by-app-radius);
+  background: var(--by-app-card);
+  box-shadow: inset 0 0 0 1px var(--by-app-line), var(--by-app-menu-shadow);
+  color: var(--by-app-text-heading);
+  font-family: var(--by-app-ff);
+  font-size: 16px;
+  line-height: var(--by-app-leading-body);
+}
+
+.by-app-menu::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  border-radius: var(--by-app-radius) var(--by-app-radius) 0 0;
+  background: var(--by-app-gradient);
+}
+
+.by-app-menu-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  padding: 12px 12px 14px;
+  border-bottom: 1px solid var(--by-app-line);
+}
+
+.by-app-menu-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--by-app-gradient);
+  color: var(--by-app-text-on-dark);
+  font: 600 13px var(--by-app-ff-head);
+}
+
+.by-app-menu-person {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.by-app-menu-name {
+  display: block;
+  font: 600 15px var(--by-app-ff-head);
+}
+
+.by-app-menu-email {
+  color: var(--by-app-text-muted);
+  font-size: 12.5px;
+}
+
+.by-app-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: var(--by-app-radius-sm);
+  color: var(--by-app-text-heading);
+  font-size: 14.5px;
+  text-decoration: none;
+}
+
+.by-app-menu-item:hover,
+.by-app-menu-item:focus {
+  background: var(--by-app-canvas);
+}
+
+.by-app-menu-hint {
+  display: inline-flex;
+  align-items: center;
+  color: var(--by-app-text-muted);
+  font-size: 12px;
+}
+
+.by-app-menu-sep {
+  margin: 6px 0;
+  border-top: 1px solid var(--by-app-line);
+}
+
+/* ===================== Content ===================== */
+
+.by-app-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  min-width: 0;
+}
+
+.by-app-main:focus {
+  outline: none;
+}
+
+/* Soft light top right: purple, turquoise in The Brain, none in Labs */
+.by-app-glow {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 440px;
+  max-width: 100%;
+  height: 380px;
+  background: var(--by-app-acc-glow) right -120px top -180px / 560px 560px no-repeat;
+  pointer-events: none;
+}
+
+.by-app[data-by-app-tone="white"] .by-app-glow {
+  display: none;
+}
+
+.by-app-content {
+  position: relative;
+  flex: 1 0 auto;
+  width: 100%;
+  padding: var(--by-app-pad-y) var(--by-app-pad-x) 40px;
+}
+
+/* Page head */
+.by-app-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.by-app-head-text {
+  min-width: 0;
+}
+
+.by-app-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--by-app-text-muted);
+  font: 600 12px/1.2 var(--by-app-ff-head);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.by-app-kicker::before {
+  content: "";
+  width: 24px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--by-app-gradient);
+}
+
+.by-app-title {
+  margin: 10px 0 6px;
+  color: var(--by-app-text-heading);
+  font-family: var(--by-app-ff-head);
+  font-size: var(--by-app-size-title);
+  font-weight: 600;
+  line-height: var(--by-app-leading-head);
+  letter-spacing: var(--by-app-tracking-hero);
+}
+
+.by-app-title-muted {
+  color: var(--by-app-text-muted);
+}
+
+.by-app-desc {
+  margin: 0;
+  color: var(--by-app-text-body);
+  font-size: 15.5px;
+  line-height: var(--by-app-leading-body);
+}
+
+.by-app-head-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Buttons, as on the website */
+.by-app-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  margin: 0;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: var(--by-app-radius-pill);
+  font: 500 14.5px var(--by-app-ff);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  appearance: none;
+  transition: box-shadow .2s, filter .2s, border-color .2s;
+}
+
+.by-app-btn > svg {
+  display: block;
+  flex: none;
+}
+
+.by-app-btn-primary {
+  background: var(--by-app-gradient);
+  color: var(--by-app-text-on-dark);
+}
+
+.by-app-btn-primary:hover {
+  filter: brightness(1.05);
+  box-shadow: var(--by-app-shadow-button-hover);
+}
+
+.by-app-btn-secondary {
+  background: var(--by-app-card);
+  border-color: var(--by-app-line);
+  color: var(--by-app-text-heading);
+}
+
+.by-app-btn-secondary:hover {
+  border-color: var(--by-app-hover-line);
+}
+
+.by-app-btn-sm {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13.5px;
+}
+
+.by-app-text-link {
+  color: var(--by-app-label-purple);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.by-app-text-link:hover {
+  text-decoration: underline;
+}
+
+/* Key figures */
+.by-app-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: var(--by-app-gap);
+}
+
+.by-app-stat {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  overflow: hidden;
+  padding: 20px 22px;
+  border-radius: var(--by-app-radius);
+  background: var(--by-app-card);
+  box-shadow: inset 0 0 0 1px var(--by-app-line);
+}
+
+.by-app-stat::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: var(--by-app-acc-grad);
+  opacity: .9;
+}
+
+.by-app-stat-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--by-app-acc-tint);
+  color: var(--by-app-acc-text);
+}
+
+.by-app-stat-icon > svg {
+  display: block;
+  width: 19px;
+  height: 19px;
+}
+
+.by-app-stat-text {
+  min-width: 0;
+  font-size: 16px;
+  line-height: var(--by-app-leading-body);
+}
+
+/* Label and hint stay inline, each on its own 16 px line around the block value (as in the mockup). */
+.by-app-stat-label {
+  color: var(--by-app-text-muted);
+  font-size: 13px;
+}
+
+.by-app-stat-value {
+  display: block;
+  margin-top: 2px;
+  color: var(--by-app-text-heading);
+  font: 600 28px var(--by-app-ff-head);
+  letter-spacing: var(--by-app-tracking-hero);
+}
+
+.by-app-stat-hint {
+  color: var(--by-app-text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.by-app-stat-hint[data-tone="positive"] {
+  color: var(--by-app-status-ok);
+}
+
+.by-app-stat-hint[data-tone="negative"] {
+  color: var(--by-app-status-err);
+}
+
+/* Panel */
+.by-app-panel {
+  border-radius: var(--by-app-radius);
+  background: var(--by-app-card);
+  box-shadow: inset 0 0 0 1px var(--by-app-line), var(--by-app-shadow-soft);
+}
+
+.by-app-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--by-app-line);
+}
+
+.by-app-panel-title {
+  margin: 0;
+  color: var(--by-app-text-heading);
+  font-family: var(--by-app-ff-head);
+  font-size: 16.5px;
+  font-weight: 600;
+  line-height: var(--by-app-leading-head);
+  letter-spacing: var(--by-app-tracking-head);
+}
+
+.by-app-panel-count {
+  padding: 2px 9px;
+  border-radius: var(--by-app-radius-pill);
+  background: var(--by-app-canvas);
+  color: var(--by-app-text-muted);
+  font-size: 12.5px;
+}
+
+.by-app-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.by-app-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: 18px;
+}
+
+.by-app-tab {
+  margin: 0;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--by-app-radius-pill);
+  background: none;
+  color: var(--by-app-text-muted);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  appearance: none;
+}
+
+.by-app-tab[aria-selected="true"],
+.by-app-tab[aria-pressed="true"],
+.by-app-tab[data-active="true"] {
+  background: var(--by-app-navy);
+  color: var(--by-app-text-on-dark);
+}
+
+.by-app-search {
+  width: 240px;
+  height: 38px;
+  margin: 0 0 0 auto;
+  padding: 0 16px;
+  border: 1px solid var(--by-app-line);
+  border-radius: var(--by-app-radius-pill);
+  background: var(--by-app-canvas);
+  color: var(--by-app-text-heading);
+  font: 14px var(--by-app-ff);
+  appearance: none;
+}
+
+.by-app-search:focus {
+  outline: 2px solid var(--by-app-purple);
+  outline-offset: 1px;
+  background: var(--by-app-card);
+}
+
+/* Table: products put .by-app-table on their table */
+.by-app-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14.5px;
+  line-height: var(--by-app-leading-body);
+}
+
+.by-app-table th {
+  padding: 11px 22px;
+  border-bottom: 1px solid var(--by-app-line);
+  color: var(--by-app-text-muted);
+  font: 600 11.5px var(--by-app-ff-head);
+  letter-spacing: .08em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.by-app-table td {
+  padding: 15px 22px;
+  border-bottom: 1px solid var(--by-app-line);
+  color: var(--by-app-text-body);
+}
+
+.by-app-table td:first-child {
+  color: var(--by-app-text-heading);
+  font-weight: 500;
+}
+
+.by-app-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.by-app-table tbody tr:hover td {
+  background: var(--by-app-row-hover);
+}
+
+.by-app-ini {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-right: 12px;
+  border-radius: 9px;
+  background: var(--by-app-acc-tint);
+  color: var(--by-app-acc-text);
+  font: 600 12px var(--by-app-ff-head);
+  vertical-align: middle;
+}
+
+/* The same rows as cards, for phones */
+.by-app-rows {
+  display: block;
+}
+
+.by-app-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--by-app-line);
+}
+
+.by-app-row:last-child {
+  border-bottom: 0;
+}
+
+.by-app-row-title {
+  font-weight: 500;
+}
+
+.by-app-row-meta {
+  grid-column: 1 / -1;
+  color: var(--by-app-text-muted);
+  font-size: 13px;
+}
+
+.by-app-mobile-only {
+  display: none;
+}
+
+/* Status pills */
+.by-app-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--by-app-radius-pill);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: var(--by-app-leading-body);
+  white-space: nowrap;
+}
+
+.by-app-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.by-app-pill[data-tone="ok"] {
+  background: var(--by-app-status-ok-bg);
+  color: var(--by-app-status-ok);
+}
+
+.by-app-pill[data-tone="run"] {
+  background: var(--by-app-status-run-bg);
+  color: var(--by-app-status-run);
+}
+
+.by-app-pill[data-tone="wait"] {
+  background: var(--by-app-status-wait-bg);
+  color: var(--by-app-status-wait);
+}
+
+.by-app-pill[data-tone="err"] {
+  background: var(--by-app-status-err-bg);
+  color: var(--by-app-status-err);
+}
+
+/* ===================== States ===================== */
+
+.by-app-state {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 64px 24px;
+  text-align: center;
+}
+
+.by-app-state-icon {
+  position: relative;
+  isolation: isolate;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 18px;
+}
+
+.by-app-state-glow {
+  position: absolute;
+  inset: -14px;
+  z-index: 0;
+  border-radius: 26px;
+  background: var(--by-app-glow-purple);
+}
+
+.by-app-state-tile {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--by-app-acc-tint);
+  color: var(--by-app-acc-text);
+}
+
+.by-app-state-tile > svg {
+  display: block;
+}
+
+.by-app-state[data-variant="error"] .by-app-state-tile {
+  background: var(--by-app-status-err-bg);
+  color: var(--by-app-status-err);
+}
+
+.by-app-state-title {
+  margin: 0 0 8px;
+  color: var(--by-app-text-heading);
+  font-family: var(--by-app-ff-head);
+  font-size: 21px;
+  font-weight: 600;
+  line-height: var(--by-app-leading-head);
+  letter-spacing: var(--by-app-tracking-head);
+}
+
+.by-app-state-desc {
+  margin: 0 0 22px;
+  color: var(--by-app-text-body);
+  font-size: 15px;
+  line-height: var(--by-app-leading-body);
+}
+
+.by-app-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* "Signed in as <email>" on the no-access card, right under the sentence */
+.by-app-state-who {
+  margin: -12px 0 22px;
+  color: var(--by-app-text-muted);
+  font-size: 13.5px;
+  line-height: var(--by-app-leading-body);
+  overflow-wrap: anywhere;
+}
+
+.by-app-state-email {
+  color: var(--by-app-text-heading);
+  font-weight: 500;
+}
+
+.by-app-state-note {
+  margin: 18px 0 0;
+  color: var(--by-app-text-muted);
+  font-size: 13.5px;
+  line-height: var(--by-app-leading-body);
+}
+
+/* Loading: placeholder rows with a soft shimmer */
+.by-app-skel-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 22px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--by-app-line);
+}
+
+.by-app-skel-row:last-child {
+  border-bottom: 0;
+}
+
+.by-app-skel {
+  display: block;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--by-app-skeleton);
+  background-size: 200% 100%;
+  animation: by-app-shimmer 1.2s linear infinite;
+}
+
+@keyframes by-app-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* No-access and sign-in error page */
+.by-app-noaccess {
+  display: grid;
+  place-items: center;
+  padding: 40px 20px;
+}
+
+.by-app-card {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  max-width: 500px;
+  padding: 26px;
+  border-radius: var(--by-app-radius);
+  background: var(--by-app-card);
+  box-shadow: inset 0 0 0 1px var(--by-app-line);
+  text-align: center;
+}
+
+.by-app-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: var(--by-app-gradient);
+}
+
+.by-app-card .by-app-state {
+  padding: 28px 8px;
+}
+
+.by-app[data-by-app-bare="true"] .by-app-nav-space {
+  flex: 1;
+}
+
+/* ===================== Footer ===================== */
+
+.by-app-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 20px;
+  flex: none;
+  padding: 14px 40px;
+  border-top: 1px solid var(--by-app-line);
+  background: var(--by-app-card);
+  color: var(--by-app-text-muted);
+  font-family: var(--by-app-ff);
+  font-size: 12.5px;
+  line-height: var(--by-app-leading-body);
+}
+
+.by-app-foot-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.by-app-foot-link:hover {
+  color: var(--by-app-text-heading);
+}
+
+.by-app-foot-ai {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.by-app-foot-ai::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--by-app-gradient);
+}
+
+/* ===================== Overlays ===================== */
+
+.by-app-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--by-app-scrim);
+  cursor: default;
+  appearance: none;
+}
+
+/* Account changed in another tab */
+.by-app-guard {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--by-app-scrim);
+  color: var(--by-app-text-heading);
+  font-family: var(--by-app-ff);
+  font-size: 16px;
+  line-height: var(--by-app-leading-body);
+}
+
+.by-app-dialog {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  max-width: 460px;
+  padding: 26px;
+  border-radius: var(--by-app-radius);
+  background: var(--by-app-card);
+  box-shadow: var(--by-app-menu-shadow);
+  text-align: left;
+}
+
+.by-app-dialog::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: var(--by-app-gradient);
+}
+
+.by-app-dialog-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: var(--by-app-tint-lavender);
+  color: var(--by-app-label-purple);
+}
+
+.by-app-dialog-title {
+  margin: 0 0 8px;
+  color: var(--by-app-text-heading);
+  font-family: var(--by-app-ff-head);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: var(--by-app-leading-head);
+  letter-spacing: var(--by-app-tracking-head);
+}
+
+.by-app-dialog-body {
+  margin: 0;
+  color: var(--by-app-text-body);
+  font-size: 15px;
+}
+
+.by-app-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+/* ===================== Focus ===================== */
+
+.by-app-skip:focus-visible,
+.by-app-lockup:focus-visible,
+.by-app-mlock:focus-visible,
+.by-app-nav-link:focus-visible,
+.by-app-burger:focus-visible,
+.by-app-back:focus-visible,
+.by-app-top-btn:focus-visible,
+.by-app-avatar:focus-visible,
+.by-app-menu-item:focus-visible,
+.by-app-foot-link:focus-visible,
+.by-app-btn:focus-visible,
+.by-app-tab:focus-visible,
+.by-app-text-link:focus-visible {
+  outline: 2px solid var(--by-app-purple);
+  outline-offset: 2px;
+}
+
+.by-app-menu-item:focus-visible {
+  outline-offset: -2px;
+}
+
+/* ===================== Phone ===================== */
+/* Below 760 px wide, and always with data-by-app-layout="mobile" (forceMobile).
+   The two blocks are identical apart from the selector prefix (tests/css.test.ts).
+   With headerActions the topbar row makes room for the full product name: labels of
+   by-app-top-btn hide, gaps get tighter and Back to Suite shows only the arrow. */
+
+/* phone:start */
+@media (max-width: 759.98px) {
+  .by-app[data-by-app-layout="auto"] .by-app-frame { grid-template-columns: minmax(0, 1fr); }
+  .by-app[data-by-app-layout="auto"] .by-app-side { position: fixed; top: 0; bottom: 0; left: 0; z-index: 60; width: var(--by-app-sidebar-mobile); max-width: calc(100vw - 40px); height: auto; transform: translateX(-100%); visibility: hidden; box-shadow: var(--by-app-drawer-shadow); transition: transform var(--by-app-duration) var(--by-app-ease), visibility 0s linear var(--by-app-duration); }
+  .by-app[data-by-app-layout="auto"] .by-app-side[data-open="true"] { transform: none; visibility: visible; transition: transform var(--by-app-duration) var(--by-app-ease); }
+  .by-app[data-by-app-layout="auto"][data-by-app-bare="true"] .by-app-side { display: none; }
+  .by-app[data-by-app-layout="auto"] .by-app-scrim { display: block; }
+  .by-app[data-by-app-layout="auto"] .by-app-top { padding: 0 12px; gap: 8px; }
+  .by-app[data-by-app-layout="auto"] .by-app-burger { display: grid; }
+  .by-app[data-by-app-layout="auto"] .by-app-mlock { display: flex; }
+  .by-app[data-by-app-layout="auto"] .by-app-crumb { display: none; }
+  .by-app[data-by-app-layout="auto"] .by-app-back { padding: 0 11px; }
+  .by-app[data-by-app-layout="auto"] .by-app-back-text { display: none; }
+  .by-app[data-by-app-layout="auto"] .by-app-grow { display: none; }
+  .by-app[data-by-app-layout="auto"] .by-app-top-actions { gap: 4px; }
+  .by-app[data-by-app-layout="auto"] .by-app-top-btn { padding: 0 8px; }
+  .by-app[data-by-app-layout="auto"] .by-app-top-label { display: none; }
+  .by-app[data-by-app-layout="auto"] .by-app-top:has(.by-app-top-actions) { gap: 6px; }
+  .by-app[data-by-app-layout="auto"] .by-app-top:has(.by-app-top-actions) .by-app-mlock { gap: 6px; }
+  .by-app[data-by-app-layout="auto"] .by-app-top:has(.by-app-top-actions) .by-app-back { gap: 0; padding: 0 10px; }
+  .by-app[data-by-app-layout="auto"] .by-app-top:has(.by-app-top-actions) .by-app-back .by-app-ext { display: none; }
+  .by-app[data-by-app-layout="auto"] .by-app-menu { left: 10px; right: 10px; width: auto; }
+  .by-app[data-by-app-layout="auto"] .by-app-content { padding: var(--by-app-pad-y-mobile) var(--by-app-pad-x-mobile); }
+  .by-app[data-by-app-layout="auto"] .by-app-head { flex-wrap: wrap; }
+  .by-app[data-by-app-layout="auto"] .by-app-title { font-size: var(--by-app-size-title-mobile); }
+  .by-app[data-by-app-layout="auto"] .by-app-head-actions { width: 100%; margin-left: 0; }
+  .by-app[data-by-app-layout="auto"] .by-app-head-actions > * { flex: 1; justify-content: center; }
+  .by-app[data-by-app-layout="auto"] .by-app-stats { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .by-app[data-by-app-layout="auto"] .by-app-panel-head { flex-wrap: wrap; }
+  .by-app[data-by-app-layout="auto"] .by-app-panel-actions { display: contents; }
+  .by-app[data-by-app-layout="auto"] .by-app-tabs { order: 3; width: 100%; margin-left: 0; }
+  .by-app[data-by-app-layout="auto"] .by-app-search { order: 4; width: 100%; margin-left: 0; }
+  .by-app[data-by-app-layout="auto"] .by-app-desktop-only { display: none; }
+  .by-app[data-by-app-layout="auto"] .by-app-mobile-only { display: revert; }
+  .by-app[data-by-app-layout="auto"] .by-app-skel-row { grid-template-columns: 1fr 1fr; }
+  .by-app[data-by-app-layout="auto"] .by-app-noaccess { padding: 12px 0; }
+  .by-app[data-by-app-layout="auto"] .by-app-foot { padding: 12px 16px; }
+  .by-app[data-by-app-layout="auto"] .by-app-foot-ai { margin-left: 0; }
+}
+/* phone:end */
+
+/* phone-forced:start */
+.by-app[data-by-app-layout="mobile"] .by-app-frame { grid-template-columns: minmax(0, 1fr); }
+.by-app[data-by-app-layout="mobile"] .by-app-side { position: fixed; top: 0; bottom: 0; left: 0; z-index: 60; width: var(--by-app-sidebar-mobile); max-width: calc(100vw - 40px); height: auto; transform: translateX(-100%); visibility: hidden; box-shadow: var(--by-app-drawer-shadow); transition: transform var(--by-app-duration) var(--by-app-ease), visibility 0s linear var(--by-app-duration); }
+.by-app[data-by-app-layout="mobile"] .by-app-side[data-open="true"] { transform: none; visibility: visible; transition: transform var(--by-app-duration) var(--by-app-ease); }
+.by-app[data-by-app-layout="mobile"][data-by-app-bare="true"] .by-app-side { display: none; }
+.by-app[data-by-app-layout="mobile"] .by-app-scrim { display: block; }
+.by-app[data-by-app-layout="mobile"] .by-app-top { padding: 0 12px; gap: 8px; }
+.by-app[data-by-app-layout="mobile"] .by-app-burger { display: grid; }
+.by-app[data-by-app-layout="mobile"] .by-app-mlock { display: flex; }
+.by-app[data-by-app-layout="mobile"] .by-app-crumb { display: none; }
+.by-app[data-by-app-layout="mobile"] .by-app-back { padding: 0 11px; }
+.by-app[data-by-app-layout="mobile"] .by-app-back-text { display: none; }
+.by-app[data-by-app-layout="mobile"] .by-app-grow { display: none; }
+.by-app[data-by-app-layout="mobile"] .by-app-top-actions { gap: 4px; }
+.by-app[data-by-app-layout="mobile"] .by-app-top-btn { padding: 0 8px; }
+.by-app[data-by-app-layout="mobile"] .by-app-top-label { display: none; }
+.by-app[data-by-app-layout="mobile"] .by-app-top:has(.by-app-top-actions) { gap: 6px; }
+.by-app[data-by-app-layout="mobile"] .by-app-top:has(.by-app-top-actions) .by-app-mlock { gap: 6px; }
+.by-app[data-by-app-layout="mobile"] .by-app-top:has(.by-app-top-actions) .by-app-back { gap: 0; padding: 0 10px; }
+.by-app[data-by-app-layout="mobile"] .by-app-top:has(.by-app-top-actions) .by-app-back .by-app-ext { display: none; }
+.by-app[data-by-app-layout="mobile"] .by-app-menu { left: 10px; right: 10px; width: auto; }
+.by-app[data-by-app-layout="mobile"] .by-app-content { padding: var(--by-app-pad-y-mobile) var(--by-app-pad-x-mobile); }
+.by-app[data-by-app-layout="mobile"] .by-app-head { flex-wrap: wrap; }
+.by-app[data-by-app-layout="mobile"] .by-app-title { font-size: var(--by-app-size-title-mobile); }
+.by-app[data-by-app-layout="mobile"] .by-app-head-actions { width: 100%; margin-left: 0; }
+.by-app[data-by-app-layout="mobile"] .by-app-head-actions > * { flex: 1; justify-content: center; }
+.by-app[data-by-app-layout="mobile"] .by-app-stats { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.by-app[data-by-app-layout="mobile"] .by-app-panel-head { flex-wrap: wrap; }
+.by-app[data-by-app-layout="mobile"] .by-app-panel-actions { display: contents; }
+.by-app[data-by-app-layout="mobile"] .by-app-tabs { order: 3; width: 100%; margin-left: 0; }
+.by-app[data-by-app-layout="mobile"] .by-app-search { order: 4; width: 100%; margin-left: 0; }
+.by-app[data-by-app-layout="mobile"] .by-app-desktop-only { display: none; }
+.by-app[data-by-app-layout="mobile"] .by-app-mobile-only { display: revert; }
+.by-app[data-by-app-layout="mobile"] .by-app-skel-row { grid-template-columns: 1fr 1fr; }
+.by-app[data-by-app-layout="mobile"] .by-app-noaccess { padding: 12px 0; }
+.by-app[data-by-app-layout="mobile"] .by-app-foot { padding: 12px 16px; }
+.by-app[data-by-app-layout="mobile"] .by-app-foot-ai { margin-left: 0; }
+/* phone-forced:end */
+
+/* Narrow phones (below 380 px, for example 360 px): a little more room for the full product
+   name. Back to Suite shows only the arrow (the design rule for phones), the gaps and buttons get tighter,
+   the name is 13.5 px. */
+@media (max-width: 379.98px) {
+  .by-app[data-by-app-layout] .by-app-top { gap: 6px; padding: 0 10px; }
+  .by-app[data-by-app-layout] .by-app-mlock { gap: 6px; }
+  .by-app[data-by-app-layout] .by-app-mlock .by-app-lockup-name { font-size: 13.5px; }
+  .by-app[data-by-app-layout] .by-app-back { gap: 0; padding: 0 10px; }
+  .by-app[data-by-app-layout] .by-app-back .by-app-ext { display: none; }
+  .by-app[data-by-app-layout] .by-app-burger { width: 34px; }
+  .by-app[data-by-app-layout] .by-app-top-btn { min-width: 34px; height: 34px; padding: 0 7px; }
+}
+
+/* ===================== Reduced motion ===================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .by-app[data-by-app-layout] .by-app-side,
+  .by-app[data-by-app-layout] .by-app-side[data-open="true"] {
+    transition: none;
+  }
+
+  .by-app .by-app-skel {
+    animation: none;
+  }
+
+  .by-app .by-app-btn {
+    transition: none;
+  }
+}

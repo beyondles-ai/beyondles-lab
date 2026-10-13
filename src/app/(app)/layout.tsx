@@ -1,38 +1,42 @@
+import "@/components/app-shell/app-shell.css";
+import { AppShell } from "@/components/app-shell";
+import { organisationDisplayName } from "@/lib/auth";
+import { LAB_PRODUCT, frameContext } from "@/lib/frame";
+import { labNavGroups } from "@/lib/lab-nav";
 import { requireAccess } from "@/lib/rbac";
-import { db } from "@/lib/db";
-import { platformUrl } from "@/lib/platform/door";
-import { suiteToolboxUrl } from "@/lib/suite-url";
-import { AppNav } from "@/components/layout/app-nav";
 
 /**
- * Frame of the signed-in area. `requireAccess()` runs here ONCE for all sub
- * pages: Suite session, level 1 (gate), level 2 (product access), and the
- * organisation mirror on the first visit. Every action still checks again —
- * a layout is not a security boundary, server actions run without it.
+ * Frame of the signed-in area: the shared Beyondles frame (`AppShell` from
+ * src/components/app-shell, generated from beyondles-ai/beyondles-shared)
+ * with sidebar, topbar, person menu, organisation chip and footer. The pages
+ * only fill the content area.
+ *
+ * `requireAccess()` runs here ONCE for all sub pages: Suite session, level 1
+ * (gate), level 2 (product access), and the organisation mirror on the first
+ * visit. Every page and action still checks again: a layout is not a security
+ * boundary, server actions run without it.
+ *
+ * The sidebar (src/lib/lab-nav.tsx) only leads to pages of this Lab. Back to Suite, profile,
+ * organisation settings, help and sign out are in the frame's topbar and
+ * person menu, built from the Suite URL of the running environment.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { session, organisationId, isAdmin } = await requireAccess();
+  const { session, isAdmin, access } = await requireAccess();
+  const frame = await frameContext(access.orgRole);
 
-  const organisation = await db.organisation.findUnique({
-    where: { id: organisationId },
-    select: { name: true },
-  });
-
-  // Read server-side: NEXT_PUBLIC_* is baked into the browser bundle at build
-  // time, and the Docker build has no per-environment value. Server-side the
-  // running environment's Suite always wins.
-  const suiteUrl = suiteToolboxUrl(platformUrl());
+  const navGroups = await labNavGroups(isAdmin);
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="md:w-60 md:shrink-0">
-        <AppNav
-          organisationName={organisation?.name ?? session.organisationSlug}
-          canManageSettings={isAdmin}
-          suiteUrl={suiteUrl}
-        />
-      </aside>
-      <main className="min-w-0 flex-1 p-4 md:p-8">{children}</main>
-    </div>
+    <AppShell
+      locale={frame.locale}
+      product={LAB_PRODUCT}
+      navGroups={navGroups}
+      user={{ name: session.name || session.email, email: session.email }}
+      organisation={{ name: organisationDisplayName(session) }}
+      links={frame.links}
+      sessionHint={frame.sessionHint}
+    >
+      {children}
+    </AppShell>
   );
 }

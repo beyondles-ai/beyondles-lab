@@ -23,6 +23,8 @@ const h = vi.hoisted(() => ({
 vi.mock("@/lib/auth", () => ({
   getSession: async () => h.session,
   getAuthToken: async () => "token-anna",
+  organisationDisplayName: (s: { organisationName?: string; organisationSlug: string }) =>
+    s.organisationName?.trim() || s.organisationSlug,
 }));
 vi.mock("@/lib/db", () => ({ db: { organisation: { upsert: h.upsert } } }));
 vi.mock("next/navigation", () => ({

@@ -36,6 +36,9 @@ Change freely (this is the product):
   languages, same keys. The language comes from the Suite setting via the
   `NEXT_LOCALE` cookie, default English; there is no language switcher in the Lab.
   External mails and documents also default to English unless a stored language exists.
+  German always uses the formal "Sie" (see section 2).
+- `src/lib/lab-nav.tsx` — the sidebar entries of your Lab's pages (only
+  pages of this Lab, never a link out of it).
 - `README.md` (the one sentence and the product description), `docs/OFFEN.md`.
 
 Never change (this is the frame, reviewed centrally):
@@ -48,7 +51,12 @@ Never change (this is the frame, reviewed centrally):
   (generated from `beyondles-ai/beyondles-shared`), `src/server/machine-door.ts`,
   `src/server/jobs/**` (add jobs, do not change the frame files),
   `src/app/api/platform/**`, `src/app/api/mcp/**`, `src/app/api/health/**`,
-  `src/app/kein-zugriff/**`, `scripts/check-frame.mjs`, `scripts/rename-lab.mjs`,
+  `src/app/kein-zugriff/**`, `src/components/app-shell/**` (the shared frame,
+  generated from `beyondles-ai/beyondles-shared`), `src/app/(app)/layout.tsx`,
+  `src/app/(app)/loading.tsx`, `src/app/(app)/error.tsx`,
+  `src/app/(app)/not-found.tsx`, `src/app/not-found.tsx`, `src/app/error.tsx`,
+  `src/lib/frame.ts`, `src/lib/suite-url.ts`, the theme mapping in
+  `src/app/globals.css`, `scripts/check-frame.mjs`, `scripts/rename-lab.mjs`,
   `.github/workflows/ci.yml`, `docker/**`, `ops/**`, `.env.example` (add your
   own variables below the frame block, never remove a frame variable).
 - If a frame file truly blocks you, write the reason in `docs/OFFEN.md` and
@@ -59,6 +67,12 @@ Never change (this is the frame, reviewed centrally):
 - **English code.** Identifiers, comments, tests, commits, docs. User-facing
   text goes into `messages/*.json` in German and English. One language per
   file, never mixed.
+- **German says "Sie".** Every German text a customer sees (messages, mails,
+  documents, error texts, placeholders, aria labels) addresses the reader
+  with the formal "Sie/Ihnen/Ihr" ("Geben Sie ... ein", "Bitte prüfen Sie Ihre
+  Eingaben"), or uses neutral noun style for labels ("Speichern"). Never
+  "du/dich/dir/dein...", never the informal plural "ihr/euch/euer...". Block 7b
+  of `check:frame` and `tests/unit/i18n.test.ts` fail otherwise.
 - **No provider keys, no provider SDKs.** AI through
   `src/lib/platform/llm.ts` (`{ useCase, level }`), mail through
   `src/lib/platform/mail.ts` (always with an `idempotencyKey`). Never
@@ -75,6 +89,18 @@ Never change (this is the frame, reviewed centrally):
 - **Jobs end with one line and an exit code** (`src/server/jobs/run-job.ts`).
   No empty `catch`, no `|| true`. Anything that deletes stops on empty input
   and on more than 10 % of a table, and is a dry run unless told otherwise.
+- **Closed-pages design.** Every page behind the login sits inside the shared
+  frame (`AppShell`); you only fill the content. Start every page with
+  `PageHeader` (kicker, two-tone title, one sentence, at most one primary
+  action); use `Panel`, `StatCard`, `StatusPill`, `PageState` and the
+  `by-app-*` classes. Light only: no `dark:` classes, no
+  `prefers-color-scheme`, no `next-themes`. Colours only from the Beyondles
+  names in `src/app/globals.css` (`text-heading`, `text-body`, `text-muted`,
+  `bg-canvas`, `bg-card`, `border-line`, `bg-lavender`, `text-err`, ...),
+  never `zinc-`/`slate-`/... classes, raw hex or `bg-[#...]`. No own "Back to
+  Suite" link and no language switch: the frame and the Suite cover them.
+  The sidebar lists only pages of this Lab. Block 13 of `check:frame` fails
+  otherwise.
 - **Docs are dated.** Every file in `docs/` carries `Checked on: YYYY-MM-DD`
   (today's date when you touch it) or is generated.
 - **Secrets never in git.** `.env` is ignored; `.env.example` has names only.
