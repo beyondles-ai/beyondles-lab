@@ -15,6 +15,8 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { informalAddressFindings } from "./support/informal-address.mjs";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const findings = [];
 const fail = (msg) => findings.push(msg);
@@ -267,6 +269,12 @@ const deKeys = keys(de).sort();
 const enKeys = keys(en).sort();
 if (JSON.stringify(deKeys) !== JSON.stringify(enKeys))
   fail("messages/de.json and messages/en.json do not have the same keys");
+// 7b. German addresses the reader with the formal "Sie" (card #350): no
+//     "du/dich/dir/dein...", no informal plural "ihr/euch/euer...". Formal
+//     "Ihr/Ihre/Ihnen" is correct. Rule and allow-list in
+//     scripts/support/informal-address.mjs.
+for (const { key, hits } of informalAddressFindings(de))
+  fail(`messages/de.json "${key}" addresses the reader informally (${hits.join(", ")}); use the formal "Sie"`);
 
 // 8. The Lab still carries the template name? The literals are assembled at
 //    runtime so `npm run rename` cannot rewrite them (it skips this file too);

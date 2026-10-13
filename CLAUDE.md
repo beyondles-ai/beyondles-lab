@@ -36,6 +36,7 @@ Change freely (this is the product):
   languages, same keys. The language comes from the Suite setting via the
   `NEXT_LOCALE` cookie, default English; there is no language switcher in the Lab.
   External mails and documents also default to English unless a stored language exists.
+  German always uses the formal "Sie" (see section 2).
 - `src/lib/lab-nav.tsx` — the sidebar entries of your Lab's pages (only
   pages of this Lab, never a link out of it).
 - `README.md` (the one sentence and the product description), `docs/OFFEN.md`.
@@ -66,6 +67,12 @@ Never change (this is the frame, reviewed centrally):
 - **English code.** Identifiers, comments, tests, commits, docs. User-facing
   text goes into `messages/*.json` in German and English. One language per
   file, never mixed.
+- **German says "Sie".** Every German text a customer sees (messages, mails,
+  documents, error texts, placeholders, aria labels) addresses the reader
+  with the formal "Sie/Ihnen/Ihr" ("Geben Sie ... ein", "Bitte prüfen Sie Ihre
+  Eingaben"), or uses neutral noun style for labels ("Speichern"). Never
+  "du/dich/dir/dein...", never the informal plural "ihr/euch/euer...". Block 7b
+  of `check:frame` and `tests/unit/i18n.test.ts` fail otherwise.
 - **No provider keys, no provider SDKs.** AI through
   `src/lib/platform/llm.ts` (`{ useCase, level }`), mail through
   `src/lib/platform/mail.ts` (always with an `idempotencyKey`). Never

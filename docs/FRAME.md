@@ -104,6 +104,14 @@ in `app-shell/HOST-CONTRACT.md` in the shared repo.
   with several Beyondles accounts sees which one is signed in.
 - **Language** from the Suite (`NEXT_LOCALE`), English by default, every text
   in English and German. No language switch in the Lab.
+- **German addresses the reader with the formal "Sie"** (decision of
+  2026-10-13, card #350), like the whole Beyondles platform: "Sie/Ihnen/Ihr",
+  "Geben Sie ... ein", or neutral noun style for labels ("Speichern"). Never
+  "du/dich/dir/dein...", never the informal plural "ihr/euch/euer...".
+  `check:frame` block 7b and `tests/unit/i18n.test.ts` fail on informal
+  address in `messages/de.json` (rule and allow-list in
+  `scripts/support/informal-address.mjs`). The `share` namespace comes in the
+  Sie variant (`.beyondles-shared.json`, `messages.de.variant: "sie"`).
 - **Page structure.** Every top-level page starts with `PageHeader` (kicker,
   two-tone title, one sentence, at most one primary action). Content uses
   `Panel`, `StatGrid`/`StatCard`, `StatusPill`, `PageState` and the classes
@@ -418,6 +426,7 @@ handled per Lab, and is not part of the profile deletion.
 - `GET /api/health` answers without a database and reports the door state.
 - Two languages (`messages/de.json`, `messages/en.json`), same keys, checked. The language comes from the Suite setting via the
   `NEXT_LOCALE` cookie, default English; no language switcher in the Lab.
+  German uses the formal "Sie", never "du" or the informal plural "ihr" (checked, section 3a).
 - Beyondles icons in `src/app/`; "Back to Suite" in the topbar of the shared frame (section 3a).
 
 ## 7a. Lab learnings built in (Masoud, 30.09.2026)

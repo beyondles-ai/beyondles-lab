@@ -75,7 +75,12 @@ edited (`docs/FRAME.md`, section 3a). Your pages only fill the content area:
 start each with `PageHeader`, use `Panel`, `StatCard`, `StatusPill`,
 `PageState` and the `by-app-*` classes, and take colours only from the names
 in `src/app/globals.css`. Light only, no dark mode, every text in English and
-German. Look at every page at 1440 px and 390 px wide before you call it done.
+German. German addresses the reader with the formal "Sie" ("Geben Sie Ihre
+E-Mail ein", "Ihre Organisation"), or neutral noun style for labels
+("Speichern"); never "du", "dein" or the informal plural "ihr/euch/euer".
+`npm run check:frame` and `npm test` fail on informal address in
+`messages/de.json`. Look at every page at 1440 px and 390 px wide before you
+call it done.
 
 Keep these green at every step: `npm run check:frame`, `npm test`,
 `npm run build`. Every message names the rule and the file.

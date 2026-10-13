@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import de from "../../messages/de.json";
 import en from "../../messages/en.json";
 import { LOCALES } from "@/i18n/config";
+import { findInformalAddress, informalAddressFindings } from "../../scripts/support/informal-address.mjs";
 
 /** Both shipped languages must carry EXACTLY the same keys and placeholders. */
 function collectKeys(obj: Record<string, unknown>, prefix = ""): string[] {
@@ -57,5 +58,38 @@ describe("messages", () => {
       return JSON.stringify(placeholders(a)) !== JSON.stringify(placeholders(b));
     });
     expect(diffs).toEqual([]);
+  });
+});
+
+describe("German addresses the reader with the formal Sie (card #350)", () => {
+  it("has no informal address in messages/de.json", () => {
+    expect(informalAddressFindings(de)).toEqual([]);
+  });
+
+  it("finds the informal singular and plural forms", () => {
+    expect(findInformalAddress("Du hast Zugriff.")).toEqual(["Du"]);
+    expect(findInformalAddress("Bitte prüfe deine Eingaben.")).toEqual(["deine"]);
+    expect(findInformalAddress("Die Notiz bleibt bei dir.")).toEqual(["dir"]);
+    expect(findInformalAddress("Das betrifft euch und euer Team.")).toEqual(["euch", "euer"]);
+    expect(findInformalAddress("Eure Organisation hat das ausgeschaltet.")).toEqual(["Eure"]);
+    expect(findInformalAddress("Ihr habt keinen Zugriff.")).toEqual(["Ihr habt"]);
+    expect(findInformalAddress("Ihr seid angemeldet.")).toEqual(["Ihr seid"]);
+    expect(findInformalAddress("Wollt ihr speichern?")).toEqual(["Wollt ihr"]);
+    expect(findInformalAddress("Gespeichert. ihr könnt weiter.")).toEqual(["ihr könnt", "ihr"]);
+  });
+
+  it("accepts the formal forms and words that only look informal", () => {
+    for (const text of [
+      "Sie haben Zugriff.",
+      "Ihr Konto ist freigeschaltet.",
+      "Ihr neuer Schlüssel wird einmal angezeigt.",
+      "Bitte prüfen Sie Ihre Eingaben.",
+      "Die Notiz bleibt bei Ihnen.",
+      "Das Verzeichnis wird geladen.",
+      "Deinstallieren Sie die alte Version.",
+      "Dirigent, Duplikat, Feuer, teuer",
+    ]) {
+      expect(findInformalAddress(text), text).toEqual([]);
+    }
   });
 });
