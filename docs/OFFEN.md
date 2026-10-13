@@ -1,11 +1,17 @@
 # Open items
 
-Checked on: 2026-10-07
+Checked on: 2026-10-13
 
 What is deliberately not finished. Every entry says WHY, so the next person
 can decide instead of guessing. Remove entries when done.
 
 ## In the template itself
+
+- **Sign out needs the Suite's closed-pages release on `main`.** The person
+  menu links to `<suite>/logout` and `<suite>/accounts`, which the Suite has
+  on `develop` only (2026-10-13). Release this template to `main` only after
+  or together with that Suite release (docs/FRAME.md, section 3a). Remove
+  this entry once the Suite on `main` has `/logout`.
 
 - **Retention periods are placeholders.** `RETENTION_NOTES_DAYS` defaults to
   365 for the example table. The period is the customer's decision; a Lab

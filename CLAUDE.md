@@ -36,6 +36,8 @@ Change freely (this is the product):
   languages, same keys. The language comes from the Suite setting via the
   `NEXT_LOCALE` cookie, default English; there is no language switcher in the Lab.
   External mails and documents also default to English unless a stored language exists.
+- `src/lib/lab-nav.tsx` — the sidebar entries of your Lab's pages (only
+  pages of this Lab, never a link out of it).
 - `README.md` (the one sentence and the product description), `docs/OFFEN.md`.
 
 Never change (this is the frame, reviewed centrally):
@@ -49,9 +51,9 @@ Never change (this is the frame, reviewed centrally):
   `src/server/jobs/**` (add jobs, do not change the frame files),
   `src/app/api/platform/**`, `src/app/api/mcp/**`, `src/app/api/health/**`,
   `src/app/kein-zugriff/**`, `src/components/app-shell/**` (the shared frame,
-  generated from `beyondles-ai/beyondles-shared`), `src/app/(app)/layout.tsx`
-  (add your own sidebar entries there, nothing else), `src/app/(app)/loading.tsx`,
-  `src/app/(app)/error.tsx`, `src/app/(app)/not-found.tsx`, `src/app/error.tsx`,
+  generated from `beyondles-ai/beyondles-shared`), `src/app/(app)/layout.tsx`,
+  `src/app/(app)/loading.tsx`, `src/app/(app)/error.tsx`,
+  `src/app/(app)/not-found.tsx`, `src/app/not-found.tsx`, `src/app/error.tsx`,
   `src/lib/frame.ts`, `src/lib/suite-url.ts`, the theme mapping in
   `src/app/globals.css`, `scripts/check-frame.mjs`, `scripts/rename-lab.mjs`,
   `.github/workflows/ci.yml`, `docker/**`, `ops/**`, `.env.example` (add your

@@ -83,6 +83,17 @@ in `app-shell/HOST-CONTRACT.md` in the shared repo.
   help `https://docs.beyondles.ai`, sign out `<suite>/logout`, switch account
   `<suite>/accounts?callbackUrl=<this Lab's start page>`. It also reads the
   cookies `platform-session-hint` (account-change guard) and `NEXT_LOCALE`.
+- **Release prerequisite: the Suite's `/logout` and `/accounts` pages.** Both
+  come with the Suite's closed-pages release (card #350). Until the Suite on
+  `main` has them, "Sign out" in the person menu of a production Lab leads to
+  a 404 page ("Switch account" stays hidden until the Suite writes the
+  session-hint cookie). So this template, and every Lab built from it, goes
+  to `main` only after (or together with) that Suite release. If a Lab must
+  go live earlier, point `signOut` in `src/lib/suite-url.ts` at
+  `<suite>/api/auth/logout` (it exists on both Suite branches) and switch
+  back afterwards.
+- **Sidebar entries** live in `src/lib/lab-nav.tsx`: the signed-in layout and
+  the root not-found page both use it.
 - **Language** from the Suite (`NEXT_LOCALE`), English by default, every text
   in English and German. No language switch in the Lab.
 - **Page structure.** Every top-level page starts with `PageHeader` (kicker,
@@ -91,7 +102,10 @@ in `app-shell/HOST-CONTRACT.md` in the shared repo.
   `by-app-table`, `by-app-rows`, `by-app-btn`, `by-app-text-link`.
 - **States.** `src/app/(app)/loading.tsx` (placeholder rows),
   `src/app/(app)/error.tsx` ("Try again", "Contact support"),
-  `src/app/(app)/not-found.tsx`, `src/app/error.tsx` (a failing layout),
+  `src/app/(app)/not-found.tsx` (`notFound()` inside the signed-in area),
+  `src/app/not-found.tsx` (an address that matches no page: inside the frame
+  for a signed-in person, never Next's unstyled 404), `src/app/error.tsx`
+  (a failing layout),
   empty lists with `PageState variant="empty"`.
 - **Look.** Light only: no dark mode, no `dark:` classes, no theme switch.
   Fonts Poppins (headings) and Inter (text) through `next/font`
@@ -105,7 +119,8 @@ in `app-shell/HOST-CONTRACT.md` in the shared repo.
   `/kein-zugriff`, no dark mode or theme switching, no default palette, raw
   hex or arbitrary colour in `src/` (generated folders and the theme mapping
   in `globals.css` excepted), no own "Back to Suite" link or text, no
-  language switch. `tests/unit/app-shell-frame.test.ts` checks the layout and
+  language switch, and the root `src/app/not-found.tsx` with the styled,
+  translated state. `tests/unit/app-shell-frame.test.ts` checks the layout and
   the Suite links.
 
 ## 4. The platform door
