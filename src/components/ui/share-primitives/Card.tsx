@@ -15,8 +15,8 @@ export function Card({
   return (
     <div
       className={[
-        "rounded-lg border bg-white",
-        variant === "elevated" ? "shadow-lg" : "",
+        "rounded-lg border border-line bg-card",
+        variant === "elevated" ? "shadow-soft" : "",
         padding === "none" ? "" : "p-4",
         className,
       ]

@@ -23,13 +23,13 @@ export function Input({
   return (
     <div className="space-y-1">
       {label ? (
-        <label htmlFor={id} className="block text-xs font-medium">
+        <label htmlFor={id} className="block text-xs font-medium text-heading">
           {label}
         </label>
       ) : null}
       <div className="relative">
         {icon ? (
-          <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-zinc-500">
+          <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-muted">
             {icon}
           </span>
         ) : null}
@@ -42,7 +42,7 @@ export function Input({
           autoComplete={autoComplete}
           onChange={onChange}
           className={[
-            "w-full rounded border px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50",
+            "w-full rounded-md border border-line bg-card px-3 py-2 text-sm text-heading focus:outline-2 focus:outline-brand disabled:cursor-not-allowed disabled:opacity-50",
             icon ? "pl-8" : "",
           ]
             .filter(Boolean)

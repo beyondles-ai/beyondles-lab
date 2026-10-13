@@ -1,14 +1,23 @@
 import Link from "next/link";
 import { getFormatter, getTranslations } from "next-intl/server";
 
+import { PageHeader, PageState, Panel } from "@/components/app-shell";
 import { VisibilityBadge, type Visibility } from "@/components/share";
 import { NoteVisibilityField } from "@/components/notes/note-visibility-field";
 import { NoteError } from "@/components/notes/note-error";
+import { FIELD, LABEL, TEXTAREA } from "@/components/ui/form-classes";
 import { uiActor } from "@/lib/actor";
 import { requireAccess } from "@/lib/rbac";
 import { allowedVisibilities } from "@/lib/access-rules";
 import { listNotes } from "@/server/services/notes";
 import { createNoteAction } from "@/server/actions/notes";
+
+/** Two letters for the initials tile of a row. */
+function initials(title: string): string {
+  const words = title.trim().split(/\s+/).filter(Boolean);
+  const letters = words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? "").slice(0, 2);
+  return letters.toUpperCase() || "·";
+}
 
 /**
  * Worked example of a tenant object: list + create; each note links to its
@@ -24,57 +33,99 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
   const allowed = allowedVisibilities(access);
   const { error } = await searchParams;
 
+  const rows = notes.map((note) => ({
+    note,
+    created: t("created", { date: format.dateTime(note.createdAt, { dateStyle: "medium" }) }),
+    owner: note.ownerUserId === access.userId ? t("ownerYou") : null,
+    badge: (
+      <VisibilityBadge
+        visibility={note.visibility.toLowerCase() as Visibility}
+        collectionName={access.collections.find((c) => c.id === note.collectionId)?.name}
+      />
+    ),
+  }));
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">{t("title")}</h1>
-        <p className="text-zinc-600">{t("intro")}</p>
-      </div>
+      <PageHeader kicker={t("kicker")} title={t("title")} titleMuted={t("titleMuted")} description={t("intro")} />
 
       <NoteError code={error} />
 
-      <form action={createNoteAction} className="space-y-3 rounded-lg border bg-white p-4">
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium">{t("newTitle")}</span>
-          <input name="title" required maxLength={200} className="w-full rounded border px-2 py-1" />
-        </label>
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium">{t("newBody")}</span>
-          <textarea name="body" maxLength={20000} rows={3} className="w-full rounded border px-2 py-1" />
-        </label>
-        <NoteVisibilityField
-          personalAllowed={allowed.includes("PRIVATE")}
-          organisationAllowed={allowed.includes("ORGANISATION")}
-        />
-        <button type="submit" className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white">
-          {t("create")}
-        </button>
-      </form>
+      <Panel title={t("newPanel")}>
+        <form action={createNoteAction} className="space-y-4 p-5 md:px-[22px]">
+          <label className="block">
+            <span className={LABEL}>{t("newTitle")}</span>
+            <input name="title" required maxLength={200} className={FIELD} />
+          </label>
+          <label className="block">
+            <span className={LABEL}>{t("newBody")}</span>
+            <textarea name="body" maxLength={20000} rows={3} className={TEXTAREA} />
+          </label>
+          <NoteVisibilityField
+            personalAllowed={allowed.includes("PRIVATE")}
+            organisationAllowed={allowed.includes("ORGANISATION")}
+          />
+          <button type="submit" className="by-app-btn by-app-btn-primary w-full md:w-auto">
+            {t("create")}
+          </button>
+        </form>
+      </Panel>
 
-      {notes.length === 0 ? (
-        <p className="text-sm text-zinc-500">{t("empty")}</p>
-      ) : (
-        <ul className="space-y-2">
-          {notes.map((note) => (
-            <li key={note.id} className="rounded-lg border bg-white p-3">
-              <Link href={`/notes/${note.id}`} className="font-medium underline-offset-2 hover:underline">
-                {note.title}
-              </Link>
-              {note.body ? <p className="whitespace-pre-wrap text-sm text-zinc-700">{note.body}</p> : null}
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                <VisibilityBadge
-                  visibility={note.visibility.toLowerCase() as Visibility}
-                  collectionName={access.collections.find((c) => c.id === note.collectionId)?.name}
-                />
-                <span>
-                  {t("created", { date: format.dateTime(note.createdAt, { dateStyle: "medium" }) })}
-                  {note.ownerUserId === access.userId ? ` · ${t("ownerYou")}` : ""}
-                </span>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+      <Panel title={t("listTitle")} count={notes.length}>
+        {notes.length === 0 ? (
+          <PageState variant="empty" title={t("emptyTitle")} description={t("empty")} />
+        ) : (
+          <>
+            <table className="by-app-table by-app-desktop-only">
+              <thead>
+                <tr>
+                  <th scope="col">{t("colNote")}</th>
+                  <th scope="col">{t("colVisibility")}</th>
+                  <th scope="col">{t("colCreated")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ note, created, owner, badge }) => (
+                  <tr key={note.id}>
+                    <td>
+                      <div className="flex items-center">
+                        <span className="by-app-ini" aria-hidden="true">
+                          {initials(note.title)}
+                        </span>
+                        <div className="min-w-0">
+                          <Link href={`/notes/${note.id}`} className="underline-offset-2 hover:underline">
+                            {note.title}
+                          </Link>
+                          {note.body ? <p className="line-clamp-1 text-sm font-normal text-muted">{note.body}</p> : null}
+                        </div>
+                      </div>
+                    </td>
+                    <td>{badge}</td>
+                    <td className="whitespace-nowrap">
+                      {created}
+                      {owner ? ` · ${owner}` : ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="by-app-rows by-app-mobile-only">
+              {rows.map(({ note, created, owner, badge }) => (
+                <div key={note.id} className="by-app-row">
+                  <Link href={`/notes/${note.id}`} className="by-app-row-title">
+                    {note.title}
+                  </Link>
+                  {badge}
+                  <span className="by-app-row-meta">
+                    {created}
+                    {owner ? ` · ${owner}` : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </Panel>
     </div>
   );
 }

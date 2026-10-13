@@ -1,35 +1,104 @@
 @import "tailwindcss";
 
 /*
- * The share blocks (src/components/share, generated from
- * beyondles-ai/beyondles-shared) use five colour names that Tailwind does not
- * know. Without them the classes produce no CSS and nothing turns red: text
- * loses its colour and the selected row loses its background. Defined here on
- * the template's own zinc palette; a Lab with its own palette points them at
- * its own variables (LeadLab does). `primary` must stay a real colour value so
- * that `bg-primary/5` and `ring-primary/30` can be made transparent.
+ * The Beyondles look for closed pages (design system "closed pages v1",
+ * card #350). The frame itself (sidebar, topbar, person menu, footer, states)
+ * comes from src/components/app-shell (generated from
+ * beyondles-ai/beyondles-shared) and brings its own stylesheet, imported in
+ * the layouts of `(app)` and `kein-zugriff`. This file maps the SAME values
+ * onto Tailwind, so the Lab's own content looks like the frame around it.
+ *
+ * The values below are the only colours, fonts and radii a Lab uses. Never
+ * use Tailwind's default palettes (zinc-, slate-, gray-, red-, ...) or raw hex
+ * colours in components: `npm run check:frame` (block 13) fails on them.
+ * Light only: no dark mode, no `dark:` classes, no theme switch.
  */
 @theme inline {
-  --color-content-primary: var(--color-zinc-900);
-  --color-content-secondary: var(--color-zinc-600);
-  --color-content-tertiary: var(--color-zinc-500);
-  --color-surface-secondary: var(--color-zinc-100);
-  --color-primary: var(--color-zinc-900);
+  /* Fonts: next/font variables set on <html> in src/app/layout.tsx. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-poppins), var(--font-inter), ui-sans-serif, sans-serif;
+
+  /* Brand */
+  --color-brand: #9652e8;
+  --color-brand-light: #ca7aff;
+  --color-brand-blue: #6e7fe0;
+  --color-brand-turquoise: #12b5e8;
+  --color-lavender: #f1eafd;
+  --color-lavender-label: #7a3fc8;
+
+  /* Surfaces and text */
+  --color-canvas: #f9fafb;
+  --color-card: #ffffff;
+  --color-line: #e3e5eb;
+  --color-heading: #0a0e1a;
+  --color-body: #4a4f5e;
+  --color-muted: #6e7382;
+
+  /* Status: only for status, never as decoration. */
+  --color-ok: #17734a;
+  --color-ok-soft: #e8f7ef;
+  --color-err: #b42318;
+  --color-err-soft: #fdecec;
+  --color-wait: #7a3fc8;
+  --color-wait-soft: #f1eafd;
+
+  /*
+   * The five names the share blocks (src/components/share) use. Without them
+   * the classes produce no CSS and nothing turns red: text loses its colour
+   * and the selected row loses its background. `primary` must stay a real
+   * colour value so that `bg-primary/5` and `ring-primary/30` work.
+   */
+  --color-content-primary: #0a0e1a;
+  --color-content-secondary: #4a4f5e;
+  --color-content-tertiary: #6e7382;
+  --color-surface-secondary: #f1eafd;
+  --color-primary: #9652e8;
+
+  /*
+   * Radii: 10 px for fields and small parts, 14 px for cards. The brand
+   * gradient of a primary button outside the frame classes:
+   * `bg-linear-120 from-brand via-brand-blue to-brand-turquoise`; inside the
+   * content area prefer `by-app-btn by-app-btn-primary`.
+   */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 14px;
+
+  /* The soft card shadow of the frame. */
+  --shadow-soft: 0 6px 20px rgba(10, 14, 26, 0.08);
 }
 
 /*
- * Kept deliberately small. The template ships with plain Tailwind utilities
- * and no component library, so a Lab can bring its own (shadcn, Base UI, …)
- * without first removing ours. Fonts: system stack; self-host a webfont when
- * the Lab wants the Beyondles look (see LeadLab `src/app/fonts/`).
+ * The frame reads its fonts from these two variables (app-shell
+ * HOST-CONTRACT section 3). They sit on <html>, which carries the next/font
+ * classes, so `var(--font-inter)` resolves there.
  */
-
-:root {
-  --font-sans:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
+html {
+  --by-app-font: var(--font-inter), system-ui, sans-serif;
+  --by-app-font-head: var(--font-poppins), var(--font-inter), sans-serif;
+  color-scheme: light;
 }
 
-body {
-  font-family: var(--font-sans);
+@layer base {
+  /* Tailwind 4 draws borders in `currentColor`; the Beyondles line is a soft grey. */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-line);
+  }
+
+  body {
+    font-family: var(--font-sans);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    color: var(--color-heading);
+  }
 }

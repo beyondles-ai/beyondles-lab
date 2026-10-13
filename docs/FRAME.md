@@ -1,6 +1,6 @@
 # The frame — what every Beyondles Lab guarantees
 
-Checked on: 2026-10-07
+Checked on: 2026-10-13
 
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
@@ -50,8 +50,63 @@ The three files are thin layers over the shared access code in
 checked in CI, never edited here). `/api/health` reports the door in the one
 vocabulary of every product: `ok`, `local`, `unconfigured`, `off`.
 
-People without access land on `/kein-zugriff` with their e-mail, the reason
-and a way back to the Suite. The Suite tile points at `/`, which IS the app.
+People without access land on `/kein-zugriff`: the shared no-access page
+(`NoAccess`, section 3a) with "Back to Suite" and, for the wrong account,
+"Switch account". When the Suite is unreachable or the platform door is
+missing, the same page shows the frame with the error state instead, because
+"ask your admin" would be the wrong advice there. The Suite tile points at
+`/`, which IS the app.
+
+## 3a. The screen: the shared frame (closed pages)
+
+Every page behind the login looks the same in every Beyondles product
+(design system "closed pages v1", approved 2026-10-13, card #350). The frame
+is not built here; it comes from `beyondles-ai/beyondles-shared`, module
+`app-shell`, as a generated copy in `src/components/app-shell/` (manifest
+`.beyondles-shared.json`, version 1.3.0). Never edit the copy: the CI step
+"Shared code is unchanged" fails on any difference. What a host must do is
+in `app-shell/HOST-CONTRACT.md` in the shared repo.
+
+- **Signed-in layout** `src/app/(app)/layout.tsx` renders `AppShell`:
+  sidebar (Lab name with the "LAB" tag, white, the Lab's own pages only),
+  topbar (breadcrumb, "Back to Suite ↗", person menu), organisation chip,
+  slim footer (Imprint, Privacy, Terms, AI notice). Pages only fill the
+  content area.
+- **Sidebar = this Lab only.** Overview, the Lab's objects, and under "Lab"
+  the Lab's own settings (admins only). Never a link out of the Lab: Back to
+  Suite, Profile, Organisation settings (organisation owners and admins only),
+  Help and docs, Switch account and Sign out live in the frame.
+- **Links from the server.** `src/lib/frame.ts` builds them on every request
+  from the Suite of the running environment (`platformUrl()`, never a value
+  baked in at build time) with `src/lib/suite-url.ts`: profile
+  `<suite>/settings/profile`, organisation settings `<suite>/admin/organisation`,
+  help `https://docs.beyondles.ai`, sign out `<suite>/logout`, switch account
+  `<suite>/accounts?callbackUrl=<this Lab's start page>`. It also reads the
+  cookies `platform-session-hint` (account-change guard) and `NEXT_LOCALE`.
+- **Language** from the Suite (`NEXT_LOCALE`), English by default, every text
+  in English and German. No language switch in the Lab.
+- **Page structure.** Every top-level page starts with `PageHeader` (kicker,
+  two-tone title, one sentence, at most one primary action). Content uses
+  `Panel`, `StatGrid`/`StatCard`, `StatusPill`, `PageState` and the classes
+  `by-app-table`, `by-app-rows`, `by-app-btn`, `by-app-text-link`.
+- **States.** `src/app/(app)/loading.tsx` (placeholder rows),
+  `src/app/(app)/error.tsx` ("Try again", "Contact support"),
+  `src/app/(app)/not-found.tsx`, `src/app/error.tsx` (a failing layout),
+  empty lists with `PageState variant="empty"`.
+- **Look.** Light only: no dark mode, no `dark:` classes, no theme switch.
+  Fonts Poppins (headings) and Inter (text) through `next/font`
+  (`src/app/layout.tsx`, which also sets `--by-app-font` and
+  `--by-app-font-head` via `src/app/globals.css`). Colours, radii and the
+  shadow only from the Beyondles names in `src/app/globals.css` (`canvas`,
+  `card`, `line`, `heading`, `body`, `muted`, `brand`, `lavender`, status
+  colours `ok`, `err`, `wait`); never Tailwind's default palettes or raw hex.
+- **Checked by** `npm run check:frame`, block 13: the manifest entry, the
+  layout rendering `AppShell` with its stylesheet, `NoAccess` on
+  `/kein-zugriff`, no dark mode or theme switching, no default palette, raw
+  hex or arbitrary colour in `src/` (generated folders and the theme mapping
+  in `globals.css` excepted), no own "Back to Suite" link or text, no
+  language switch. `tests/unit/app-shell-frame.test.ts` checks the layout and
+  the Suite links.
 
 ## 4. The platform door
 
@@ -340,7 +395,7 @@ handled per Lab, and is not part of the profile deletion.
 - `GET /api/health` answers without a database and reports the door state.
 - Two languages (`messages/de.json`, `messages/en.json`), same keys, checked. The language comes from the Suite setting via the
   `NEXT_LOCALE` cookie, default English; no language switcher in the Lab.
-- Beyondles icons in `src/app/`, "Back to Suite" link above the menu.
+- Beyondles icons in `src/app/`; "Back to Suite" in the topbar of the shared frame (section 3a).
 
 ## 7a. Lab learnings built in (Masoud, 30.09.2026)
 

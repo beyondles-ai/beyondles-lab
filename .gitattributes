@@ -13,3 +13,6 @@ src/components/share/** text eol=lf
 
 # Generated from beyondles-ai/beyondles-shared (platform-client). Never edited here.
 src/lib/platform-client/** text eol=lf
+
+# Generated from beyondles-ai/beyondles-shared (app-shell). Never edited here.
+src/components/app-shell/** text eol=lf
