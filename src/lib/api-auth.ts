@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { hashApiKey, hashEquals } from "@/lib/api-keys";
 import { ApiError } from "@/lib/api-errors";
 import { MACHINE_DENY_STATUS } from "@/lib/platform-client/core/types";
-import { LAB_KEY } from "@/lib/lab";
+import { API_KEY_PREFIX, LAB_KEY } from "@/lib/lab";
 import { ensureOrganisationById } from "@/lib/rbac";
 import {
   getApiKeyAccessContext,
@@ -13,30 +13,52 @@ import {
   type AccessContext,
   type MachineDenyReason,
 } from "@/lib/platform/access";
-import { checkOnBehalfToken, onBehalfBearer } from "@/lib/tool-door/obo-door";
+import {
+  clientAddressOf,
+  exchangeBeyondlesKey,
+  looksLikeBeyondlesKey,
+} from "@/lib/tool-door/key-exchange";
+import {
+  checkOnBehalfToken,
+  onBehalfBearer,
+  onBehalfRateSubject,
+} from "@/lib/tool-door/obo-door";
 import { checkLabReleased } from "@/lib/tool-door/release-gate";
-import { checkRateLimit, type RateDoor } from "@/lib/rate-limit";
-import { missingScopes, onBehalfScopes, type GrantedScopes, type Scope } from "@/lib/scopes";
+import { checkRateLimit, type RateCredential, type RateDoor } from "@/lib/rate-limit";
+import { missingScopes, scopesFromClaims, type GrantedScopes, type Scope } from "@/lib/scopes";
 
 /**
- * The door for machines. It accepts TWO credentials:
+ * The door for machines (door contract: `src/lib/doors/door-contract.md`).
+ * It accepts TWO credentials:
  *
- *  1. `x-api-key` — a key this Lab issued. Two kinds:
- *     - USER   — created for a PERSON. Acts in her view of TODAY: the Lab asks
- *                the platform per request what she may see. Lost access = dead
- *                key (403), not "then only organisation-wide".
- *     - WORKER — created for the ORGANISATION. No person behind it: only
- *                organisation-wide rows, nothing private, survives departures.
+ *  1. `x-api-key` — a key. Three kinds:
+ *     - USER   — a key this Lab issued for a PERSON. Acts in her view of
+ *                TODAY: the Lab asks the platform per request what she may
+ *                see. Lost access = dead key (403), not "then only
+ *                organisation-wide".
+ *     - WORKER — a key this Lab issued for the ORGANISATION. No person behind
+ *                it: only organisation-wide rows, nothing private, survives
+ *                departures.
+ *     - BEYONDLES KEY (`bk_...`, created by a person in the Suite, Settings,
+ *                Access) — exchanged at the platform for a key token
+ *                (`src/lib/tool-door/key-exchange.ts`), which then takes the
+ *                token path below: its owner's view, its `scp` are the scopes.
  *     Every key also passes the RELEASE GATE: it works only for organisations
  *     the Lab is released for in the Suite (src/lib/tool-door/release-gate.ts).
  *
- *  2. `Authorization: Bearer <on-behalf token>` — another Beyondles product
- *     (Beyondles HorAIzon, another Lab) calling on behalf of an organisation,
- *     a person or an agent. The platform signed it for audience = this Lab.
- *     The view follows the agent: organisation agent = worker view,
- *     collection agent = its collection, private agent = its owner, no agent
- *     = the person (`sub`), neither = worker view. Every named person is
- *     checked at the platform (floor, membership, product access).
+ *  2. `Authorization: Bearer <on-behalf token>` — a token the platform
+ *     signed for audience = this Lab. Two types:
+ *     - classic: another Beyondles product (Beyondles HorAIzon, another Lab)
+ *       calling on behalf of an organisation, a person or an agent. The view
+ *       follows the agent: organisation agent = worker view, collection
+ *       agent = its collection, private agent = its owner, no agent = the
+ *       person (`sub`), neither = worker view. Scopes: the fallback rule
+ *       (`onBehalfScopes`).
+ *     - key token (`typ: beyondles-obo-key+jwt`): a Beyondles key the client
+ *       had exchanged. A key in every respect: release gate, rate limit per
+ *       key, exactly the scopes of its `scp`.
+ *     Every named person is checked at the platform (floor, membership,
+ *     product access).
  *
  * After the credential: the RATE LIMIT (`src/lib/rate-limit.ts`, 429 with
  * `Retry-After`) per key or per calling product, and the SCOPES the
@@ -63,9 +85,9 @@ export interface OnBehalfCaller {
 
 export interface ApiKeyContext {
   organisationId: string;
-  /** For a token: `obo:<jti>`. */
+  /** For a classic token: `obo:<jti>`. For a Beyondles key in either form: `bk:<key id>`. */
   keyId: string;
-  /** For a token: the calling product. */
+  /** For a classic token: the calling product. For a Beyondles key: `Beyondles key`. */
   keyName: string;
   /** For a token: the person whose view applies, or `null`. */
   createdByUserId: string | null;
@@ -78,8 +100,10 @@ export interface ApiKeyContext {
   access: AccessContext;
   via: "api-key" | "on-behalf";
   onBehalf: OnBehalfCaller | null;
-  /** Key: the stored scopes (`*` = legacy full access). Token: `onBehalfScopes`. */
+  /** Key: the stored scopes (`*` = legacy full access). Token: `scopesFromClaims`. */
   scopes: GrantedScopes;
+  /** The Beyondles key behind the request (sent as `x-api-key` or as a key token), else `null`. */
+  beyondlesKeyId: string | null;
 }
 
 /** 403 `insufficient_scope` unless the credential carries every scope in `needed`. */
@@ -102,7 +126,7 @@ function doorOf(request: Request): RateDoor {
   }
 }
 
-function enforceRateLimit(request: Request, credential: "key" | "on-behalf", subject: string): void {
+function enforceRateLimit(request: Request, credential: RateCredential, subject: string): void {
   const decision = checkRateLimit({ door: doorOf(request), credential, subject });
   if (!decision.allowed) {
     throw new ApiError(429, "rate_limited", "Too many requests for this credential. Wait and try again.", undefined, {
@@ -142,10 +166,18 @@ export async function requireApiKey(request: Request): Promise<ApiKeyContext> {
       "Send either an on-behalf token or an x-api-key, never both.",
     );
   }
-  if (bearer) return requireOnBehalf(request, bearer.token);
+  if (bearer) return requireOnBehalf(request, bearer.token, "bearer");
 
   const plaintext = request.headers.get("x-api-key")?.trim();
   if (!plaintext) throw new ApiError(401, "unauthorized", "Header x-api-key is missing.");
+
+  // A Beyondles key: exchanged at the platform, then the token path. The
+  // shapes do not overlap (a Lab key starts with `<labkey>_`, a Beyondles key
+  // with `bk_` and has another length); the prefix check keeps it so after a
+  // rename.
+  if (looksLikeBeyondlesKey(plaintext) && !plaintext.startsWith(API_KEY_PREFIX)) {
+    return requireBeyondlesKey(request, plaintext);
+  }
 
   const hash = hashApiKey(plaintext);
   const row = await db.apiKey.findUnique({
@@ -201,13 +233,50 @@ export async function requireApiKey(request: Request): Promise<ApiKeyContext> {
     via: "api-key",
     onBehalf: null,
     scopes: row.scopes,
+    beyondlesKeyId: null,
   };
 }
 
-/** Steps 1 to 6 of the token path (connection layer contract, stage 6, 2.4). */
-async function requireOnBehalf(request: Request, token: string): Promise<ApiKeyContext> {
+const KEY_TOKEN_UNVERIFIED =
+  "The token the platform issued for this Beyondles key could not be checked; try again later.";
+
+/**
+ * A Beyondles key sent as `x-api-key` (door contract, section 4): exchanged
+ * at the platform (shape filter, caches, per-address limit in
+ * `key-exchange.ts`), then the token path with the key token.
+ */
+async function requireBeyondlesKey(request: Request, plaintext: string): Promise<ApiKeyContext> {
+  const exchanged = await exchangeBeyondlesKey(plaintext, { clientAddress: clientAddressOf(request) });
+  if (!exchanged.ok) {
+    throw new ApiError(
+      exchanged.status,
+      exchanged.code,
+      exchanged.message,
+      undefined,
+      exchanged.retryAfterSeconds !== undefined ? { "Retry-After": String(exchanged.retryAfterSeconds) } : {},
+    );
+  }
+  return requireOnBehalf(request, exchanged.token, "x-api-key");
+}
+
+/**
+ * Steps 1 to 6 of the token path (connection layer contract, stage 6, 2.4).
+ * `source`: how the token arrived. `bearer` = the client sent it;
+ * `x-api-key` = this Lab exchanged a Beyondles key for it.
+ */
+async function requireOnBehalf(
+  request: Request,
+  token: string,
+  source: "bearer" | "x-api-key",
+): Promise<ApiKeyContext> {
+  const fromKey = source === "x-api-key";
   const check = await checkOnBehalfToken(token, LAB_KEY);
   if (!check.ok) {
+    if (fromKey && check.status === 401) {
+      // The platform just issued this token for this Lab: a refusal is not the client's fault.
+      console.error("[api-auth] the token exchanged for a Beyondles key did not verify (check ON_BEHALF_ISSUER).");
+      throw new ApiError(503, "key_check_unavailable", KEY_TOKEN_UNVERIFIED);
+    }
     const headers: Record<string, string> =
       check.status === 401
         ? { ...INVALID_TOKEN_CHALLENGE }
@@ -218,7 +287,21 @@ async function requireOnBehalf(request: Request, token: string): Promise<ApiKeyC
   }
 
   const { claims } = check;
-  enforceRateLimit(request, "on-behalf", `cp:${claims.cp}:${claims.org}`);
+  const keyId = claims.key ?? null;
+  if (fromKey && keyId === null) {
+    // A classic token would get the fallback scopes: never for a key.
+    console.error("[api-auth] the platform exchanged a Beyondles key for a token without a key claim.");
+    throw new ApiError(503, "key_check_unavailable", KEY_TOKEN_UNVERIFIED);
+  }
+
+  // A key token is a key: counted per key, and through the release gate like every key.
+  const rate = onBehalfRateSubject(claims);
+  enforceRateLimit(request, rate.credential, rate.subject);
+  if (keyId !== null) {
+    const release = await checkLabReleased(claims.org, { localMode: localFallbackAllowed() });
+    if (!release.ok) throw new ApiError(release.status, release.code, release.message);
+  }
+
   const agent = claims.agt ?? null;
   const issuedAt = new Date(claims.iat * 1000);
   const access = await getOnBehalfAccessContext({
@@ -228,6 +311,10 @@ async function requireOnBehalf(request: Request, token: string): Promise<ApiKeyC
     agent,
   });
   if (!access.ok) {
+    // A Beyondles key sent as x-api-key answers like this Lab's own keys.
+    if (fromKey) {
+      throw new ApiError(MACHINE_DENY_STATUS[access.reason], access.reason, DENIALS[access.reason]);
+    }
     switch (access.reason) {
       case "KEY_REVOKED":
         throw new ApiError(401, "unauthorized", REFUSED_TOKEN_MESSAGE, undefined, INVALID_TOKEN_CHALLENGE);
@@ -256,21 +343,25 @@ async function requireOnBehalf(request: Request, token: string): Promise<ApiKeyC
   const person = access.context.userId || null;
   return {
     organisationId: claims.org,
-    keyId: `obo:${claims.jti}`,
-    keyName: claims.cp,
+    keyId: keyId !== null ? `bk:${keyId}` : `obo:${claims.jti}`,
+    keyName: keyId !== null ? "Beyondles key" : claims.cp,
     createdByUserId: person,
     kind: person ? "user" : "worker",
     access: access.context,
-    via: "on-behalf",
-    onBehalf: {
-      callingProduct: claims.cp,
-      userId: claims.sub ?? null,
-      role: claims.role ?? null,
-      agent,
-      tokenId: claims.jti,
-      issuedAt,
-    },
-    scopes: onBehalfScopes({ personUserId: person }),
+    via: fromKey ? "api-key" : "on-behalf",
+    onBehalf: fromKey
+      ? null
+      : {
+          callingProduct: claims.cp,
+          userId: claims.sub ?? null,
+          role: claims.role ?? null,
+          agent,
+          tokenId: claims.jti,
+          issuedAt,
+        },
+    // A key token: exactly its `scp` for this Lab, prefix stripped. A classic token: the fallback rule.
+    scopes: scopesFromClaims(claims, { personUserId: person }),
+    beyondlesKeyId: keyId,
   };
 }
 

@@ -36,6 +36,10 @@ export type ApiErrorCode =
   | "insufficient_scope"
   /** A worker-triggered route called with anything but a WORKER key. */
   | "worker_only"
+  /** Beyondles key: this server lacks PLATFORM_API_URL or PLATFORM_API_KEY. */
+  | "not_configured"
+  /** Beyondles key: the platform could not exchange it right now, or its token did not verify. */
+  | "key_check_unavailable"
   | "internal_error";
 
 export interface ApiErrorBody {

@@ -480,7 +480,7 @@ describe("POST /api/mcp", () => {
     const self = calls.find((c) => c.url.startsWith("http://127.0.0.1:3390/api/v1/notes"));
     expect(self?.headers).toEqual({ authorization: `Bearer ${token}` });
     expect(log.mock.calls.map((c) => String(c[0]))).toContain(
-      `[tool-door] via=on-behalf cp=bookinglab org=${ORG} sub=${USER} agent=- tool=examplelab_list_notes outcome=ok jti=aaaaaaaa-aaaa-4aaa-8aaa-000000000202`,
+      `[tool-door] via=on-behalf cp=bookinglab org=${ORG} sub=${USER} agent=- tool=examplelab_list_notes outcome=ok jti=aaaaaaaa-aaaa-4aaa-8aaa-000000000202 key=-`,
     );
   });
 

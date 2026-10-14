@@ -55,6 +55,8 @@ export interface McpServerContext {
     userId: string | null;
     agentLevel: string | null;
     tokenId: string | null;
+    /** The Beyondles key behind the call (either form), else `null` or left out. */
+    keyId?: string | null;
   };
   fetchImpl?: typeof fetch;
 }
@@ -161,6 +163,7 @@ export async function callTool(
     tool: name,
     outcome: result.isError ? "error" : "ok",
     tokenId: context.caller.tokenId,
+    keyId: context.caller.keyId ?? null,
   });
   return result;
 }

@@ -91,6 +91,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       userId: key.onBehalf?.userId ?? key.createdByUserId,
       agentLevel: key.onBehalf?.agent?.level ?? null,
       tokenId: key.onBehalf?.tokenId ?? null,
+      keyId: key.beyondlesKeyId,
     },
   });
   const transport = new WebStandardStreamableHTTPServerTransport({

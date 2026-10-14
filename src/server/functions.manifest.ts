@@ -1,6 +1,14 @@
 import type { z } from "zod";
 
 import type { MemoryKind } from "@/lib/brain-client";
+import type {
+  Excluded,
+  FrameServices,
+  FunctionEntry as SharedFunctionEntry,
+  InfrastructureRoutes,
+  RestDoor as SharedRestDoor,
+  ScreenHelpers,
+} from "@/lib/doors/manifest";
 import { TOOL_PREFIX } from "@/lib/lab";
 import type { Scope } from "@/lib/scopes";
 import {
@@ -35,27 +43,10 @@ import {
  * (the screen is limited by the container rules instead).
  */
 
-export interface Excluded {
-  /** Why this door deliberately does not exist. Shown in docs/EXCLUSIONS.md. */
-  excluded: string;
-}
+export type { Excluded, McpDoor, ScreenDoor } from "@/lib/doors/manifest";
 
-/** `action`: a server action export; `page`: an app route path such as `/notes/[noteId]`. */
-export type ScreenDoor = { action: string } | { page: string } | Excluded;
-
-export interface RestDoor {
-  method: "GET" | "POST" | "PATCH" | "DELETE";
-  /** OpenAPI form: `/api/v1/notes/{noteId}`. */
-  path: string;
-  summary: string;
-  query?: z.ZodType;
-  body?: z.ZodType;
-  response: z.ZodType;
-  /** Success status, default 200. */
-  status?: number;
-}
-
-export type McpDoor = { tool: string } | Excluded;
+/** The REST door of a function in this Lab: its schemas are zod schemas. */
+export type RestDoor = SharedRestDoor<z.ZodType>;
 
 /**
  * The memory door of a function (docs/FRAME.md, section 4a): which kinds of
@@ -66,17 +57,16 @@ export type McpDoor = { tool: string } | Excluded;
  */
 export type MemoryDoor = { writes: readonly MemoryKind[]; reads: boolean } | Excluded;
 
-export interface FunctionEntry {
-  /** File under `src/server/services` without `.ts`. */
-  service: string;
-  scopes: readonly Scope[];
-  /** `worker`: a cron-style trigger; WORKER key only, REST only (docs/FRAME.md 5). */
-  trigger?: "worker";
-  screen: ScreenDoor;
-  rest: RestDoor | Excluded;
-  mcp: McpDoor;
+/**
+ * One function of this Lab: the shared entry (`src/lib/doors/manifest.ts`,
+ * generated from beyondles-shared, never edited here) with this Lab's scopes
+ * and zod schemas, plus the Lab's memory door. `service` is the file under
+ * `src/server/services` without `.ts`; `trigger: "worker"` is a cron-style
+ * trigger, WORKER key only, REST only (docs/FRAME.md 5).
+ */
+export type FunctionEntry = SharedFunctionEntry<Scope, z.ZodType> & {
   memory?: MemoryDoor;
-}
+};
 
 const KEYS_ARE_FOR_PEOPLE =
   "Keys are managed by product admins in the screen only: a credential never mints or revokes credentials.";
@@ -222,7 +212,7 @@ export const FUNCTIONS = {
 export type FunctionId = keyof typeof FUNCTIONS;
 
 /** Whole service files outside the rule: the frame's platform calls, not functions of the Lab. */
-export const FRAME_SERVICES: Readonly<Record<string, string>> = {
+export const FRAME_SERVICES: FrameServices = {
   "platform-export":
     "Tenant export, called by the platform through /api/platform/export.",
   "platform-delete":
@@ -234,17 +224,13 @@ export const FRAME_SERVICES: Readonly<Record<string, string>> = {
 };
 
 /** Server actions that are screen mechanics, not functions. */
-export const SCREEN_HELPERS: Readonly<Record<string, string>> = {
+export const SCREEN_HELPERS: ScreenHelpers = {
   dismissNewKeyAction:
     "Removes the one-time cookie that shows a new key; no data changes.",
 };
 
 /** `/api/v1` routes that are not functions of the Lab. */
-export const INFRASTRUCTURE_ROUTES: ReadonlyArray<{
-  method: string;
-  path: string;
-  reason: string;
-}> = [
+export const INFRASTRUCTURE_ROUTES: InfrastructureRoutes = [
   {
     method: "GET",
     path: "/api/v1/openapi.json",

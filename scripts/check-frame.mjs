@@ -10,7 +10,6 @@
  *
  * Exit code 1 on the first group of findings; every finding is printed.
  */
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,10 +47,18 @@ for (const rel of [
   "src/app/api/mcp/route.ts",
   "src/app/api/mcp/describe/route.ts",
   "src/app/api/platform/reassign-owner/route.ts",
+  // The door code is the shared module `doors` (beyondles-shared, card #383),
+  // generated into src/lib/doors and drift-checked by the shared check action.
+  // The Lab keeps its manifest, scopes, settings and the thin wrappers.
+  "src/lib/doors/.shared-version",
+  "src/lib/doors/door-contract.md",
+  "src/lib/doors/on-behalf.ts",
+  "src/lib/doors/tool-door/markers.ts",
+  "src/lib/doors/tool-door/obo-door.ts",
+  "src/lib/doors/tool-door/release-gate.ts",
   "src/lib/platform/on-behalf.ts",
-  "src/lib/tool-door/markers.ts",
-  "src/lib/tool-door/obo-door.ts",
-  "src/lib/tool-door/release-gate.ts",
+  "src/lib/tool-door/host.ts",
+  "src/lib/tool-door/key-exchange.ts",
   "tests/unit/tool-catalog.test.ts",
   // Headless by construction (06.10.2026): the manifest, its parity test and
   // the generated exclusions list.
@@ -238,17 +245,23 @@ if (/^JWT_SECRET=/m.test(envExample) || /^ALLOW_LOCAL_JWT=/m.test(envExample))
     fail("src/app/api/platform/organisation/route.ts exports no DELETE handler");
 }
 
-// 5c. The on-behalf module is a VERBATIM copy (connection layer contract,
-//     stage 6, 2.5). A changed byte means a Lab verifies tokens differently
-//     from every other product. Line endings are normalised to LF first, so a
-//     Windows checkout with CRLF does not count as a change.
+// 5c. One on-behalf verifier (connection layer contract, stage 6, 2.5). Its
+//     source is the shared module `doors` (src/lib/doors/on-behalf.ts, synced
+//     from beyondles-shared and drift-checked by the shared check action).
+//     src/lib/platform/on-behalf.ts only keeps the Lab's import path: after
+//     its comments it must be exactly the re-export, so nobody re-inlines a
+//     verifier that checks tokens differently from every other product.
 {
-  const ON_BEHALF_SHA256 = "25f16f34f9653690f59a5cb3ea89060592c78cc0f88299dd61aed7aa5c5b1175";
   const rel = "src/lib/platform/on-behalf.ts";
+  const WRAPPER = 'export * from "@/lib/doors/on-behalf";';
   if (exists(rel)) {
-    const digest = createHash("sha256").update(read(rel).replace(/\r\n/g, "\n"), "utf8").digest("hex");
-    if (digest !== ON_BEHALF_SHA256)
-      fail(`${rel} is not the verbatim copy of the contract (sha256 ${digest}, expected ${ON_BEHALF_SHA256})`);
+    const code = read(rel)
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (code !== WRAPPER)
+      fail(`${rel} must be only the re-export of the shared verifier (${WRAPPER}); found other code`);
   }
 }
 
