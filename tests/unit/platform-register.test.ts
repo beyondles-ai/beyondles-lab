@@ -45,7 +45,7 @@ describe("registrationBody", () => {
   });
   it("leaves out addresses the platform would refuse", () => {
     for (const url of [
-      "http://examplelab.beyondles.ai",
+      `http://${LAB_KEY}.beyondles.ai`,
       "https://evil.example.com",
       "https://beyondles.ai.evil.com",
     ]) {
