@@ -4,6 +4,7 @@ import type { Actor } from "@/lib/actor";
 import { canEdit, chooseContainer, visibleWhere } from "@/lib/access-rules";
 import { recordAudit } from "@/lib/audit";
 import { LAB_KEY } from "@/lib/lab";
+import { forgetDeletedObjects, noteSourceRef } from "@/lib/platform/memory";
 import { ServiceError } from "@/lib/service-errors";
 import type { ExpireNotesInput, ListNotesQuery, NoteInput, NoteUpdate } from "@/server/schemas/notes";
 import { db } from "@/lib/db";
@@ -127,6 +128,9 @@ export async function deleteNote(actor: Actor, noteId: string): Promise<{ id: st
   if (!canEdit(actor.access, "note", current)) throw new ServiceError("forbidden", "You may see this note but not delete it.");
   await db.note.delete({ where: { id: current.id, organisationId: actor.organisationId } });
   await recordAudit(actor, { action: "object.deleted", objectId: current.id, objectTitle: current.title });
+  // The memory door: whatever this Lab wrote into The Brain for the note goes
+  // with it. Never blocks the deletion; a failure is logged with the ids.
+  await forgetDeletedObjects(actor.organisationId, [noteSourceRef(current.id)]);
   return { id: current.id, deleted: true };
 }
 
@@ -158,12 +162,17 @@ export async function expireNotes(
   }
   if (input.dryRun || expired === 0) return { deleted: 0, expired, dryRun: input.dryRun };
 
-  const result = await db.note.deleteMany({ where: { AND: [...scope, { createdAt: { lt: cutoff } }] } });
+  // The ids first: the memory door forgets exactly the notes that went.
+  const doomed = await db.note.findMany({ where: { AND: [...scope, { createdAt: { lt: cutoff } }] }, select: { id: true } });
+  const ids = doomed.map((note) => note.id);
+  const result = await db.note.deleteMany({ where: { AND: [...scope, { id: { in: ids } }] } });
   if (result.count > 0) {
     await recordAudit(actor, {
       action: `${LAB_KEY}.notes_expired`,
       details: { deleted: result.count, olderThanDays: input.olderThanDays },
     });
   }
+  // After the audit row: the evidence of the deletion never waits for The Brain.
+  await forgetDeletedObjects(actor.organisationId, ids.map(noteSourceRef));
   return { deleted: result.count, expired, dryRun: false };
 }

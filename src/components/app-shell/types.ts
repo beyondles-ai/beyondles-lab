@@ -75,8 +75,11 @@ export interface ShellOrganisation {
 export interface ShellLinks {
   /** Base URL of the Beyondles Suite, read on the server at runtime. "Back to Suite" opens it in a new tab. */
   suite: string;
-  /** The person's profile in the Suite. Internal (same tab) when the product is the Suite. */
-  profile: string;
+  /**
+   * The person's profile in the Suite. Internal (same tab) when the product is the Suite.
+   * Optional: without it the person menu shows no Profile entry.
+   */
+  profile?: string;
   /** Only pass it for admins of the organisation; without it the entry is not shown. */
   organisationSettings?: string;
   /** Help and docs, always opened in a new tab. */

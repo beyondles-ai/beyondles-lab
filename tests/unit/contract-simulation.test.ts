@@ -10,9 +10,11 @@ const env = {
   PLATFORM_EXPORT_KEY: "e",
   CONTRACT_LAB_URL: "https://lab.test",
   CONTRACT_ORGANISATION_ID: "00000000-0000-4000-8000-000000000000",
+  BRAIN_API_URL: "https://brain-api.test",
 };
 
 const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
+const soon = () => new Date(Date.now() + 300_000).toISOString();
 
 describe("contract edges (fake fetch, no network)", () => {
   it("all edges ok when every answer matches the contract", async () => {
@@ -21,10 +23,12 @@ describe("contract edges (fake fetch, no network)", () => {
       if (u.endsWith("/api/llm/complete")) return reply(200, { success: true, data: { text: "OK" } });
       if (u.includes("/api/llm/route?")) return reply(200, { success: true, data: { model: "gpt-image-2" } });
       if (u.endsWith("/api/auth/me")) return reply(401, { error: "Not authenticated" });
+      if (u.endsWith("/api/on-behalf/token")) return reply(200, { success: true, data: { token: "obo", expiresAt: soon() } });
+      if (u.endsWith("/api/memory/recall")) return reply(200, { success: true, data: { items: [] } });
       return reply(200, { success: true });
     }) as unknown as typeof fetch;
     const results = await checkEdges(buildEdges(), env, fetchImpl);
-    expect(results.map((r) => r.status)).toEqual(["ok", "ok", "ok", "ok"]);
+    expect(results.map((r) => r.status)).toEqual(["ok", "ok", "ok", "ok", "ok"]);
   });
 
   it("the door call stays on the contract: useCase + level, no model, no provider key", async () => {
@@ -49,6 +53,68 @@ describe("contract edges (fake fetch, no network)", () => {
     expect(suite.accept(401, { error: "Not authenticated" })).toBe(true);
     expect(suite.accept(401, { unparsable: "SyntaxError" })).toBe(false);
     expect(suite.accept(502, {})).toBe(false);
+  });
+
+  describe("brain-memory-recall", () => {
+    const brainEdge = () => buildEdges().find((e) => e.name === "brain-memory-recall")!;
+    const network = (token: () => Response, recall: () => Response) => {
+      const seen: { url: string; init?: RequestInit }[] = [];
+      const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = String(url);
+        seen.push({ url: u, init });
+        if (u === "https://door.test/api/on-behalf/token") return token();
+        if (u === "https://brain-api.test/api/memory/recall") return recall();
+        return reply(404, {});
+      }) as unknown as typeof fetch;
+      return { seen, fetchImpl };
+    };
+    const okToken = () => reply(200, { success: true, data: { token: "obo", expiresAt: soon() } });
+
+    it("recalls once with an on-behalf token for the Brain, like every real call", async () => {
+      const { seen, fetchImpl } = network(okToken, () => reply(200, { success: true, data: { items: [] } }));
+      const [result] = await checkEdges([brainEdge()], env, fetchImpl);
+      expect(result).toEqual({ name: "brain-memory-recall", status: "ok", http: 200 });
+      expect(seen[0].url).toBe("https://door.test/api/on-behalf/token");
+      expect(JSON.parse(String(seen[0].init?.body))).toEqual({ audience: "brain", organisationId: env.CONTRACT_ORGANISATION_ID });
+      expect(seen[1].url).toBe("https://brain-api.test/api/memory/recall");
+      expect((seen[1].init?.headers as Record<string, string>).Authorization).toBe("Bearer obo");
+      expect(JSON.parse(String(seen[1].init?.body))).toMatchObject({ limit: 1 });
+    });
+
+    it("fails, before any call, a staging check pointed at the production Brain, the dashboard or the platform", async () => {
+      const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      for (const [url, reason] of [
+        ["https://api.beyondles.ai", /production Brain/],
+        ["https://brain-staging.beyondles.ai", /dashboard/],
+        ["https://api-staging.beyondles.ai", /platform API/],
+      ] as const) {
+        const { fetchImpl } = network(okToken, () => reply(200, { success: true, data: { items: [] } }));
+        const [result] = await checkEdges([brainEdge()], { ...env, BRAIN_API_URL: url }, fetchImpl);
+        expect(result.status, url).toBe("failed");
+        expect(result.reason, url).toMatch(reason);
+        expect(fetchImpl).not.toHaveBeenCalled();
+      }
+      errors.mockRestore();
+    });
+
+    it("fails with the platform's code when no token is issued, and on an answer that is not the contract", async () => {
+      const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const refused = network(
+        () => reply(404, { success: false, error: { code: "AUDIENCE_UNKNOWN", message: "no brain" } }),
+        () => reply(200, {}),
+      );
+      const [noToken] = await checkEdges([brainEdge()], env, refused.fetchImpl);
+      expect(noToken).toMatchObject({ status: "failed", reason: expect.stringMatching(/AUDIENCE_UNKNOWN/) });
+      const html = network(okToken, () => new Response("<html></html>", { status: 200 }));
+      const [notJson] = await checkEdges([brainEdge()], env, html.fetchImpl);
+      expect(notJson).toMatchObject({ status: "failed", http: 200 });
+      errors.mockRestore();
+    });
+
+    it("is missing, never skipped, without BRAIN_API_URL", async () => {
+      const [result] = await checkEdges([brainEdge()], { ...env, BRAIN_API_URL: "" }, vi.fn() as unknown as typeof fetch);
+      expect(result).toEqual({ name: "brain-memory-recall", status: "missing" });
+    });
   });
 
   it("a network error is a failure", async () => {

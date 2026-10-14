@@ -21,6 +21,7 @@ const eslintConfig = [
       "src/components/share/**",
       "src/lib/platform-client/**",
       "src/components/app-shell/**",
+      "src/lib/brain-client/**",
     ],
   },
 ];

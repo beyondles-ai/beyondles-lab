@@ -71,6 +71,9 @@ services:
       PLATFORM_EXPORT_KEY: ${PLATFORM_EXPORT_KEY:-}
       PLATFORM_DELETE_KEY: ${PLATFORM_DELETE_KEY:-}
       ON_BEHALF_ISSUER: ${ON_BEHALF_ISSUER:-}
+      # The memory door (The Brain API of THIS environment, never the
+      # dashboard host). Empty = the Lab writes and reads nothing there.
+      BRAIN_API_URL: ${BRAIN_API_URL:-}
       # MCP over HTTP: override of the base URL for the self-call to /api/v1.
       # Empty is the norm (then http://127.0.0.1:${PORT}).
       MCP_SELF_BASE_URL: ${MCP_SELF_BASE_URL:-}
@@ -117,6 +120,9 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-examplelab}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-examplelab}
       PLATFORM_API_URL: ${PLATFORM_API_URL:-}
       PLATFORM_API_KEY: ${PLATFORM_API_KEY:-}
+      # Jobs that write to or forget in The Brain run here too.
+      BRAIN_API_URL: ${BRAIN_API_URL:-}
+      ON_BEHALF_ISSUER: ${ON_BEHALF_ISSUER:-}
       # Scheduled jobs (src/server/jobs): ops alerts through the mail door,
       # retention settings. Dry run unless RETENTION_DRY_RUN says false/0/no.
       OPS_ALERT_EMAIL: ${OPS_ALERT_EMAIL:-}

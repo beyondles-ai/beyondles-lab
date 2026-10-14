@@ -4,7 +4,8 @@ import type { Prisma } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { LAB_KEY } from "@/lib/lab";
-import type { DeletionItem } from "@/server/services/platform-delete";
+import { forgetMemoryMany, noteSourceRef } from "@/lib/platform/memory";
+import { brainDeletionItem, type DeletionItem } from "@/server/services/platform-delete";
 
 /**
  * The person deletion: erase ONE Suite user from this Lab, inside one
@@ -167,11 +168,36 @@ const UNKNOWN = "organisation or user unknown to this Lab";
 /**
  * Data outside the database that belongs only to this person (avatar,
  * uploads). Runs BEFORE the transaction: a failure here returns one failed
- * item and leaves the database untouched. The template has none.
+ * item and leaves the database untouched, so the platform's next run still
+ * finds every id. The template has one such store: what the memory door
+ * wrote into The Brain for the person's PRIVATE notes (the rows
+ * `notes_private` deletes). Shared notes stay, and so do their entries.
  */
 async function erasePersonalFiles(scope: PersonScope): Promise<DeletionItem[]> {
-  void scope;
-  return [];
+  const privateNotes = await db.note.findMany({
+    where: {
+      organisationId: scope.organisationId,
+      ownerUserId: ci(scope.userId),
+      visibility: "PRIVATE",
+    },
+    select: { id: true },
+  });
+  if (privateNotes.length === 0) return [];
+  const outcome = await forgetMemoryMany(
+    scope.organisationId,
+    privateNotes.map((note) => noteSourceRef(note.id)),
+  );
+  const target = "memory note:* (private notes)";
+  if (outcome.failed.length > 0) {
+    return [brainDeletionItem(target, { status: "failed", code: outcome.failed[0].code, detail: "" })];
+  }
+  if (outcome.notConfigured !== null) {
+    return [brainDeletionItem(target, { status: "not_configured", detail: outcome.notConfigured })];
+  }
+  if (outcome.refused.length > 0) {
+    return [brainDeletionItem(target, { status: "refused", code: outcome.refused[0].code, detail: "" })];
+  }
+  return [brainDeletionItem(target, { status: "forgotten", deleted: outcome.deleted })];
 }
 
 function planItems(outcome: "skipped", detail: string): DeletionItem[] {

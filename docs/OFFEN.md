@@ -1,6 +1,6 @@
 # Open items
 
-Checked on: 2026-10-13
+Checked on: 2026-10-14
 
 What is deliberately not finished. Every entry says WHY, so the next person
 can decide instead of guessing. Remove entries when done.
@@ -13,6 +13,27 @@ can decide instead of guessing. Remove entries when done.
   or together with that Suite release (docs/FRAME.md, section 3a). Remove
   this entry once the Suite on `main` has `/logout`.
 
+- **The memory door waits for The Brain's memory routes (card #377).** The
+  client, the wrapper, the forgets and the contract edge are in place, but
+  `POST /api/memory/*` is not on The Brain's `develop` yet (2026-10-14). Until
+  it is, a configured `BRAIN_API_URL` makes every forget a `failed` item
+  (404, `BRAIN_NOT_FOUND`) and the `brain-memory-recall` edge red. Leave
+  `BRAIN_API_URL` empty on a Lab's servers until The Brain ships the routes.
+- **The knowledge-flow switch is not read yet.** platform-api reports
+  `product.knowledgeFlow.write` (Organisation settings > Knowledge flow,
+  platform-api migration 027); the shared platform client does not carry
+  the field yet. A Lab that writes must check it before `remember` once the
+  client has it.
+- **A failed forget after a Lab's own delete is only logged.** `deleteNote`
+  and `expireNotes` never fail because of The Brain and wait for it at most
+  the client's time limit (10 s; a bulk forget stops sending after the first
+  sign that The Brain is down or misconfigured). When it is down, the entry
+  stays there and a log line names the ids. The template writes nothing, so
+  nothing stays. A Lab that writes adds a retry through its own queue (the
+  same queue its `remember` jobs use).
+- **The Brain must know the Lab's key as a source.** The source of every
+  entry is `LAB_KEY`; The Brain accepts registry keys only. A new Lab is
+  registered in the platform registry before its first write.
 - **Retention periods are placeholders.** `RETENTION_NOTES_DAYS` defaults to
   365 for the example table. The period is the customer's decision; a Lab
   keeps this entry until the customer signed its periods off.

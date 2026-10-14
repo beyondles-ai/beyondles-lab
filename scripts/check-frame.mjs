@@ -16,6 +16,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { informalAddressFindings } from "./support/informal-address.mjs";
+import { memoryDoorFindings } from "./support/memory-door.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const findings = [];
@@ -469,6 +470,14 @@ if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((
     if (hit) fail(`${rel}: "${hit}" is an own "Back to Suite" text; the frame's topbar has the way back`);
   }
 }
+
+// 14. Memory door (card #377, docs/FRAME.md 4a). Every Lab carries the
+//     shared Brain client (module brain-client) and its wrapper
+//     src/lib/platform/memory.ts; every manifest function declares `memory`
+//     (what it writes and reads, or why not); when any function writes,
+//     every delete path forgets in The Brain. A Lab without the client
+//     fails. Rule and scanner in scripts/support/memory-door.mjs.
+for (const finding of memoryDoorFindings({ read, exists })) fail(finding);
 
 if (findings.length > 0) {
   console.error("Frame check FAILED:\n" + findings.map((f) => `  - ${f}`).join("\n"));

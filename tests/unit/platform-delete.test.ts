@@ -43,6 +43,7 @@ const { calls, MODELS, deleteManyMocks, organisationFindFirst, transaction } =
 vi.mock("@/lib/db", () => ({ db: h.dbMock }));
 
 import { DELETE } from "@/app/api/platform/organisation/route";
+import { resetBrainClientForTests } from "@/lib/platform/memory";
 import {
   DELETION_PLAN,
   deleteOrganisation,
@@ -74,14 +75,22 @@ describe("deleteOrganisation", () => {
     expect(out.failures).toEqual([]);
     expect(out.organisationId).toBe(ORG);
     expect(out.runId).toBe(RUN);
-    expect(out.items.map((i) => i.target)).toEqual(
+    const rows = out.items.filter((i) => i.store === "postgres");
+    expect(rows.map((i) => i.target)).toEqual(
       DELETION_PLAN.map((e) => e.table),
     );
     expect(
-      out.items.every(
-        (i) => i.outcome === "success" && i.action === "delete_rows",
-      ),
+      rows.every((i) => i.outcome === "success" && i.action === "delete_rows"),
     ).toBe(true);
+    // The memory door reports its own line; without BRAIN_API_URL it is a skip.
+    expect(out.items.slice(rows.length)).toEqual([
+      expect.objectContaining({
+        store: "brain",
+        target: "memory note:*",
+        action: "forget",
+        outcome: "skipped",
+      }),
+    ]);
     expect(out.items.find((i) => i.target === "notes")?.itemCount).toBe(4);
     expect(calls).toEqual(["note", "apiKey", "organisation"]);
   });
@@ -116,7 +125,7 @@ describe("deleteOrganisation", () => {
     organisationFindFirst.mockResolvedValue(null);
     const out = await deleteOrganisation(ORG, RUN);
     expect(out.ok).toBe(true);
-    expect(out.items).toHaveLength(DELETION_PLAN.length);
+    expect(out.items).toHaveLength(DELETION_PLAN.length + 1);
     expect(
       out.items.every((i) => i.outcome === "skipped" && i.itemCount === 0),
     ).toBe(true);
@@ -136,6 +145,92 @@ describe("deleteOrganisation", () => {
     });
     expect(out.failures).toHaveLength(1);
     expect(JSON.stringify(out)).not.toContain("customer@example.com");
+  });
+});
+
+describe("deleteOrganisation and the memory door", () => {
+  const BRAIN_ENV = {
+    BRAIN_API_URL: "https://brain-api.test",
+    PLATFORM_API_URL: "https://platform.test",
+    PLATFORM_API_KEY: "lab-service-key",
+  };
+  type Answer = { status: number; body: unknown };
+  const ok = (data: unknown): Answer => ({ status: 200, body: { success: true, data } });
+  const err = (status: number, code: string): Answer => ({
+    status,
+    body: { success: false, error: { code, message: code } },
+  });
+
+  function network(token: () => Answer, forget: () => Answer) {
+    const forgets: unknown[] = [];
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      let answer: Answer = err(404, "NOT_FOUND");
+      if (url === "https://platform.test/api/on-behalf/token") answer = token();
+      if (url === "https://brain-api.test/api/memory/forget") {
+        forgets.push({ body: JSON.parse(String(init?.body)), order: [...calls] });
+        answer = forget();
+      }
+      return new Response(JSON.stringify(answer.body), { status: answer.status });
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+    return forgets;
+  }
+  const token = () => ok({ token: "obo", expiresAt: new Date(Date.now() + 300_000).toISOString() });
+
+  beforeEach(() => {
+    resetBrainClientForTests();
+    for (const [name, value] of Object.entries(BRAIN_ENV)) vi.stubEnv(name, value);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("forgets every prefix the Lab writes under, AFTER the commit, and reports the count", async () => {
+    const forgets = network(token, () => ok({ deleted: 7 }));
+    const out = await deleteOrganisation(ORG, RUN);
+    expect(out.ok).toBe(true);
+    expect(forgets).toEqual([
+      {
+        body: { source: "examplelab", sourceRefPrefix: "note:" },
+        order: ["note", "apiKey", "organisation"],
+      },
+    ]);
+    expect(out.items.at(-1)).toEqual({
+      store: "brain",
+      target: "memory note:*",
+      action: "forget",
+      itemCount: 7,
+      outcome: "success",
+      detail: null,
+    });
+  });
+
+  it("fails the run when The Brain cannot be reached, so the platform asks again", async () => {
+    network(token, () => err(503, "DOWN"));
+    const out = await deleteOrganisation(ORG, RUN);
+    expect(out.ok).toBe(false);
+    expect(out.failures).toEqual([
+      "brain memory note:* forget failed: The Brain did not forget (UNREACHABLE)",
+    ]);
+  });
+
+  it("asks The Brain again when the organisation is already gone here (the retry of a failed run)", async () => {
+    organisationFindFirst.mockResolvedValue(null);
+    const forgets = network(token, () => ok({ deleted: 1 }));
+    const out = await deleteOrganisation(ORG, RUN);
+    expect(transaction).not.toHaveBeenCalled();
+    expect(forgets).toHaveLength(1);
+    expect(out.items.at(-1)).toMatchObject({ store: "brain", outcome: "success", itemCount: 1 });
+  });
+
+  it("skips, with the reason, when the platform no longer issues tokens for the organisation", async () => {
+    network(() => err(403, "ORGANISATION_INACTIVE"), () => ok({ deleted: 0 }));
+    const out = await deleteOrganisation(ORG, RUN);
+    expect(out.ok).toBe(true);
+    expect(out.items.at(-1)).toMatchObject({
+      store: "brain",
+      outcome: "skipped",
+      detail: expect.stringMatching(/refused \(FORBIDDEN\)/),
+    });
   });
 });
 

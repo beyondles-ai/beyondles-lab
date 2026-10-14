@@ -1,5 +1,6 @@
 import type { z } from "zod";
 
+import type { MemoryKind } from "@/lib/brain-client";
 import { TOOL_PREFIX } from "@/lib/lab";
 import type { Scope } from "@/lib/scopes";
 import {
@@ -56,6 +57,15 @@ export interface RestDoor {
 
 export type McpDoor = { tool: string } | Excluded;
 
+/**
+ * The memory door of a function (docs/FRAME.md, section 4a): which kinds of
+ * RESULTS it writes into The Brain (`writes`, empty for none) and whether it
+ * reads what the organisation knows (`reads`), or why it has nothing to do
+ * with The Brain (`excluded`). Optional for the parity check; block 14 of
+ * `npm run check:frame` fails an entry without it.
+ */
+export type MemoryDoor = { writes: readonly MemoryKind[]; reads: boolean } | Excluded;
+
 export interface FunctionEntry {
   /** File under `src/server/services` without `.ts`. */
   service: string;
@@ -65,10 +75,24 @@ export interface FunctionEntry {
   screen: ScreenDoor;
   rest: RestDoor | Excluded;
   mcp: McpDoor;
+  memory?: MemoryDoor;
 }
 
 const KEYS_ARE_FOR_PEOPLE =
   "Keys are managed by product admins in the screen only: a credential never mints or revokes credentials.";
+
+/**
+ * The example notes are raw material, and The Brain takes results only. A
+ * real Lab declares here which results a function writes, for example
+ * `{ writes: ["decision"], reads: false }`. Deleting a note still forgets
+ * whatever the Lab wrote for it (platform-delete.ts, notes.ts).
+ */
+const NOTES_ARE_RAW_MATERIAL: MemoryDoor = {
+  excluded: "Example notes are raw material, not results; The Brain takes results only.",
+};
+const KEYS_ARE_NOT_KNOWLEDGE: MemoryDoor = {
+  excluded: "Credentials are never knowledge.",
+};
 
 export const FUNCTIONS = {
   listNotes: {
@@ -83,6 +107,7 @@ export const FUNCTIONS = {
       response: noteListEnvelope,
     },
     mcp: { tool: `${TOOL_PREFIX}list_notes` },
+    memory: NOTES_ARE_RAW_MATERIAL,
   },
   getNote: {
     service: "notes",
@@ -95,6 +120,7 @@ export const FUNCTIONS = {
       response: noteEnvelope,
     },
     mcp: { tool: `${TOOL_PREFIX}get_note` },
+    memory: NOTES_ARE_RAW_MATERIAL,
   },
   createNote: {
     service: "notes",
@@ -109,6 +135,7 @@ export const FUNCTIONS = {
       status: 201,
     },
     mcp: { tool: `${TOOL_PREFIX}create_note` },
+    memory: NOTES_ARE_RAW_MATERIAL,
   },
   updateNote: {
     service: "notes",
@@ -122,6 +149,7 @@ export const FUNCTIONS = {
       response: noteEnvelope,
     },
     mcp: { tool: `${TOOL_PREFIX}update_note` },
+    memory: NOTES_ARE_RAW_MATERIAL,
   },
   deleteNote: {
     service: "notes",
@@ -134,6 +162,7 @@ export const FUNCTIONS = {
       response: deletedEnvelope,
     },
     mcp: { tool: `${TOOL_PREFIX}delete_note` },
+    memory: NOTES_ARE_RAW_MATERIAL,
   },
   countVisibleNotes: {
     service: "notes",
@@ -144,6 +173,7 @@ export const FUNCTIONS = {
         "A dashboard figure; machines count the result of GET /api/v1/notes.",
     },
     mcp: { excluded: "A dashboard figure; agents use list_notes." },
+    memory: NOTES_ARE_RAW_MATERIAL,
   },
   expireNotes: {
     service: "notes",
@@ -161,6 +191,7 @@ export const FUNCTIONS = {
       excluded:
         "Worker-triggered job; an agent deletes single notes with delete_note.",
     },
+    memory: NOTES_ARE_RAW_MATERIAL,
   },
   listApiKeys: {
     service: "api-keys",
@@ -168,6 +199,7 @@ export const FUNCTIONS = {
     screen: { page: "/settings" },
     rest: { excluded: KEYS_ARE_FOR_PEOPLE },
     mcp: { excluded: KEYS_ARE_FOR_PEOPLE },
+    memory: KEYS_ARE_NOT_KNOWLEDGE,
   },
   createApiKey: {
     service: "api-keys",
@@ -175,6 +207,7 @@ export const FUNCTIONS = {
     screen: { action: "createApiKeyAction" },
     rest: { excluded: KEYS_ARE_FOR_PEOPLE },
     mcp: { excluded: KEYS_ARE_FOR_PEOPLE },
+    memory: KEYS_ARE_NOT_KNOWLEDGE,
   },
   revokeApiKey: {
     service: "api-keys",
@@ -182,6 +215,7 @@ export const FUNCTIONS = {
     screen: { action: "revokeApiKeyAction" },
     rest: { excluded: KEYS_ARE_FOR_PEOPLE },
     mcp: { excluded: KEYS_ARE_FOR_PEOPLE },
+    memory: KEYS_ARE_NOT_KNOWLEDGE,
   },
 } as const satisfies Record<string, FunctionEntry>;
 
