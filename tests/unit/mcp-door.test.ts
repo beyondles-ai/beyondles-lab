@@ -384,6 +384,21 @@ describe("requireApiKey: configuration and the key path", () => {
     });
   });
 
+  it("the release gate comes before the rate limit: an unreleased key stays 403 past its limit", async () => {
+    vi.stubEnv("API_RATE_LIMIT_PER_MINUTE", "1");
+    released = () =>
+      Response.json({
+        success: true,
+        data: { organisationId: ORG, product: AUD, kind: "lab", organisationStatus: "active", released: false },
+      });
+    for (let i = 0; i < 3; i += 1) {
+      expect(await refusal(requireApiKey(req("/api/v1/notes", { "x-api-key": WORKER_KEY })))).toMatchObject({
+        status: 403,
+        code: "lab_not_released",
+      });
+    }
+  });
+
   it("an unknown key is 401 before the gate is asked", async () => {
     expect(await refusal(requireApiKey(req("/api/v1/notes", { "x-api-key": "nope" })))).toMatchObject({ status: 401 });
     expect(releaseCalls()).toHaveLength(0);

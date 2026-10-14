@@ -276,15 +276,12 @@ export function createKeyExchange(options: {
       );
     }
 
-    if (response.status === 400) {
-      // The body is ours and the key passed the shape filter: the platform refuses this value.
-      return remember(cacheKey, deny(401, "unauthorized", INVALID_KEY));
-    }
-
     // This Lab's own service key or registration is refused (CALLER_NOT_REGISTERED,
-    // CALLER_NOT_ALLOWED, KEY_AUDIENCE_NOT_CALLER, an invalid PLATFORM_API_KEY), or the
-    // platform is down (5xx, MEMBERSHIP_SOURCE_*, KEYS_NOT_MIGRATED). Never the key's fault,
-    // never cached.
+    // CALLER_NOT_ALLOWED, KEY_AUDIENCE_NOT_CALLER, an invalid PLATFORM_API_KEY), the
+    // platform refuses the request this Lab built (400 VALIDATION: the body is ours, the key
+    // passed the shape filter, so it is the audience, e.g. a LAB_KEY that is no product key),
+    // or the platform is down (5xx, MEMBERSHIP_SOURCE_*, KEYS_NOT_MIGRATED). Never the key's
+    // fault, never cached.
     const line = `[key-exchange] the platform refused the exchange: status=${response.status} code=${code ?? "-"}`;
     if (response.status >= 500) hostLogger(host).warn(line);
     else hostLogger(host).error(line);

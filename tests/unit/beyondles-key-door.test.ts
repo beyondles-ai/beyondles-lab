@@ -429,6 +429,20 @@ describe("a key token as Bearer (the client exchanged the key itself)", () => {
     expect(error.headers["Retry-After"]).toMatch(/^\d+$/);
   });
 
+  it("checks the release gate before the rate limit (door contract, section 2)", async () => {
+    vi.stubEnv("API_RATE_LIMIT_PER_MINUTE", "1");
+    released = false;
+    for (const headers of [
+      bearer(keyToken()),
+      asKey,
+      bearer(keyToken()),
+      asKey,
+    ]) {
+      const error = await refusal(requireApiKey(req("/api/v1/notes", headers)));
+      expect(error).toMatchObject({ status: 403, code: "lab_not_released" });
+    }
+  });
+
   it("both credentials at once stay 400 ambiguous_credential", async () => {
     const error = await refusal(
       requireApiKey(req("/api/v1/notes", { ...bearer(keyToken()), ...asKey })),

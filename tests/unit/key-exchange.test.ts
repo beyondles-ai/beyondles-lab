@@ -328,12 +328,12 @@ describe("the denial mapping", () => {
     [403, "KEY_OWNER_NOT_MEMBER", 401, "unauthorized", true],
     [403, "ORGANISATION_INACTIVE", 401, "unauthorized", true],
     [403, "ORG_NOT_ALLOWED_FOR_KEY", 401, "unauthorized", true],
-    [400, "VALIDATION", 401, "unauthorized", true],
     [403, "AUDIENCE_NOT_RELEASED", 403, "lab_not_released", true],
     [403, "CALLER_NOT_REGISTERED", 503, "key_check_unavailable", false],
     [403, "CALLER_NOT_ALLOWED", 503, "key_check_unavailable", false],
     [403, "KEY_AUDIENCE_NOT_CALLER", 503, "key_check_unavailable", false],
     [401, "UNAUTHORIZED", 503, "key_check_unavailable", false],
+    [400, "VALIDATION", 503, "key_check_unavailable", false],
     [503, "ON_BEHALF_NOT_CONFIGURED", 503, "key_check_unavailable", false],
     [503, "MEMBERSHIP_SOURCE_OUTDATED", 503, "key_check_unavailable", false],
     [500, "INTERNAL", 503, "key_check_unavailable", false],
@@ -346,6 +346,19 @@ describe("the denial mapping", () => {
       expect(t.calls).toHaveLength(cached ? 1 : 2);
     },
   );
+
+  it("logs a refused request of this Lab as an error, not as a dead key", async () => {
+    const t = setup({ answer: () => refusal(400, "VALIDATION") });
+    const result = await t.run();
+    expect(result).toMatchObject({
+      ok: false,
+      status: 503,
+      code: "key_check_unavailable",
+    });
+    expect(
+      t.lines.some((line) => /status=400 code=VALIDATION/.test(line)),
+    ).toBe(true);
+  });
 
   it("names the reason for a key without a scope for this Lab", async () => {
     const t = setup({ answer: () => refusal(403, "KEY_NO_SCOPE_FOR_PRODUCT") });

@@ -201,11 +201,13 @@ export async function requireApiKey(request: Request): Promise<ApiKeyContext> {
     throw new ApiError(401, "unauthorized", "API key invalid.");
   }
 
-  enforceRateLimit(request, "key", `key:${row.id}`);
-
+  // Door contract, section 2: release gate first, then the rate limit, so a key of an
+  // organisation the Lab is not released for always gets 403 and never spends its window.
   // Level 1 for machines: the Suite's release switch, asked through the platform.
   const release = await checkLabReleased(row.organisationId, { localMode: localFallbackAllowed() });
   if (!release.ok) throw new ApiError(release.status, release.code, release.message);
+
+  enforceRateLimit(request, "key", `key:${row.id}`);
 
   // The kind is the row's. A USER row without a creator stays a user key and
   // is refused (policy P3); only a WORKER row acts for nobody.
@@ -303,13 +305,14 @@ async function requireOnBehalf(
     throw new ApiError(503, "key_check_unavailable", KEY_TOKEN_UNVERIFIED);
   }
 
-  // A key token is a key: counted per key, and through the release gate like every key.
-  const rate = onBehalfRateSubject(claims);
-  enforceRateLimit(request, rate.credential, rate.subject);
+  // A key token is a key: through the release gate like every key, then counted per key
+  // (door contract, section 2: release gate before rate limit).
   if (keyId !== null) {
     const release = await checkLabReleased(claims.org, { localMode: localFallbackAllowed() });
     if (!release.ok) throw new ApiError(release.status, release.code, release.message);
   }
+  const rate = onBehalfRateSubject(claims);
+  enforceRateLimit(request, rate.credential, rate.subject);
 
   const agent = claims.agt ?? null;
   const issuedAt = new Date(claims.iat * 1000);

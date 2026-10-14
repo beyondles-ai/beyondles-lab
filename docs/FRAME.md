@@ -1,6 +1,6 @@
 # The frame — what every Beyondles Lab guarantees
 
-Checked on: 2026-10-14
+Checked on: 2026-10-15
 
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
@@ -383,7 +383,10 @@ like every person.
   gets a token with the Lab's own service key and calls the target's door.
 - The door code under `src/lib/doors/` is generated from beyondles-shared
   (`.beyondles-shared.json`, checked by `beyondles-shared/check`); change it
-  there, never in a Lab.
+  there, never in a Lab. That shared check does not run in the public
+  template or in a Lab outside the organisation, so `check:frame` block 5d
+  also pins the sha256 of every file of the copy (`DOORS_PIN`, doors 1.5.1).
+  A doors sync updates that pin in the same PR.
 
 ### 5.4 Scopes on machine credentials
 
@@ -414,7 +417,8 @@ manifest entry names; no scope implies another.
 
 ### 5.5 Rate limit
 
-In `requireApiKey`, after the credential is known, for `/api/v1` and
+In `requireApiKey`, after the credential is known and (for a key) after the
+release gate, as door contract section 2 orders it, for `/api/v1` and
 `/api/mcp` separately (`src/lib/rate-limit.ts`). Per key (`key:<id>`) or per
 calling product and organisation (`cp:<product>:<org>`). Defaults per
 minute: 120 per key on `/api/v1`, 60 per key on `/api/mcp`, 600 per calling
