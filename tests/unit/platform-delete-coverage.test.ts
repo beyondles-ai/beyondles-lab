@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
@@ -116,5 +116,56 @@ describe("tenant deletion coverage", () => {
 
   it("removes the organisation row last", () => {
     expect(plan[plan.length - 1].table).toBe("organisations");
+  });
+});
+
+/**
+ * The memory door (docs/FRAME.md 4a): what the Lab wrote into The Brain for an
+ * object goes when the object goes. Every service file that removes rows
+ * calls one of the wrapper's forget functions, so a new delete path cannot
+ * leave entries behind in The Brain. A file whose deletes never touch
+ * anything the Lab writes there goes into DELETES_WITHOUT_MEMORY, with the
+ * reason.
+ */
+const DELETES_WITHOUT_MEMORY: Readonly<Record<string, string>> = {};
+const DELETE_STATEMENT = /\.(delete|deleteMany)\s*\(|\bDELETE\s+FROM\b/i;
+const FORGET_CALL = /\b(forgetMemory|forgetMemoryMany|forgetDeletedObjects)\s*\(/;
+
+function serviceCode(): { file: string; code: string }[] {
+  const dir = path.resolve(__dirname, "..", "..", "src", "server", "services");
+  return readdirSync(dir)
+    .filter((name) => name.endsWith(".ts"))
+    .map((name) => ({
+      file: name,
+      code: readFileSync(path.join(dir, name), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/(^|[^:])\/\/.*$/gm, "$1"),
+    }));
+}
+
+describe("every delete path forgets in The Brain", () => {
+  const files = serviceCode();
+  const deleting = files.filter((f) => DELETE_STATEMENT.test(f.code));
+
+  it("finds the delete paths the template is known to have", () => {
+    // Guards the pattern itself: if it stopped matching, the next test would
+    // pass for the wrong reason.
+    expect(deleting.map((f) => f.file)).toEqual(
+      expect.arrayContaining(["notes.ts", "platform-delete.ts", "platform-delete-member.ts"]),
+    );
+  });
+
+  it("calls forget in every service file that removes rows", () => {
+    const silent = deleting
+      .filter((f) => !(f.file in DELETES_WITHOUT_MEMORY))
+      .filter((f) => !FORGET_CALL.test(f.code))
+      .map((f) => f.file);
+    expect(silent, `delete paths without a forget: ${silent.join(", ")}`).toEqual([]);
+  });
+
+  it("gives a written reason for every delete path that does not forget", () => {
+    for (const [file, reason] of Object.entries(DELETES_WITHOUT_MEMORY)) {
+      expect(reason.trim().length, `${file} needs a reason`).toBeGreaterThan(10);
+    }
   });
 });

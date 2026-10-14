@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { LAB_KEY } from "@/lib/lab";
+import { forgetMemory, type ForgetOutcome, MEMORY_REF_PREFIXES } from "@/lib/platform/memory";
 
 /**
  * The tenant deletion: erase EVERYTHING this Lab stores for one organisation
@@ -29,7 +30,10 @@ import { LAB_KEY } from "@/lib/lab";
  * Data OUTSIDE the database (files on disk, objects in a store, tokens at a
  * provider) is not covered by the transaction. A Lab that has such data
  * removes it in `eraseExternalStores` AFTER the commit and reports one item
- * per store. The template has none.
+ * per store. The template has one: what it wrote into The Brain (the memory
+ * door, `src/lib/platform/memory.ts`), forgotten per object prefix. That
+ * step also runs when the organisation is already gone here, so a repeated
+ * run after a failed forget tries again.
  */
 export type Treatment = "delete" | "anonymise" | "retain";
 
@@ -104,12 +108,50 @@ export interface TenantDeletion {
   failures: string[];
 }
 
-/** Data outside the database. Runs after the commit; never throws. */
+/**
+ * One evidence line for a forget in The Brain. `refused` is a skip, not a
+ * failure: the platform no longer issues tokens for an organisation that is
+ * being deleted, and The Brain then erases the organisation's tenant itself
+ * as a source of the same deletion run.
+ */
+export function brainDeletionItem(
+  target: string,
+  outcome: ForgetOutcome | { status: "nothing" },
+  itemCount?: number,
+): DeletionItem {
+  const base = { store: "brain", target, action: "forget" };
+  switch (outcome.status) {
+    case "forgotten":
+      return { ...base, itemCount: itemCount ?? outcome.deleted, outcome: "success", detail: null };
+    case "nothing":
+      return { ...base, itemCount: 0, outcome: "skipped", detail: "nothing to forget" };
+    case "not_configured":
+      return { ...base, itemCount: 0, outcome: "skipped", detail: outcome.detail };
+    case "refused":
+      return {
+        ...base,
+        itemCount: null,
+        outcome: "skipped",
+        detail: `refused (${outcome.code}); The Brain erases the organisation through the platform's own deletion run`,
+      };
+    case "failed":
+      return { ...base, itemCount: null, outcome: "failed", detail: `The Brain did not forget (${outcome.code})` };
+  }
+}
+
+/**
+ * Data outside the database. Runs after the commit; never throws. The Brain:
+ * one forget per object prefix this Lab writes under.
+ */
 async function eraseExternalStores(
   storedOrganisationId: string,
 ): Promise<DeletionItem[]> {
-  void storedOrganisationId;
-  return [];
+  const items: DeletionItem[] = [];
+  for (const prefix of MEMORY_REF_PREFIXES) {
+    const outcome = await forgetMemory(storedOrganisationId, { sourceRefPrefix: prefix });
+    items.push(brainDeletionItem(`memory ${prefix}*`, outcome));
+  }
+  return items;
 }
 
 export async function deleteOrganisation(
@@ -140,9 +182,11 @@ export async function deleteOrganisation(
     select: { id: true },
   });
   if (!organisation) {
-    // Not an error, and the answer a repeated run gets: nothing left to erase.
-    return result(
-      DELETION_PLAN.map((entry) => ({
+    // Not an error, and the answer a repeated run gets: nothing left to erase
+    // here. The stores outside the database are asked again, so a forget
+    // that failed in the first run is retried.
+    return result([
+      ...DELETION_PLAN.map((entry) => ({
         store: "postgres",
         target: entry.table,
         action: ACTION[entry.treatment],
@@ -150,7 +194,8 @@ export async function deleteOrganisation(
         outcome: "skipped" as const,
         detail: "organisation unknown to this Lab",
       })),
-    );
+      ...(await eraseExternalStores(organisationId.toLowerCase())),
+    ]);
   }
   const storedId = organisation.id;
 

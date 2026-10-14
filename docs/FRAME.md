@@ -1,6 +1,6 @@
 # The frame — what every Beyondles Lab guarantees
 
-Checked on: 2026-10-13
+Checked on: 2026-10-14
 
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
@@ -63,7 +63,7 @@ Every page behind the login looks the same in every Beyondles product
 (design system "closed pages v1", approved 2026-10-13, card #350). The frame
 is not built here; it comes from `beyondles-ai/beyondles-shared`, module
 `app-shell`, as a generated copy in `src/components/app-shell/` (manifest
-`.beyondles-shared.json`, version 1.3.3). Never edit the copy: the CI step
+`.beyondles-shared.json`, version 1.4.0). Never edit the copy: the CI step
 "Shared code is unchanged" fails on any difference. What a host must do is
 in `app-shell/HOST-CONTRACT.md` in the shared repo.
 
@@ -141,15 +141,90 @@ in `app-shell/HOST-CONTRACT.md` in the shared repo.
 
 ## 4. The platform door
 
-- No provider key, no mail key, no provider SDK. AI through
-  `POST /api/llm/complete` (`src/lib/platform/llm.ts`), mail through
-  `POST /api/mail/send` (`src/lib/platform/mail.ts`), both with
-  `X-API-Key: PLATFORM_API_KEY`.
+- No provider key, no mail key, no provider SDK. Text AI through
+  `POST /api/llm/complete` (`src/lib/platform/llm.ts`), images and speech to
+  text through `POST /api/media/image` and `/api/media/stt`
+  (`src/lib/platform/media.ts`), embeddings through `POST /api/embeddings`
+  (`src/lib/platform/embeddings.ts`), mail through `POST /api/mail/send`
+  (`src/lib/platform/mail.ts`), all with `X-API-Key: PLATFORM_API_KEY`.
+- The Lab names what it needs, never a model: `useCase` (`general`,
+  `writing`, `verification`, ...; `image` and `stt` on the media door) plus
+  `level` (`economy`, `workhorse`, `frontier`). A model the CUSTOMER chose
+  goes as `{ model, fallback }`. The old `tier` (`fast`/`balanced`/`best`)
+  still works for existing callers of `complete` and is sent as
+  `useCase: "general"` with the matching level (`TIER_TO_LEVEL`).
+- Embeddings go into a store named `<LAB_KEY>.<name>` (`storeFor`); the
+  platform pins each store to one model. `needsReembedding: true` in an
+  answer means the stored vectors must be rebuilt.
 - Purposes are `<LAB_KEY>.<action>` (`purposeFor`), stable forever.
-- Retry only on 429/503. Mail only with an `idempotencyKey`.
+- Retry only on 429/503 (`postDoor`), never after a timeout or a lost
+  connection: a completion, an image or a transcription may already be
+  billed. Embeddings are the exception (free, no side effect) and retry a
+  network error too. Mail only with an `idempotencyKey`.
 - Fixed variable names: `PLATFORM_API_URL`, `PLATFORM_API_KEY`,
   `PLATFORM_EXPORT_KEY`, `PLATFORM_DELETE_KEY`, `NEXT_PUBLIC_PLATFORM_URL`,
-  `ON_BEHALF_ISSUER`. `PLATFORM_SSO_URL` is retired and refused by the frame check.
+  `ON_BEHALF_ISSUER`, `BRAIN_API_URL`. `PLATFORM_SSO_URL` is retired and refused by the frame check.
+
+## 4a. The memory door (The Brain)
+
+Every Lab is connected to The Brain, the organisation's knowledge layer
+(card #377). A Lab drops its finished RESULTS there (a decision, a fact, an
+event such as "signed", a task with owner and due date) and reads what the
+organisation already knows. Never raw material: no transcripts, documents,
+contact lists, drafts or e-mail addresses.
+
+- **The client is shared.** `src/lib/brain-client/` is a generated copy of
+  the module `brain-client` from `beyondles-ai/beyondles-shared` (manifest
+  `.beyondles-shared.json`). Never edit it; usage and retry guidance are in
+  `brain-client/README.md` in the shared repo. The client is mandatory, also
+  for a Lab that writes nothing yet.
+- **The wrapper is the Lab's.** `src/lib/platform/memory.ts` builds the
+  client lazily (`brain()`, `null` while not configured) with an on-behalf
+  token from the platform (audience `brain`) through the Lab's own token
+  helper `src/lib/platform/on-behalf.ts`. A Lab holds NO Brain key.
+- **The address** is `BRAIN_API_URL`, the Brain API host of THIS
+  environment: `https://api.beyondles.ai` in production, the staging Brain
+  API on staging, `http://localhost:3336` locally. The platform registry's
+  `brain` entry is the dashboard address and is not used. Refused, and
+  reported as `brain: "wrong-host"` in `/api/health`: the dashboard hosts
+  (`brain.`, `brain-staging.`, `brain-admin.`), a platform host
+  (`api-staging.beyondles.ai` is the PLATFORM on staging), plain `http://` to
+  a public host, an `/api` suffix, and the production Brain from a staging
+  Lab (`ON_BEHALF_ISSUER` ending in `:staging`). Missing settings are
+  `unconfigured`; the Lab then sends nothing and everything else works.
+- **What a function does with The Brain** is declared in the functions
+  manifest, field `memory` of every entry: `{ writes: [kinds], reads: bool }`
+  (kinds `fact`, `decision`, `event`, `task`, `text`) or
+  `{ excluded: "<reason>" }`. The template's notes are raw material and say
+  so. Write with `brain()?.remember(ctx, { sourceRef, kind, title, content,
+  object })`: `sourceRef` is stable (`note:<id>`, `noteSourceRef`), `object`
+  carries the record's visibility, owner and collection, and The Brain picks
+  the brain of that level. Write from a job, not from the request: the
+  client's `enqueueRemember` builds the payload for the Lab's own queue,
+  `retryAdvice` says what to do with each error (402 park with a notice,
+  429 back off, 401/404 mark the edge broken). Read with `recall`, which
+  never throws (an empty list and a `failure` for a notice).
+- **Deleting an object forgets it.** Every delete path calls the wrapper's
+  forget: `deleteNote` and `expireNotes` (`forgetDeletedObjects`, after the
+  delete, never blocking it, failures logged with ids and codes), the tenant
+  deletion (one forget per prefix in `MEMORY_REF_PREFIXES`, after the commit
+  and again on a repeated run, reported as a `brain` item) and the person
+  deletion (the person's PRIVATE notes, BEFORE the transaction, so a failure
+  leaves the database untouched and the next run still finds every id). A
+  refusal for an organisation that is no longer active is a `skipped` item:
+  The Brain erases that tenant itself in the platform's deletion run.
+  `tests/unit/platform-delete-coverage.test.ts` fails a service file that
+  removes rows without a forget. Retention redaction does not forget: the
+  results in The Brain outlive the raw material on purpose.
+- **The edge is checked daily.** `brain-memory-recall` in
+  `src/server/jobs/contract-edges.ts`: the host check above, then one
+  `POST /api/memory/recall` with a real token against the staging Brain.
+- **Block 14 of `npm run check:frame`** (rule in
+  `scripts/support/memory-door.mjs`, tested in
+  `tests/unit/memory-door.test.ts`) fails a Lab without the module or the
+  wrapper, a manifest entry without `memory` (or with an unknown kind or an
+  exclusion without a reason), and, as soon as any function writes, a delete
+  path without a forget.
 
 ## 5. Headless: one function, three doors
 
@@ -468,7 +543,8 @@ it true by construction; `npm run check:frame` and the unit tests keep it so.
 - **Contract test per platform edge.** `npm run contract:check`
   (`src/server/jobs/contract-edges.ts`) makes one real, cheap call per edge
   against staging: door `/api/llm/complete` and `/api/media`, Suite
-  `auth/me`, the export key (Brain: add an edge when used). Daily via
+  `auth/me`, the export key and the memory door (`brain-memory-recall`,
+  section 4a). Daily via
   `.github/workflows/contract-check.yml`; a missing setting fails, it is
   never skipped. The repo secrets it needs are listed in that file and are
   set by a human.

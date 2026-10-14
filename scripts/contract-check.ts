@@ -9,7 +9,7 @@
  * any edge failed or its settings are missing. Settings (staging values):
  * PLATFORM_API_URL, PLATFORM_API_KEY, NEXT_PUBLIC_PLATFORM_URL,
  * PLATFORM_EXPORT_KEY, CONTRACT_LAB_URL, CONTRACT_ORGANISATION_ID,
- * OPS_ALERT_EMAIL, OPS_ALERT_ORGANISATION_ID.
+ * BRAIN_API_URL, OPS_ALERT_EMAIL, OPS_ALERT_ORGANISATION_ID.
  */
 import "dotenv/config";
 
@@ -22,7 +22,7 @@ async function main(): Promise<void> {
     "contract-check",
     async () => {
       const results = await checkEdges(buildEdges(), process.env);
-      for (const r of results) console.log(`edge=${r.name} status=${r.status}${r.http !== undefined ? ` http=${r.http}` : ""}`);
+      for (const r of results) console.log(`edge=${r.name} status=${r.status}${r.http !== undefined ? ` http=${r.http}` : ""}${r.reason ? ` reason=${JSON.stringify(r.reason)}` : ""}`);
       const bad = results.filter((r) => r.status !== "ok");
       return {
         counts: {

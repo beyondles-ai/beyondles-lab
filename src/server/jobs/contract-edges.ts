@@ -1,4 +1,6 @@
 import { LAB_KEY } from "@/lib/lab";
+import { brainAddressProblem, labEnvironment } from "@/lib/platform/memory";
+import { createOnBehalfClient } from "@/lib/platform/on-behalf";
 
 /**
  * Contract test per platform edge (lab learnings, rule 15).
@@ -19,6 +21,12 @@ export interface Edge {
   name: string;
   /** Names of the settings this edge needs; empty value = edge `missing`. */
   needs: string[];
+  /**
+   * Optional step before the request (a host check, a token). Its values join
+   * the settings handed to `request`. A throw fails the edge with the
+   * message as the reason (never a secret in it).
+   */
+  prepare?: (env: Record<string, string>, fetchImpl: typeof fetch) => Promise<Record<string, string>>;
   request: (env: Record<string, string>) => { url: string; init: RequestInit };
   /** Is this answer the contract? Gets status and parsed JSON (or null). */
   accept: (status: number, body: unknown) => boolean;
@@ -88,12 +96,52 @@ export function buildEdges(): Edge[] {
       }),
       accept: (status) => status === 200,
     },
-    // Brain: add an edge here when the Lab uses the Brain (BRAIN_API_URL +
-    // its key), with one cheap read against the Lab's staging Brain.
+    {
+      // The memory door (docs/FRAME.md 4a): one recall against the Lab's
+      // staging Brain with an on-behalf token (audience `brain`), the way
+      // every real call goes. An empty list is the contract too. Before any
+      // call, the address must be the Brain API host of THIS environment:
+      // never the dashboard, never the platform, and this check runs
+      // against staging, so never the production Brain (unless
+      // ON_BEHALF_ISSUER explicitly names production).
+      name: "brain-memory-recall",
+      needs: ["BRAIN_API_URL", "PLATFORM_API_URL", "PLATFORM_API_KEY", "CONTRACT_ORGANISATION_ID"],
+      prepare: async (env, fetchImpl) => {
+        const environment = labEnvironment(env) === "production" ? "production" : "staging";
+        const problem = brainAddressProblem(env.BRAIN_API_URL, environment, env.PLATFORM_API_URL);
+        if (problem) throw new Error(`BRAIN_API_URL: ${problem}`);
+        const tokens = createOnBehalfClient({ platformApiUrl: trim(env.PLATFORM_API_URL), apiKey: env.PLATFORM_API_KEY, fetchImpl });
+        try {
+          return {
+            BRAIN_TOKEN: await tokens.getToken({ audience: "brain", organisationId: env.CONTRACT_ORGANISATION_ID }),
+          };
+        } catch (error) {
+          const code = isObject(error) && typeof error.code === "string" ? error.code : "unknown";
+          throw new Error(`the platform issued no on-behalf token for the Brain (${code})`);
+        }
+      },
+      request: (env) => ({
+        url: `${trim(env.BRAIN_API_URL)}/api/memory/recall`,
+        init: {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.BRAIN_TOKEN}` },
+          redirect: "manual",
+          body: json({ query: `${LAB_KEY} contract check`, limit: 1 }),
+        },
+      }),
+      accept: (status, body) =>
+        status === 200 && isObject(body) && body.success === true && isObject(body.data) && Array.isArray(body.data.items),
+    },
   ];
 }
 
-export type EdgeResult = { name: string; status: "ok" | "failed" | "missing"; http?: number };
+export type EdgeResult = {
+  name: string;
+  status: "ok" | "failed" | "missing";
+  http?: number;
+  /** Why `prepare` failed the edge before any request. */
+  reason?: string;
+};
 
 export async function checkEdges(
   edges: Edge[],
@@ -107,6 +155,16 @@ export async function checkEdges(
     if (missing.length > 0) {
       results.push({ name: edge.name, status: "missing" });
       continue;
+    }
+    if (edge.prepare) {
+      try {
+        Object.assign(values, await edge.prepare(values, fetchImpl));
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "prepare failed";
+        results.push({ name: edge.name, status: "failed", http: 0, reason });
+        console.error(`edge=${edge.name} prepare_failed=${JSON.stringify(reason)}`);
+        continue;
+      }
     }
     const { url, init } = edge.request(values);
     try {
