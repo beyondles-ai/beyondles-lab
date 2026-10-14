@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * The round person button and its menu: header (initials, name, e-mail), Profile,
- * Organisation settings (admins only), Help and docs, Switch account (when the session hint
+ * The round person button and its menu: header (initials, name, e-mail), Profile (only with
+ * the link), Organisation settings (admins only), Help and docs, Switch account (when the session hint
  * allows it), separator, Sign out.
  *
  * Links that leave the product open a new tab and carry ↗. In the Beyondles Suite itself,
@@ -140,7 +140,7 @@ export function UserMenu({ user, links, kind, switching, messages: t }: UserMenu
               <span className="by-app-menu-email">{user.email}</span>
             </span>
           </div>
-          {productLink(links.profile, t.profile, null)}
+          {links.profile ? productLink(links.profile, t.profile, null) : null}
           {links.organisationSettings ? productLink(links.organisationSettings, t.organisationSettings, t.adminOnly) : null}
           <a href={links.help} className="by-app-menu-item" role="menuitem" tabIndex={-1} target="_blank" rel="noopener" onClick={close}>
             <span>{t.help}</span>
