@@ -132,7 +132,9 @@ export function brainDeletionItem(
         ...base,
         itemCount: null,
         outcome: "skipped",
-        detail: `refused (${outcome.code}); The Brain erases the organisation through the platform's own deletion run`,
+        // Shared by the tenant and the person deletion: the platform's own
+        // runs reach The Brain directly (tenant deletion, leaver hand-over).
+        detail: `refused (${outcome.code}); The Brain erases this data through the platform's own deletion run`,
       };
     case "failed":
       return { ...base, itemCount: null, outcome: "failed", detail: `The Brain did not forget (${outcome.code})` };

@@ -134,6 +134,24 @@ describe("expireNotes and the memory door", () => {
     expect(forgets.map((f) => f.sourceRef).sort()).toEqual(["note:e1", "note:e2"]);
   });
 
+  it("writes the audit row before it talks to The Brain", async () => {
+    const order: string[] = [];
+    restoreAudit();
+    restoreAudit = __setAuditWriterForTests(async () => {
+      order.push("audit");
+      return true;
+    });
+    const fetchMock = vi.mocked(fetch);
+    const original = fetchMock.getMockImplementation();
+    if (!original) throw new Error("the fake network is missing");
+    fetchMock.mockImplementation(async (input, init) => {
+      if (String(input).endsWith("/api/memory/forget")) order.push("forget");
+      return original(input, init);
+    });
+    await expireNotes(actor("worker"), { olderThanDays: 30, dryRun: false });
+    expect(order).toEqual(["audit", "forget", "forget"]);
+  });
+
   it("forgets nothing in a dry run", async () => {
     await expireNotes(actor("worker"), { olderThanDays: 30, dryRun: true });
     expect(h.note.deleteMany).not.toHaveBeenCalled();

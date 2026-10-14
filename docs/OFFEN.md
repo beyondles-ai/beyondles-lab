@@ -25,7 +25,9 @@ can decide instead of guessing. Remove entries when done.
   the field yet. A Lab that writes must check it before `remember` once the
   client has it.
 - **A failed forget after a Lab's own delete is only logged.** `deleteNote`
-  and `expireNotes` never wait for The Brain; when it is down, the entry
+  and `expireNotes` never fail because of The Brain and wait for it at most
+  the client's time limit (10 s; a bulk forget stops sending after the first
+  sign that The Brain is down or misconfigured). When it is down, the entry
   stays there and a log line names the ids. The template writes nothing, so
   nothing stays. A Lab that writes adds a retry through its own queue (the
   same queue its `remember` jobs use).

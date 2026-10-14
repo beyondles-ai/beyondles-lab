@@ -196,6 +196,34 @@ describe("forgetMemoryMany and forgetDeletedObjects", () => {
     expect(outcome.notConfigured).toBeNull();
   });
 
+  it("stops sending after The Brain proved down, and reports the rest failed for the retry", async () => {
+    const { calls } = fakeNetwork({ forget: () => ({ status: 503, body: { success: false, error: { code: "DOWN", message: "down" } } }) });
+    const refs = Array.from({ length: 40 }, (_, i) => `note:n${i}`);
+    const outcome = await forgetMemoryMany(ORG, refs, ENV);
+    const sent = calls.filter((c) => c.url === "https://brain-api.test/api/memory/forget");
+    // One wave of parallel calls (the concurrency limit), not one call per object.
+    expect(sent.length).toBeGreaterThan(0);
+    expect(sent.length).toBeLessThanOrEqual(8);
+    expect(outcome.failed).toHaveLength(40);
+    expect(new Set(outcome.failed.map((f) => f.code))).toEqual(new Set(["UNREACHABLE"]));
+    expect(outcome.failed.map((f) => f.sourceRef).sort()).toEqual([...refs].sort());
+    expect(outcome.deleted).toBe(0);
+  });
+
+  it("keeps sending after a refusal about one object", async () => {
+    const { calls } = fakeNetwork({
+      forget: (body) =>
+        body.sourceRef === "note:n0"
+          ? { status: 403, body: { success: false, error: { code: "FORBIDDEN", message: "no" } } }
+          : { status: 200, body: { success: true, data: { deleted: 1 } } },
+    });
+    const refs = Array.from({ length: 20 }, (_, i) => `note:n${i}`);
+    const outcome = await forgetMemoryMany(ORG, refs, ENV);
+    expect(calls.filter((c) => c.url === "https://brain-api.test/api/memory/forget")).toHaveLength(20);
+    expect(outcome.deleted).toBe(19);
+    expect(outcome.refused).toEqual([{ sourceRef: "note:n0", code: "FORBIDDEN" }]);
+  });
+
   it("stops at once when The Brain is not configured", async () => {
     const { fetchImpl } = fakeNetwork();
     const outcome = await forgetMemoryMany(ORG, ["note:a", "note:b"], { ...ENV, BRAIN_API_URL: "" });
@@ -220,6 +248,18 @@ describe("forgetMemoryMany and forgetDeletedObjects", () => {
       `[memory] forget failed source=${MEMORY_SOURCE} organisation=${ORG.toLowerCase()} ref=note:n1 code=UNREACHABLE`,
     );
     expect(lines.join("\n")).not.toContain("secret text");
+    vi.unstubAllEnvs();
+  });
+
+  it("writes at most 20 failure lines and one line with the rest", async () => {
+    for (const [name, value] of Object.entries(ENV)) vi.stubEnv(name, value);
+    fakeNetwork({ forget: () => ({ status: 503, body: { success: false, error: { code: "DOWN", message: "down" } } }) });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const outcome = await forgetDeletedObjects(ORG, Array.from({ length: 50 }, (_, i) => `note:n${i}`));
+    expect(outcome.failed).toHaveLength(50);
+    const lines = errors.mock.calls.map((c) => String(c[0]));
+    expect(lines).toHaveLength(21);
+    expect(lines.at(-1)).toBe(`[memory] forget failed source=${MEMORY_SOURCE} organisation=${ORG.toLowerCase()} and 30 more objects`);
     vi.unstubAllEnvs();
   });
 });

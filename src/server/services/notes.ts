@@ -166,12 +166,13 @@ export async function expireNotes(
   const doomed = await db.note.findMany({ where: { AND: [...scope, { createdAt: { lt: cutoff } }] }, select: { id: true } });
   const ids = doomed.map((note) => note.id);
   const result = await db.note.deleteMany({ where: { AND: [...scope, { id: { in: ids } }] } });
-  await forgetDeletedObjects(actor.organisationId, ids.map(noteSourceRef));
   if (result.count > 0) {
     await recordAudit(actor, {
       action: `${LAB_KEY}.notes_expired`,
       details: { deleted: result.count, olderThanDays: input.olderThanDays },
     });
   }
+  // After the audit row: the evidence of the deletion never waits for The Brain.
+  await forgetDeletedObjects(actor.organisationId, ids.map(noteSourceRef));
   return { deleted: result.count, expired, dryRun: false };
 }

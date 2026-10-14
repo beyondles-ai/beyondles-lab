@@ -206,7 +206,8 @@ contact lists, drafts or e-mail addresses.
   never throws (an empty list and a `failure` for a notice).
 - **Deleting an object forgets it.** Every delete path calls the wrapper's
   forget: `deleteNote` and `expireNotes` (`forgetDeletedObjects`, after the
-  delete, never blocking it, failures logged with ids and codes), the tenant
+  delete and its audit row, never failing it, waiting at most the client's
+  10 s, failures logged with ids and codes), the tenant
   deletion (one forget per prefix in `MEMORY_REF_PREFIXES`, after the commit
   and again on a repeated run, reported as a `brain` item) and the person
   deletion (the person's PRIVATE notes, BEFORE the transaction, so a failure

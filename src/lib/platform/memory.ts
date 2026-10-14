@@ -230,9 +230,11 @@ export async function forgetMemory(
     // The client refuses such an address, so nothing was ever written through it.
     return { status: "not_configured", detail: `BRAIN_API_URL is not usable here: ${config.reason}` };
   }
-  const client = brain(env);
-  if (!client) return { status: "not_configured", detail: "The Brain is not configured here." };
   try {
+    // Inside the try: building the client checks the Lab key and the address,
+    // and a throw there must not undo the caller's deletion either.
+    const client = brain(env);
+    if (!client) return { status: "not_configured", detail: "The Brain is not configured here." };
     const { deleted } = await client.forget({ organisationId: organisationId.toLowerCase() }, target);
     return { status: "forgotten", deleted };
   } catch (error) {
@@ -257,6 +259,24 @@ export interface ForgetManyOutcome {
 /** At most this many forget calls run at the same time. */
 const FORGET_CONCURRENCY = 8;
 
+/**
+ * Failures that say nothing about the one object and everything about the
+ * edge: The Brain is down or slow, the address or the token is wrong, the
+ * organisation is out of budget. After the first of them the remaining
+ * objects are not sent; they are reported failed with the same code, so the
+ * caller's retry covers them. Without this, 10 000 expired notes against a
+ * Brain that hangs would hold the worker for hours (10 s per call).
+ */
+const EDGE_FAILURES: readonly ForgetFailureCode[] = [
+  "UNREACHABLE",
+  "RATE_LIMITED",
+  "UNAUTHORIZED",
+  "BRAIN_NOT_FOUND",
+  "BAD_RESPONSE",
+  "USAGE_LIMIT_REACHED",
+  "UNKNOWN",
+];
+
 /** `forgetMemory` for many objects of one organisation; never throws. */
 export async function forgetMemoryMany(
   organisationId: string,
@@ -266,31 +286,50 @@ export async function forgetMemoryMany(
   const outcome: ForgetManyOutcome = { deleted: 0, failed: [], refused: [], notConfigured: null };
   if (sourceRefs.length === 0) return outcome;
   let next = 0;
+  let edgeDown: ForgetFailureCode | null = null;
   const worker = async () => {
     while (next < sourceRefs.length && outcome.notConfigured === null) {
       const sourceRef = sourceRefs[next++];
+      if (edgeDown !== null) {
+        outcome.failed.push({ sourceRef, code: edgeDown });
+        continue;
+      }
       const one = await forgetMemory(organisationId, { sourceRef }, env);
       if (one.status === "forgotten") outcome.deleted += one.deleted;
       else if (one.status === "not_configured") outcome.notConfigured = one.detail;
       else if (one.status === "refused") outcome.refused.push({ sourceRef, code: one.code });
-      else outcome.failed.push({ sourceRef, code: one.code });
+      else {
+        outcome.failed.push({ sourceRef, code: one.code });
+        if (EDGE_FAILURES.includes(one.code)) edgeDown = one.code;
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.min(FORGET_CONCURRENCY, sourceRefs.length) }, worker));
   return outcome;
 }
 
+/** At most this many failure lines per call; the rest is one summary line. */
+const MAX_FAILURE_LINES = 20;
+
 /**
  * For deletions a person or a worker makes in the Lab itself: forget, and
- * write one log line per failure (ids and codes only, never content). The
+ * write one log line per failure (ids and codes only, never content; at most
+ * 20 lines, then one line with the count). It waits for The Brain at most
+ * the client's time limit (10 s), once per wave of calls. The
  * Lab's deletion stands either way. A Lab that WRITES to The Brain routes
  * these failures into its outbox for a retry (docs/FRAME.md, section 4a).
  */
 export async function forgetDeletedObjects(organisationId: string, sourceRefs: readonly string[]): Promise<ForgetManyOutcome> {
   const outcome = await forgetMemoryMany(organisationId, sourceRefs);
-  for (const failure of [...outcome.failed, ...outcome.refused]) {
+  const failures = [...outcome.failed, ...outcome.refused];
+  for (const failure of failures.slice(0, MAX_FAILURE_LINES)) {
     console.error(
       `[memory] forget failed source=${MEMORY_SOURCE} organisation=${organisationId.toLowerCase()} ref=${failure.sourceRef} code=${failure.code}`,
+    );
+  }
+  if (failures.length > MAX_FAILURE_LINES) {
+    console.error(
+      `[memory] forget failed source=${MEMORY_SOURCE} organisation=${organisationId.toLowerCase()} and ${failures.length - MAX_FAILURE_LINES} more objects`,
     );
   }
   return outcome;
