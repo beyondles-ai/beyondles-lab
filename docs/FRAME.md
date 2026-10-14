@@ -1,6 +1,6 @@
 # The frame — what every Beyondles Lab guarantees
 
-Checked on: 2026-10-13
+Checked on: 2026-10-14
 
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
@@ -13,6 +13,18 @@ this file and that one disagree, that one wins and this template is updated.
   repo, folder, Compose project, database role, subdomain, Suite `labs.key`,
   platform product key and platform service-key name.
 - `npm run rename -- <name> "<Display Name>"` replaces it everywhere.
+- **The Lab registers itself.** On every start `src/instrumentation.ts` calls
+  `registerInBackground()` (`src/lib/platform/register.ts`): `POST
+  /api/registry/self` with the Lab's own service key, body `{ name, kind:
+  "lab", baseUrl, toolDoorUrl, toolDoorProtocol: "mcp" }` from `LAB_NAME` and
+  `NEXT_PUBLIC_APP_URL`. The platform files it in its product registry, the
+  Suite reads the registry and creates the Lab's release switch (`labs`,
+  `enabled = FALSE`). No platform migration, no Suite migration, no Suite
+  list. It never blocks the start and does nothing without a platform door.
+  What stays manual: the service key named exactly `LAB_KEY`, and releasing
+  the Lab under `/operator/labs`. Protection and product-specific role names
+  are set by a platform migration only. Fallback for a Lab that cannot
+  register: the two migrations as before (platform `products`, Suite `labs`).
 
 ## 2. Sign-in: the Suite is the only login
 
