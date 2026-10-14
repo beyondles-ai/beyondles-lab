@@ -47,8 +47,8 @@ Never change (this is the frame, reviewed centrally):
   `src/lib/platform-access.ts`, `src/lib/platform/**`, `src/lib/api-auth.ts`,
   `src/lib/api-keys.ts`, `src/lib/api-errors.ts`, `src/lib/service-errors.ts`,
   `src/lib/scopes.ts`, `src/lib/rate-limit.ts`, `src/lib/actor.ts`,
-  `src/lib/audit.ts`, `src/lib/tool-door/**`, `src/lib/platform-client/**`
-  and `src/lib/brain-client/**` (generated from `beyondles-ai/beyondles-shared`),
+  `src/lib/audit.ts`, `src/lib/tool-door/**`, `src/lib/platform-client/**`,
+  `src/lib/brain-client/**` and `src/lib/doors/**` (generated from `beyondles-ai/beyondles-shared`),
   `src/server/machine-door.ts`,
   `src/server/jobs/**` (add jobs, do not change the frame files),
   `src/app/api/platform/**`, `src/app/api/mcp/**`, `src/app/api/health/**`,
@@ -165,7 +165,7 @@ section is a claim that everything was tested). Then follow
   the tests that enforce the frame).
 - Small commits with English messages in the form `feat(notes): …`,
   `fix(export): …`, `test(parity): …`.
-- Never edit generated files (`src/lib/platform-client/**`, `src/lib/brain-client/**`,
+- Never edit generated files (`src/lib/platform-client/**`, `src/lib/brain-client/**`, `src/lib/doors/**`,
   `docs/EXCLUSIONS.md`, `docs/RETENTION.md`); regenerate them.
 - When a check fails, read its message: every message names the rule and the
   file. Fix the cause, never the check.

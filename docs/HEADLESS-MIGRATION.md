@@ -1,6 +1,6 @@
 # Adopting "headless by construction" in an existing Lab
 
-Checked on: 2026-10-07
+Checked on: 2026-10-14
 
 The template enforces since 06.10.2026 what it used to only state: every
 function exists once, in a service, and is reachable through the screen,
@@ -14,6 +14,16 @@ Prerequisite: the Lab already uses the shared access code
 protocol client to call.
 
 ## 1. Copy the new files (no behaviour change yet)
+
+Since card #383 the door code is the shared module `doors` of
+beyondles-shared (1.5.1 or later). First declare it in
+`.beyondles-shared.json` as `{ "name": "doors", "dest": "src/lib/doors" }`,
+run `node <beyondles-shared checkout>/sync/sync.mjs --target <this Lab>` and
+raise the `beyondles-shared/check` step in `.github/workflows/ci.yml` to the
+same version. Several of the files below are then thin wrappers around that
+copy (they keep the import paths); copy them as they are, together with
+`src/lib/tool-door/host.ts` (the settings the shared code reads) and
+`src/lib/tool-door/key-exchange.ts` (Beyondles keys sent as `x-api-key`).
 
 Copy from the template unchanged:
 
@@ -32,10 +42,10 @@ Copy from the template unchanged:
 
 Add `"docs:exclusions": "tsx scripts/write-exclusions.ts"` to `package.json`.
 
-**Changed shared file (verbatim copy):** `src/lib/tool-door/describe.ts` now
-takes an optional `scopes` per tool and returns `scopes` per tool. Copy it
-unchanged; it stays self-contained. Its test expectation in
-`tests/unit/tool-door.test.ts` gains `scopes`.
+**Changed shared file:** `src/lib/tool-door/describe.ts` takes an optional
+`scopes` per tool and returns `scopes` per tool. It is a re-export of the
+shared `doors` module now; copy the wrapper unchanged. Its test expectation
+in `tests/unit/tool-door.test.ts` gains `scopes`.
 
 In `src/lib/api-errors.ts` add the codes `insufficient_scope` and
 `worker_only`, and in `withErrorEnvelope` the line
