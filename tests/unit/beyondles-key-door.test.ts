@@ -339,6 +339,17 @@ describe("a Beyondles key as x-api-key", () => {
     });
   });
 
+  it("without ON_BEHALF_ISSUER answers 503 not_configured and spends no exchange", async () => {
+    vi.stubEnv("ON_BEHALF_ISSUER", "");
+    expect(
+      await refusal(requireApiKey(req("/api/v1/notes", asKey))),
+    ).toMatchObject({
+      status: 503,
+      code: "not_configured",
+    });
+    expect(exchangeCalls()).toHaveLength(0);
+  });
+
   it("a classic token from the exchange is never accepted for a key (it would carry fallback scopes)", async () => {
     exchangeAnswer = () =>
       exchanged(signToken({ aud: AUD, cp: AUD, org: ORG, sub: USER }));

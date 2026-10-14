@@ -20,6 +20,7 @@ import {
 } from "@/lib/tool-door/key-exchange";
 import {
   checkOnBehalfToken,
+  oboDoorState,
   onBehalfBearer,
   onBehalfRateSubject,
 } from "@/lib/tool-door/obo-door";
@@ -246,6 +247,14 @@ const KEY_TOKEN_UNVERIFIED =
  * `key-exchange.ts`), then the token path with the key token.
  */
 async function requireBeyondlesKey(request: Request, plaintext: string): Promise<ApiKeyContext> {
+  // The token could not be verified here: do not spend an exchange on it.
+  if (oboDoorState() !== "ok") {
+    throw new ApiError(
+      503,
+      "not_configured",
+      "Beyondles keys are not configured on this server (ON_BEHALF_ISSUER or PLATFORM_API_URL is missing).",
+    );
+  }
   const exchanged = await exchangeBeyondlesKey(plaintext, { clientAddress: clientAddressOf(request) });
   if (!exchanged.ok) {
     throw new ApiError(
