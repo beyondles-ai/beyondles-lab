@@ -264,6 +264,8 @@ for (const file of sourceFiles.filter((f) => /\.tsx?$/.test(f))) {
 // without it the Suite never lists the Lab and somebody writes the migrations by hand again.
 if (exists("src/instrumentation.ts") && !/registerInBackground\(\)/.test(read("src/instrumentation.ts")))
   fail("src/instrumentation.ts does not call registerInBackground() (self-registration at the platform registry)");
+if (exists("src/lib/platform/register.ts") && !/\/api\/registry\/self/.test(read("src/lib/platform/register.ts")))
+  fail("src/lib/platform/register.ts does not post to /api/registry/self");
 
 // 7. Both languages carry the same keys and no empty text.
 const keys = (obj, prefix = "") =>

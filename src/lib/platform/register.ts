@@ -20,7 +20,7 @@ import { LAB_KEY, LAB_NAME } from "@/lib/lab";
  */
 
 const TIMEOUT_MS = 10_000;
-const RETRY_DELAYS_MS = [5_000, 30_000, 120_000];
+const RETRY_DELAYS_MS = [5_000, 15_000, 45_000];
 
 type Env = Record<string, string | undefined>;
 
@@ -36,13 +36,29 @@ export type RegistrationResult =
   | { ok: true; outcome: string }
   | { ok: false; status: number; code: string; retry: boolean };
 
+/**
+ * The platform refuses addresses outside *.beyondles.ai (plus localhost) and plain http outside
+ * localhost. Such an address is left out instead of sent: a refused body would cost the whole
+ * registration, and the name alone is enough to be listed.
+ */
+function acceptableOrigin(url: URL): boolean {
+  const host = url.hostname;
+  const local = host === "localhost" || host === "127.0.0.1";
+  if (local) return url.protocol === "http:" || url.protocol === "https:";
+  return (
+    url.protocol === "https:" &&
+    (host === "beyondles.ai" || host.endsWith(".beyondles.ai"))
+  );
+}
+
 /** The body this Lab sends: its name and, when known, its public address and tool door. */
 export function registrationBody(env: Env = process.env): RegistrationBody {
   const raw = env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
   let baseUrl: string | undefined;
   if (raw) {
     try {
-      baseUrl = new URL(raw).origin;
+      const parsed = new URL(raw);
+      baseUrl = acceptableOrigin(parsed) ? parsed.origin : undefined;
     } catch {
       baseUrl = undefined;
     }
@@ -58,7 +74,7 @@ export function registrationBody(env: Env = process.env): RegistrationBody {
     : { name: LAB_NAME, kind: "lab" };
 }
 
-/** One attempt. 4xx is final (fix the key or the address), 5xx and network errors may be retried. */
+/** One attempt. 4xx is final (fix the key or the address) except 429; 5xx and network errors may be retried. */
 export async function registerOnce(
   fetchImpl: typeof fetch = fetch,
   env: Env = process.env,
@@ -98,7 +114,7 @@ export async function registerOnce(
     ok: false,
     status: res.status,
     code: envelope?.error?.code ?? `HTTP_${res.status}`,
-    retry: res.status >= 500,
+    retry: res.status >= 500 || res.status === 429,
   };
 }
 
@@ -110,8 +126,31 @@ export async function registerInBackground(
   fetchImpl: typeof fetch = fetch,
   env: Env = process.env,
   wait: (ms: number) => Promise<void> = (ms) =>
-    new Promise((r) => setTimeout(r, ms).unref?.()),
+    new Promise<void>((r) => {
+      setTimeout(r, ms).unref?.();
+    }),
   log: (line: string) => void = (line) => console.warn(line),
+): Promise<RegistrationResult | null> {
+  try {
+    return await registerWithRetries(fetchImpl, env, wait, log);
+  } catch (err) {
+    // Last line of defence: nothing here may become an unhandled rejection at boot.
+    try {
+      log(
+        `[${LAB_KEY}] could not register at the platform registry (0 UNEXPECTED: ${err instanceof Error ? err.message : "unknown"}).`,
+      );
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+}
+
+async function registerWithRetries(
+  fetchImpl: typeof fetch,
+  env: Env,
+  wait: (ms: number) => Promise<void>,
+  log: (line: string) => void,
 ): Promise<RegistrationResult | null> {
   let result = await registerOnce(fetchImpl, env);
   for (const delay of RETRY_DELAYS_MS) {

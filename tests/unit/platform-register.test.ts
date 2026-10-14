@@ -43,6 +43,24 @@ describe("registrationBody", () => {
       kind: "lab",
     });
   });
+  it("leaves out addresses the platform would refuse", () => {
+    for (const url of [
+      "http://examplelab.beyondles.ai",
+      "https://evil.example.com",
+      "https://beyondles.ai.evil.com",
+    ]) {
+      expect(registrationBody({ NEXT_PUBLIC_APP_URL: url })).toEqual({
+        name: LAB_NAME,
+        kind: "lab",
+      });
+    }
+    expect(
+      registrationBody({ NEXT_PUBLIC_APP_URL: "http://localhost:3390" }),
+    ).toMatchObject({
+      baseUrl: "http://localhost:3390",
+      toolDoorUrl: "http://localhost:3390/api/mcp",
+    });
+  });
   it("never carries a key, a protection flag or role labels", () => {
     const body = registrationBody(APP) as unknown as Record<string, unknown>;
     expect(Object.keys(body).sort()).toEqual([
@@ -144,6 +162,30 @@ describe("registerInBackground", () => {
     );
     expect(result).toMatchObject({ ok: false, status: 503 });
     expect(logs).toHaveLength(1);
+  });
+
+  it("retries 429, never throws when the fetch itself blows up synchronously", async () => {
+    const answers = [
+      reply(429, {}),
+      reply(200, { success: true, data: { outcome: "registered" } }),
+    ];
+    const ok = await registerInBackground(
+      (async () => answers.shift() as Response) as unknown as typeof fetch,
+      { ...DOOR, ...APP },
+      async () => undefined,
+    );
+    expect(ok).toEqual({ ok: true, outcome: "registered" });
+    const logs: string[] = [];
+    const boom = await registerInBackground(
+      (() => {
+        throw new Error("sync boom");
+      }) as unknown as typeof fetch,
+      { ...DOOR, ...APP },
+      async () => undefined,
+      (l) => logs.push(l),
+    );
+    expect(boom).toMatchObject({ ok: false, code: "NETWORK" });
+    expect(logs[0]).toContain("NETWORK");
   });
 
   it("does not retry a refusal", async () => {

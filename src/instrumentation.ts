@@ -21,5 +21,6 @@ export async function register(): Promise<void> {
 
   assertProductionEnvSane();
   reportDoorOnce(door(), LAB_NAME);
+  // Fire and forget: never awaited, never rejects (it catches everything itself).
   void registerInBackground();
 }
