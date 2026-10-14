@@ -37,6 +37,8 @@ for (const rel of [
   "src/lib/jwt-guard.ts",
   "src/middleware.ts",
   "src/instrumentation.ts",
+  // Self-registration at the platform registry (product registry follow-up).
+  "src/lib/platform/register.ts",
   "src/app/api/health/route.ts",
   "src/app/api/platform/export/route.ts",
   "src/app/api/platform/organisation/route.ts",
@@ -258,6 +260,13 @@ for (const file of sourceFiles.filter((f) => /\.tsx?$/.test(f))) {
   if (text.includes("beyondles.ai/api/auth/me"))
     fail(`${path.relative(root, file)} hard-codes the Suite address for /api/auth/me`);
 }
+
+// 6b. The Lab registers itself at the platform on start (product registry follow-up):
+// without it the Suite never lists the Lab and somebody writes the migrations by hand again.
+if (exists("src/instrumentation.ts") && !/registerInBackground\(\)/.test(read("src/instrumentation.ts")))
+  fail("src/instrumentation.ts does not call registerInBackground() (self-registration at the platform registry)");
+if (exists("src/lib/platform/register.ts") && !/\/api\/registry\/self/.test(read("src/lib/platform/register.ts")))
+  fail("src/lib/platform/register.ts does not post to /api/registry/self");
 
 // 7. Both languages carry the same keys and no empty text.
 const keys = (obj, prefix = "") =>
