@@ -40,6 +40,7 @@ function key(over: Partial<ApiKeyContext>): ApiKeyContext {
     via: "api-key",
     onBehalf: null,
     scopes: ["read"],
+    beyondlesKeyId: null,
     ...over,
   };
 }

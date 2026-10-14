@@ -1,6 +1,6 @@
 # The frame — what every Beyondles Lab guarantees
 
-Checked on: 2026-10-14
+Checked on: 2026-10-15
 
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
@@ -310,6 +310,31 @@ test fails when it is stale. `docs/OFFEN.md` no longer lists missing doors.
 
 ### 5.3 The machine doors
 
+**The door code is the shared module `doors`** (beyondles-shared 1.5.1,
+card #383), generated into `src/lib/doors` and never edited here: the door
+contract (`src/lib/doors/door-contract.md`: order, error codes, JSON-RPC
+mapping, credentials, scope names), manifest types, parity check and reader,
+OpenAPI and exclusions renderers, scope model, rate limiter, on-behalf
+verifier, token door, release gate, tool markers, describe answer and call
+log. The Lab keeps what is its own: the manifest, its scope vocabulary
+(`LAB_SCOPES`), the settings the shared code reads
+(`src/lib/tool-door/host.ts`), `openMachineDoor`, `requireApiKey` and thin
+wrappers that keep the import paths (`src/lib/scopes.ts`,
+`src/lib/rate-limit.ts`, `src/lib/openapi.ts`, `src/server/parity.ts`,
+`src/server/exclusions.ts`, `src/lib/platform/on-behalf.ts`,
+`src/lib/tool-door/*.ts`). The door also accepts a **Beyondles key**, created
+by a person in the Suite (Settings, Access): sent as `x-api-key`, it is
+exchanged at the platform (`POST /api/keys/exchange` with
+`PLATFORM_API_KEY`, `src/lib/tool-door/key-exchange.ts`: shape filter, token
+reused for at most 60 seconds, refusals remembered for 60 seconds, 30 new
+exchanges per minute and client address) for a key token
+(`typ: beyondles-obo-key+jwt`) that then takes the token path; a client
+that exchanged the key itself sends that token as `Bearer`. In both forms a
+Beyondles key is a key: release gate, rate limit per key (`key:<id>`), and
+exactly the scopes of its `scp` claim with the Lab prefix stripped
+(`examplelab:write` becomes `write`); its owner is checked at the platform
+like every person.
+
 - `POST /api/mcp` serves the tool catalogue (`src/lib/mcp/catalog.ts`) over
   Streamable HTTP; `mcp/server.mjs` is the stdio bridge for Claude Desktop/Code.
 - **`openMachineDoor(request, "<functionId>")`** (`src/server/machine-door.ts`)
@@ -323,7 +348,7 @@ test fails when it is stale. `docs/OFFEN.md` no longer lists missing doors.
     (Beyondles HorAIzon, another Lab) calling for an organisation, a person
     or an agent. The platform signed it for audience = `LAB_KEY`; the Lab
     verifies it with the platform's public keys (`src/lib/platform/on-behalf.ts`,
-    a verbatim copy, checked by the frame check). The view follows the agent:
+    the re-export of the shared verifier, checked by the frame check). The view follows the agent:
     organisation agent = worker view, collection agent = its collection only
     (`source: "agent"`), private agent = its owner, no agent = the person
     (`sub`), neither = worker view. Every named person is checked at the
@@ -336,7 +361,8 @@ test fails when it is stale. `docs/OFFEN.md` no longer lists missing doors.
   the Lab is released for in the Suite (`src/lib/tool-door/release-gate.ts`,
   `GET /api/registry/released` at the platform, 60 s cache, 15 minutes of
   grace during an outage, not applied by a platform without the route).
-  Tokens are not gated here: the platform issues none for an unreleased Lab.
+  Classic tokens are not gated here: the platform issues none for an
+  unreleased Lab. A Beyondles key is gated in both forms.
 - **Markers.** Every tool says what it does: `access` (`read`, `write`,
   `destructive` = deletes, reaches somebody outside, spends money or credits),
   `idempotent`, `title` in German and English, and a `capability`
@@ -350,13 +376,17 @@ test fails when it is stale. `docs/OFFEN.md` no longer lists missing doors.
   `/api/mcp`) lists every tool with markers, titles, `scopes` and
   `available` (the caller's credential carries the tool's scopes).
 - One log line per `tools/call`: `[tool-door] via=… cp=… org=… sub=… agent=…
-  tool=… outcome=… jti=…`, never arguments or results.
+  tool=… outcome=… jti=… key=…` (`key` = the Beyondles key behind the call),
+  never arguments or results.
 - `GET /api/health` reports `onBehalf: "ok" | "unconfigured"`.
 - Lab-to-Lab calls: `createLabToolClient` (`src/lib/tool-door/lab-client.ts`)
   gets a token with the Lab's own service key and calls the target's door.
-- The shared files under `src/lib/tool-door/` (except `lab-client.ts`) and
-  `src/lib/platform/on-behalf.ts` are copied verbatim into every Lab; change
-  them here, never in a copy.
+- The door code under `src/lib/doors/` is generated from beyondles-shared
+  (`.beyondles-shared.json`, checked by `beyondles-shared/check`); change it
+  there, never in a Lab. That shared check does not run in the public
+  template or in a Lab outside the organisation, so `check:frame` block 5d
+  also pins the sha256 of every file of the copy (`DOORS_PIN`, doors 1.5.1).
+  A doors sync updates that pin in the same PR.
 
 ### 5.4 Scopes on machine credentials
 
@@ -371,11 +401,13 @@ manifest entry names; no scope implies another.
 - **Keys from before scopes** carry `*` (full access, also to scopes added
   later), set by migration `0002_api_key_scopes`. Their owners narrow them by
   creating a new key and revoking the old one; the list marks them.
-- **On-behalf tokens** carry no scopes; `onBehalfScopes` is the one mapping:
-  a token that names a person gets every scope (the person is checked at the
+- **On-behalf tokens**: `scopesFromClaims` is the one mapping. A classic
+  token carries no scopes and gets the fallback rule (`onBehalfScopes`): a
+  token that names a person gets every scope (the person is checked at the
   platform per request, and the calling product's agent safety asks a human
   before a `destructive` tool); a token without a person gets `read` and
-  `write` only.
+  `write` only. A Beyondles key's token gets exactly its `scp` entries for
+  this Lab, prefix stripped, never the fallback.
 - **People in the screen** are not scoped: their limit is the container rule
   in the service, which every door shares.
 - `requireScope` (`api-auth.ts`) answers `403 insufficient_scope` and names
@@ -385,7 +417,8 @@ manifest entry names; no scope implies another.
 
 ### 5.5 Rate limit
 
-In `requireApiKey`, after the credential is known, for `/api/v1` and
+In `requireApiKey`, after the credential is known and (for a key) after the
+release gate, as door contract section 2 orders it, for `/api/v1` and
 `/api/mcp` separately (`src/lib/rate-limit.ts`). Per key (`key:<id>`) or per
 calling product and organisation (`cp:<product>:<org>`). Defaults per
 minute: 120 per key on `/api/v1`, 60 per key on `/api/mcp`, 600 per calling

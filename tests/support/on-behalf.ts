@@ -22,10 +22,19 @@ export interface TestClaims {
   sub?: string;
   role?: "owner" | "admin" | "member";
   agt?: { id: string; level: "private" | "collection" | "organisation"; owner?: string; col?: string };
+  /** #383: scopes of a Beyondles key (any value, so tests can send broken ones). */
+  scp?: unknown;
+  /** #383: the Beyondles key id. */
+  key?: unknown;
   jti?: string;
   iat?: number;
   exp?: number;
+  /** Header type. Default: the key type when `key` is given, else the classic type. */
+  typ?: string;
 }
+
+export const CLASSIC_TYP = "beyondles-obo+jwt";
+export const KEY_TYP = "beyondles-obo-key+jwt";
 
 let counter = 0;
 
@@ -39,12 +48,15 @@ export function signToken(input: TestClaims): string {
     claims.role = input.role ?? "member";
   }
   if (input.agt) claims.agt = input.agt;
+  if (input.scp !== undefined) claims.scp = input.scp;
+  if (input.key !== undefined) claims.key = input.key;
   claims.jti = input.jti ?? `aaaaaaaa-aaaa-4aaa-8aaa-${String(counter).padStart(12, "0")}`;
   claims.iat = iat;
   claims.exp = input.exp ?? iat + 300;
 
   const key = createPrivateKey({ key: Buffer.from(vectors.privateKey, "base64url"), format: "der", type: "pkcs8" });
-  const header = { alg: "EdDSA", typ: "beyondles-obo+jwt", kid: vectors.keyId };
+  const typ = input.typ ?? (input.key !== undefined ? KEY_TYP : CLASSIC_TYP);
+  const header = { alg: "EdDSA", typ, kid: vectors.keyId };
   const signingInput = `${encode(header)}.${encode(claims)}`;
   return `${signingInput}.${signBytes(null, Buffer.from(signingInput, "ascii"), key).toString("base64url")}`;
 }

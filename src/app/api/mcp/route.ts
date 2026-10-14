@@ -13,8 +13,9 @@ import { onBehalfBearer } from "@/lib/tool-door/obo-door";
  * (`enableJsonResponse: true`). The credential is checked BEFORE anything
  * else; the route is on the middleware's public list because an agent has no
  * Suite cookie. Its security boundary is `requireApiKey`, the same as
- * `/api/v1`: an `x-api-key` of this Lab, or an on-behalf token the platform
- * signed for this Lab (connection layer contract, stage 6).
+ * `/api/v1`: an `x-api-key` (a key of this Lab or a Beyondles key), or an
+ * on-behalf token the platform signed for this Lab (connection layer
+ * contract, stage 6; door contract in `src/lib/doors/door-contract.md`).
  *
  * Nothing else happens here: no Prisma, no service. The tools call the own
  * `/api/v1` with exactly the credential this request carried
@@ -91,6 +92,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       userId: key.onBehalf?.userId ?? key.createdByUserId,
       agentLevel: key.onBehalf?.agent?.level ?? null,
       tokenId: key.onBehalf?.tokenId ?? null,
+      keyId: key.beyondlesKeyId,
     },
   });
   const transport = new WebStandardStreamableHTTPServerTransport({
