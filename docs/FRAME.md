@@ -385,8 +385,15 @@ like every person.
   (`.beyondles-shared.json`, checked by `beyondles-shared/check`); change it
   there, never in a Lab. That shared check does not run in the public
   template or in a Lab outside the organisation, so `check:frame` block 5d
-  also pins the sha256 of every file of the copy (`DOORS_PIN`, doors 1.5.1).
-  A doors sync updates that pin in the same PR.
+  also pins the sha256 of every file of the copy (`scripts/support/doors-pin.mjs`,
+  doors 1.5.1). A doors sync updates that pin in the same PR.
+- The core products (The Brain, Beyondles HorAIzon, Beyondles Suite) carry the
+  same doors. `node scripts/check-frame.mjs --profile core --root <product>`
+  checks one of them: its `doors.config.json` names the manifest, the parity
+  test, the machine door, the MCP and OpenAPI routes, the exclusions doc and
+  the doors copy (with `variant` for the CommonJS copy); block 5d holds that
+  copy to the same pin, in the flavour the product declares (`ts`, `ts+.js`
+  or `cjs`).
 
 ### 5.4 Scopes on machine credentials
 

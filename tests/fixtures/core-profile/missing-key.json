@@ -1,0 +1,8 @@
+{
+  "manifest": "lib/doors/functions.manifest.ts",
+  "machineDoor": "lib/doors/machine-door.ts",
+  "mcpRoute": "app/api/mcp/route.ts",
+  "openapiRoute": "app/api/v1/openapi.json/route.ts",
+  "exclusionsDoc": "docs/EXCLUSIONS.md",
+  "sharedCopy": "lib/shared-doors"
+}

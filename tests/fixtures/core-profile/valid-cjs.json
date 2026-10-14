@@ -1,0 +1,10 @@
+{
+  "manifest": "api/src/doors/functions.manifest.js",
+  "parityTest": "api/tests/unit/door-parity.test.js",
+  "machineDoor": "api/src/doors/machine-door.js",
+  "mcpRoute": "api/src/routes/mcp-routes.js",
+  "openapiRoute": "api/src/routes/openapi-routes.js",
+  "exclusionsDoc": "docs/EXCLUSIONS.md",
+  "sharedCopy": "api/src/shared-doors",
+  "variant": "cjs"
+}
