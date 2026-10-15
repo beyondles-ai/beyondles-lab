@@ -83,7 +83,7 @@ server — see `src/lib/jwt-guard.ts`.
 | `src/app/kein-zugriff/` | the no-access page (shared `NoAccess`), outside the signed-in layout on purpose |
 | `src/app/globals.css`, `src/components/ui/form-classes.ts` | the Beyondles colours, fonts and radii for Tailwind, and the form field styles |
 | `docker/`, `ops/deploy/` | container stack and host scripts |
-| `scripts/check-frame.mjs` | the repo half of `/lab-pipeline check`, runs in CI |
+| `scripts/check-frame.mjs` | the repo half of `/lab-pipeline check`, runs in CI; `--profile core --root <product>` checks a core product (The Brain, Beyondles HorAIzon, Beyondles Suite) against its `doors.config.json` (rules in `scripts/support/core-profile.mjs`) |
 | `docs/FRAME.md` | what the frame guarantees |
 | `docs/SUBMISSION.md` | how a Lab gets into the ecosystem (concept) |
 | `docs/OFFEN.md` | what is deliberately not finished |

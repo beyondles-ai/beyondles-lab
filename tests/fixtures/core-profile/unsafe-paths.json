@@ -1,0 +1,9 @@
+{
+  "manifest": "../other-repo/functions.manifest.ts",
+  "parityTest": "/etc/door-parity.test.ts",
+  "machineDoor": "lib\\doors\\machine-door.ts",
+  "mcpRoute": "",
+  "openapiRoute": "app/./api/openapi.json/route.ts",
+  "exclusionsDoc": 7,
+  "sharedCopy": "C:/shared-doors"
+}

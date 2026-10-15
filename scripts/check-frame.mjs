@@ -9,16 +9,45 @@
  * stay with `/lab-pipeline check`.
  *
  * Exit code 1 on the first group of findings; every finding is printed.
+ *
+ *   node scripts/check-frame.mjs                                  this repo, profile lab
+ *   node scripts/check-frame.mjs --profile core --root <product>  a core product
+ *
+ * Profile "lab" (the default) checks a Lab built from this template; with
+ * `--root` it checks another Lab's folder instead of this repo. Profile
+ * "core" checks a core product (The Brain, Beyondles HorAIzon, Beyondles
+ * Suite): the template layout (blocks 1, 2 and 8) is replaced by the door
+ * files the product names in its `doors.config.json`; the principle blocks
+ * run where they apply and print "n/a" with the reason where they do not.
+ * The rules of that profile are in scripts/support/core-profile.mjs.
+ * Exit code 2 = wrong usage.
  */
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { parseFrameArgs, runCoreProfile } from "./support/core-profile.mjs";
+import { doorsPinFindings } from "./support/doors-pin.mjs";
+import {
+  AI_PROVIDER_ENV,
+  AI_PROVIDER_SDKS,
+  DARK_MODE,
+  MAIL_ENV,
+  MAIL_SDKS,
+  RETIRED_ENV,
+  SWALLOW,
+} from "./support/frame-rules.mjs";
 import { informalAddressFindings } from "./support/informal-address.mjs";
 import { memoryDoorFindings } from "./support/memory-door.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const args = parseFrameArgs(process.argv.slice(2));
+if (args.error) {
+  console.error(`${args.error}\n${args.usage}`);
+  process.exit(2);
+}
+if (args.profile === "core") process.exit(runCoreProfile(args.root));
+
+const root = args.root ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const findings = [];
 const fail = (msg) => findings.push(msg);
 const read = (rel) => readFileSync(path.join(root, rel), "utf8");
@@ -143,22 +172,16 @@ if (exists(".github/workflows/ci.yml")) {
 // 4. No provider or mail SDK, no provider key, no retired variable.
 const pkg = JSON.parse(read("package.json"));
 const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-for (const sdk of [
-  "@anthropic-ai/sdk",
-  "openai",
-  "@google/generative-ai",
-  "@google/genai",
-  "resend",
-  "nodemailer",
-  "@mistralai/mistralai",
-]) {
+for (const sdk of [...AI_PROVIDER_SDKS, ...MAIL_SDKS]) {
   if (deps[sdk]) fail(`provider/mail SDK in package.json: ${sdk} (use the platform door)`);
 }
 if (pkg.scripts?.start && /\bnext start\b/.test(pkg.scripts.start))
   fail('"start" uses `next start` — standalone output needs scripts/start.mjs');
 
-const FORBIDDEN_ENV =
-  /\b(ANTHROPIC_API_KEY|OPENAI_API_KEY|GOOGLE_[A-Z_]*API_KEY|MISTRAL_API_KEY|DEEPSEEK_API_KEY|RESEND_API_KEY|RESEND_ENDPOINT|MAILER_MODE|SMTP_(HOST|PORT|USER|PASS|PASSWORD)|PLATFORM_SSO_URL)\b/;
+// Provider keys, mail settings and retired names (scripts/support/frame-rules.mjs).
+const FORBIDDEN_ENV = {
+  test: (line) => AI_PROVIDER_ENV.test(line) || MAIL_ENV.test(line) || RETIRED_ENV.test(line),
+};
 function walk(dir, out = []) {
   if (!existsSync(dir)) return out;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -169,9 +192,17 @@ function walk(dir, out = []) {
   }
   return out;
 }
+// The frame check's own files name every rule they enforce; they are not
+// scanned by those rules.
+const FRAME_CHECK_FILES = [
+  ["scripts", "check-frame.mjs"],
+  ["scripts", "support", "frame-rules.mjs"],
+  ["scripts", "support", "core-profile.mjs"],
+].map((parts) => path.join(root, ...parts));
+const isFrameCheckFile = (f) => FRAME_CHECK_FILES.includes(f);
 const sourceFiles = ["src", "docker", "ops", "scripts", "mcp", ".github"]
   .flatMap((d) => walk(path.join(root, d)))
-  .filter((f) => !f.endsWith("check-frame.mjs"))
+  .filter((f) => !isFrameCheckFile(f))
   .concat([path.join(root, ".env.example")]);
 
 // JWT_SECRET must never be passed by Compose (a server .env must not carry it).
@@ -273,55 +304,17 @@ if (/^JWT_SECRET=/m.test(envExample) || /^ALLOW_LOCAL_JWT=/m.test(envExample))
 //     does not run in this public template or in a Lab outside the
 //     organisation. This pin is the check that always runs: an edited verifier,
 //     token door, release gate or scope model fails here. Line endings are
-//     normalised to LF first. After each doors sync, replace DOORS_PIN with the
-//     digests the failure lists (and review that diff like code).
+//     normalised to LF first. After each doors sync, replace the "ts" table in
+//     scripts/support/doors-pin.mjs with the digests the failure lists (and
+//     review that diff like code); the core profile reads the same pin.
 {
   const DOORS_DIR = "src/lib/doors";
-  const DOORS_PIN = {
-    version: "1.5.1",
-    files: {
-      "door-contract.md": "28c4424eb4f2dd18eb581b95550afaeec5de8915983e616f0c0e2c935fbe5e1c",
-      "door-host.ts": "be91d0975478660f2ec0e6f47853be0c409392e3c8e73a2995f9c6bc3f33438e",
-      "exclusions.ts": "c6abe070acc215b28633d37c218009cafc847e4f2856fe1416b9d94286b2415a",
-      "index.ts": "662bf70beb176a5db60ca2d611af8223afadc65596067b5b41313dc8c391b4b9",
-      "manifest.ts": "e71c8d2eb572b250361a994b119c5fd9d3c6af1c3ec4459da554e6652a557089",
-      "on-behalf.ts": "0a7c10fa37e84af63a86735ddce31c0d00e4937ad96553bf39d55859c7c7292d",
-      "openapi.ts": "98b27606b73d33de2c3c180868dee18784d952fbecfc94ce887d50f7b7aae41c",
-      "parity.ts": "11646b929ee08d70aa2bb7246dd423d0dc50fbd0ae9069509addd1ac779d5a1e",
-      "rate-limit.ts": "5dbfaa0fd2f469050a97733894cba21712318062a949385f96f9aa24e97ff09e",
-      "readers/express.ts": "9909a0f6747d85278bcf03b0abbc9a9d18bd6dc998f7b773f4603a9907fb4e8c",
-      "readers/next-app-router.ts": "f569607cdaf3fccac3adc876d517445322ad15b30cea1230072406fb535690f3",
-      "readers/node-fs.ts": "8b316d5a75f2aa6f0aea573f04b40fd42dba74653f0bf6d9e27d2723d68cd5f6",
-      "readers/source-files.ts": "aae5a0fd5d6540d0d4bfa39c8148ec3b128f543c1a7844a8e93721678251343e",
-      "scopes.ts": "37ca4aeadb2e3cc7e24c153943231b5124696cbb88163ca536494e81ce0914e4",
-      "tool-door/call-log.ts": "d1b58ac67d0b14257c3892697d245b709bd10020a5475666332f47c3d31142ab",
-      "tool-door/describe.ts": "3ce5af3c5cf2e10125017cd0bc2e42f99a1bade3f83eb7112abeab0b84f18f13",
-      "tool-door/markers.ts": "8b216956ca5a0a93be3da168bb4e0ed9b5d530467216774b39c4f7a4dc83d723",
-      "tool-door/obo-door.ts": "b3aefa1a3c8b73c1a699e9be7bd8354b9acc5e15533564288b805258ed555f35",
-      "tool-door/release-gate.ts": "6fc658dd26dbeb466d6f368795154f2e75d3efed788e85a82cbd738f6cb02793",
-    },
-  };
   if (exists(DOORS_DIR)) {
-    const walk = (dir) =>
+    const list = (dir) =>
       readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap((entry) =>
-        entry.isDirectory() ? walk(`${dir}/${entry.name}`) : [`${dir}/${entry.name}`],
+        entry.isDirectory() ? list(`${dir}/${entry.name}`) : [`${dir}/${entry.name}`],
       );
-    const version = exists(`${DOORS_DIR}/.shared-version`) ? read(`${DOORS_DIR}/.shared-version`).trim() : "";
-    if (version !== DOORS_PIN.version)
-      fail(`${DOORS_DIR}/.shared-version says "${version}", the frame check pins doors ${DOORS_PIN.version}: update DOORS_PIN in scripts/check-frame.mjs with the sync`);
-    const seen = new Set();
-    for (const file of walk(DOORS_DIR)) {
-      const name = file.slice(DOORS_DIR.length + 1);
-      if (name === ".shared-version") continue;
-      seen.add(name);
-      const expected = Object.hasOwn(DOORS_PIN.files, name) ? DOORS_PIN.files[name] : undefined;
-      const digest = createHash("sha256").update(read(file).replace(/\r\n/g, "\n"), "utf8").digest("hex");
-      if (expected === undefined) fail(`${file} is not part of doors ${DOORS_PIN.version} (sha256 ${digest})`);
-      else if (digest !== expected)
-        fail(`${file} differs from doors ${DOORS_PIN.version} (sha256 ${digest}, expected ${expected}): change it in beyondles-shared and sync`);
-    }
-    for (const name of Object.keys(DOORS_PIN.files))
-      if (!seen.has(name)) fail(`${DOORS_DIR}/${name} of doors ${DOORS_PIN.version} is missing`);
+    for (const finding of doorsPinFindings({ read, exists, list }, DOORS_DIR, "ts")) fail(finding);
   }
 }
 
@@ -380,11 +373,6 @@ if (!IS_TEMPLATE_REPO) {
 //    `.catch(() => {})`, no `|| true` in code and scripts. A failure is
 //    handled, logged with a reason, or it propagates.
 {
-  const SWALLOW = [
-    [/catch\s*(\([^)]*\))?\s*\{\s*\}/, "empty catch block"],
-    [/\.catch\(\s*(\(\s*\w*\s*\)|\w+)\s*=>\s*(\{\s*\}|undefined\s*\))/, "promise error swallowed by .catch"],
-    [/\|\|\s*true\b/, "`|| true` hides a failed command"],
-  ];
   const generated = [
     `${path.sep}src${path.sep}lib${path.sep}platform-client${path.sep}`,
     `${path.sep}src${path.sep}components${path.sep}share${path.sep}`,
@@ -393,7 +381,7 @@ if (!IS_TEMPLATE_REPO) {
   const files = ["src", "scripts", "ops", "mcp", "docker"]
     .flatMap((d) => walk(path.join(root, d)))
     .filter((f) => /\.(ts|tsx|mjs|js|sh)$/.test(f) || path.basename(f) === "Dockerfile")
-    .filter((f) => !f.endsWith("check-frame.mjs") && !generated.some((g) => f.includes(g)));
+    .filter((f) => !isFrameCheckFile(f) && !generated.some((g) => f.includes(g)));
   for (const file of files) {
     readFileSync(file, "utf8")
       .split("\n")
@@ -501,11 +489,7 @@ if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((
     "slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose";
   const TOKENS = "use the Beyondles names from src/app/globals.css";
   const DESIGN = [
-    [/(^|[\s"'`{(])dark:/, "dark: class (light only, no dark mode)"],
-    [/prefers-color-scheme/, "prefers-color-scheme (light only)"],
-    [/color-scheme:\s*dark/, "color-scheme: dark (light only)"],
-    [/@custom-variant\s+dark/, "dark variant (light only)"],
-    [/next-themes|\bThemeProvider\b|\buseTheme\b/, "theme switching (light only)"],
+    ...DARK_MODE,
     [new RegExp(`\\b[a-z-]+-(${PALETTE})-\\d{2,3}\\b`), `Tailwind default palette class: ${TOKENS}`],
     [new RegExp(`--color-(${PALETTE})-\\d{2,3}\\b`), `Tailwind default palette value: ${TOKENS}`],
     [/\b[a-z-]+-\[(#|rgb|hsl|oklch)/, `arbitrary colour class: ${TOKENS}`],
