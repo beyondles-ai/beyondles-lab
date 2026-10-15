@@ -1,9 +1,11 @@
 {
-  "version": "1.3.3",
+  "version": "1.5.1",
   "modules": [
     { "name": "share-ui", "dest": "src/components/share" },
     { "name": "platform-client", "dest": "src/lib/platform-client", "parts": ["core", "next"] },
-    { "name": "app-shell", "dest": "src/components/app-shell" }
+    { "name": "app-shell", "dest": "src/components/app-shell" },
+    { "name": "brain-client", "dest": "src/lib/brain-client" },
+    { "name": "doors", "dest": "src/lib/doors" }
   ],
   "messages": {
     "en": { "file": "messages/en.json" },

@@ -1,10 +1,31 @@
+import {
+  createRateLimiter,
+  rateLimitFor as sharedRateLimitFor,
+  type RateCredential,
+  type RateDecision,
+  type RateDoor,
+  type RateLimitSettings,
+  type RateLimitStore,
+} from "@/lib/doors/rate-limit";
+
+export {
+  RATE_LIMIT_DEFAULTS,
+  createMemoryStore,
+  type RateCredential,
+  type RateDecision,
+  type RateDoor,
+  type RateLimitStore,
+} from "@/lib/doors/rate-limit";
+
 /**
- * Rate limit for the machine doors `/api/v1` and `/api/mcp`.
+ * Rate limit for the machine doors `/api/v1` and `/api/mcp`: the shared
+ * limiter (`src/lib/doors/rate-limit.ts`, generated from beyondles-shared,
+ * never edited here) with this Lab's three settings.
  *
- * Counted per door and per credential: an API key counts as `key:<id>`, an
- * on-behalf token as `cp:<calling product>:<organisation>`. Fixed one-minute
- * windows. Over the limit: `429 rate_limited` with `Retry-After`
- * (`src/lib/api-auth.ts`).
+ * Counted per door and per credential: an API key (a Lab key, or a Beyondles
+ * key in either form) counts as `key:<id>`, an on-behalf token as
+ * `cp:<calling product>:<organisation>`. Fixed one-minute windows. Over the
+ * limit: `429 rate_limited` with `Retry-After` (`src/lib/api-auth.ts`).
  *
  * Defaults per minute (env-tunable, empty = default, `0` = off):
  *   API_RATE_LIMIT_PER_MINUTE        120  per key on /api/v1
@@ -19,84 +40,11 @@
  * restart each count from zero. That is acceptable for one container per
  * environment (the Playground setup). A Lab that runs several replicas
  * replaces the store once at start-up with `setRateLimitStore` (Redis,
- * Postgres); the interface is one synchronous-looking method so a shared
- * store can implement it with a local cache in front.
+ * Postgres).
  */
 
-export type RateDoor = "v1" | "mcp";
-export type RateCredential = "key" | "on-behalf";
-
-export interface RateDecision {
-  allowed: boolean;
-  remaining: number;
-  retryAfterSeconds: number;
-}
-
-export interface RateLimitStore {
-  hit(
-    bucket: string,
-    limit: number,
-    windowMs: number,
-    now: number,
-  ): RateDecision;
-}
-
-export const RATE_LIMIT_DEFAULTS = { v1: 120, mcp: 60, onBehalf: 600 } as const;
-
-const WINDOW_MS = 60_000;
-
-/** In-memory fixed window. `maxBuckets` bounds memory; expired buckets are swept when it is reached. */
-export function createMemoryStore(maxBuckets = 10_000): RateLimitStore {
-  const buckets = new Map<string, { windowStart: number; count: number }>();
-  return {
-    hit(bucket, limit, windowMs, now) {
-      let entry = buckets.get(bucket);
-      if (!entry || now - entry.windowStart >= windowMs) {
-        if (!entry && buckets.size >= maxBuckets) {
-          for (const [key, value] of buckets)
-            if (now - value.windowStart >= windowMs) buckets.delete(key);
-        }
-        entry = { windowStart: now, count: 0 };
-        buckets.set(bucket, entry);
-      }
-      entry.count += 1;
-      if (entry.count > limit) {
-        const retryAfterSeconds = Math.max(
-          1,
-          Math.ceil((entry.windowStart + windowMs - now) / 1000),
-        );
-        return { allowed: false, remaining: 0, retryAfterSeconds };
-      }
-      return {
-        allowed: true,
-        remaining: limit - entry.count,
-        retryAfterSeconds: 0,
-      };
-    },
-  };
-}
-
-let store: RateLimitStore = createMemoryStore();
-
-/** Replace the store once at start-up (shared store for several replicas). */
-export function setRateLimitStore(next: RateLimitStore): void {
-  store = next;
-}
-
-export function __resetRateLimitForTests(): void {
-  store = createMemoryStore();
-}
-
-type Env = Record<string, string | undefined>;
-
-function readLimit(raw: string | undefined, fallback: number): number {
-  if (raw === undefined || raw.trim() === "") return fallback;
-  const value = Number(raw);
-  return Number.isInteger(value) && value >= 0 ? value : fallback;
-}
-
 /** Named reads, so `tests/unit/deployment-env.test.ts` sees them and checks Compose. */
-function currentEnv(): Env {
+function currentEnv(): RateLimitSettings {
   return {
     API_RATE_LIMIT_PER_MINUTE: process.env.API_RATE_LIMIT_PER_MINUTE,
     MCP_RATE_LIMIT_PER_MINUTE: process.env.MCP_RATE_LIMIT_PER_MINUTE,
@@ -108,17 +56,22 @@ function currentEnv(): Env {
 export function rateLimitFor(
   door: RateDoor,
   credential: RateCredential,
-  env: Env = currentEnv(),
+  env: RateLimitSettings = currentEnv(),
 ): number {
-  if (credential === "on-behalf") {
-    return readLimit(
-      env.ON_BEHALF_RATE_LIMIT_PER_MINUTE,
-      RATE_LIMIT_DEFAULTS.onBehalf,
-    );
-  }
-  return door === "mcp"
-    ? readLimit(env.MCP_RATE_LIMIT_PER_MINUTE, RATE_LIMIT_DEFAULTS.mcp)
-    : readLimit(env.API_RATE_LIMIT_PER_MINUTE, RATE_LIMIT_DEFAULTS.v1);
+  return sharedRateLimitFor(door, credential, env);
+}
+
+const limiter = createRateLimiter({
+  limitFor: (door, credential) => rateLimitFor(door, credential),
+});
+
+/** Replace the store once at start-up (shared store for several replicas). */
+export function setRateLimitStore(next: RateLimitStore): void {
+  limiter.setStore(next);
+}
+
+export function __resetRateLimitForTests(): void {
+  limiter.reset();
 }
 
 export function checkRateLimit(input: {
@@ -127,17 +80,5 @@ export function checkRateLimit(input: {
   subject: string;
   now?: number;
 }): RateDecision {
-  const limit = rateLimitFor(input.door, input.credential);
-  if (limit === 0)
-    return {
-      allowed: true,
-      remaining: Number.POSITIVE_INFINITY,
-      retryAfterSeconds: 0,
-    };
-  return store.hit(
-    `${input.door}|${input.subject}`,
-    limit,
-    WINDOW_MS,
-    input.now ?? Date.now(),
-  );
+  return limiter.check(input);
 }

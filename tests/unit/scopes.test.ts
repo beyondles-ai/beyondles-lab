@@ -9,6 +9,7 @@ import {
   missingScopes,
   normaliseKeyScopes,
   onBehalfScopes,
+  scopesFromClaims,
 } from "@/lib/scopes";
 
 /** Scopes on machine credentials: a small generic model, one place for each rule. */
@@ -73,12 +74,68 @@ describe("normaliseKeyScopes (what the key form may store)", () => {
   });
 });
 
-describe("onBehalfScopes (tokens carry no scopes; this is the one mapping)", () => {
+describe("onBehalfScopes (the fallback rule for tokens without scp)", () => {
   it("a token that names a person gets read, write and the Lab's extra scopes", () => {
-    expect(onBehalfScopes({ personUserId: "u-1" })).toEqual(ALL_SCOPES);
+    expect(onBehalfScopes({ personUserId: "u-1", scp: undefined })).toEqual(
+      ALL_SCOPES,
+    );
   });
 
   it("a token without a person (organisation or collection agent) gets read and write only", () => {
-    expect(onBehalfScopes({ personUserId: null })).toEqual(["read", "write"]);
+    expect(onBehalfScopes({ personUserId: null, scp: undefined })).toEqual([
+      "read",
+      "write",
+    ]);
+  });
+
+  it("a token that carries scp gets NO fallback scopes (fail closed)", () => {
+    expect(onBehalfScopes({ personUserId: "u-1", scp: [] })).toEqual([]);
+    expect(
+      onBehalfScopes({ personUserId: "u-1", scp: ["examplelab:write"] }),
+    ).toEqual([]);
+  });
+});
+
+describe("scopesFromClaims (the one mapping from a token to scopes)", () => {
+  it("a key token gets exactly its scp for this Lab, prefix stripped", () => {
+    expect(
+      scopesFromClaims({
+        aud: "examplelab",
+        sub: "u-1",
+        scp: ["examplelab:read", "examplelab:notes:delete"],
+      }),
+    ).toEqual(["read", "notes:delete"]);
+  });
+
+  it("drops another product's scopes and never adds the fallback", () => {
+    expect(
+      scopesFromClaims({
+        aud: "examplelab",
+        sub: "u-1",
+        scp: ["brain:read", "leadlab:write", "examplelab"],
+      }),
+    ).toEqual([]);
+    expect(
+      scopesFromClaims({
+        aud: "examplelab",
+        sub: "u-1",
+        scp: ["examplelab:write", "brain:write"],
+      }),
+    ).toEqual(["write"]);
+  });
+
+  it("a classic token without scp gets the fallback rule, by the person the Lab found", () => {
+    expect(scopesFromClaims({ aud: "examplelab", sub: "u-1" })).toEqual(
+      ALL_SCOPES,
+    );
+    expect(
+      scopesFromClaims(
+        { aud: "examplelab", sub: "u-1" },
+        { personUserId: null },
+      ),
+    ).toEqual(["read", "write"]);
+    expect(
+      scopesFromClaims({ aud: "examplelab" }, { personUserId: "u-2" }),
+    ).toEqual(ALL_SCOPES);
   });
 });

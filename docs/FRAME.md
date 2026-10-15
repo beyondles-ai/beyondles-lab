@@ -1,6 +1,6 @@
 # The frame — what every Beyondles Lab guarantees
 
-Checked on: 2026-10-13
+Checked on: 2026-10-15
 
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
@@ -13,6 +13,18 @@ this file and that one disagree, that one wins and this template is updated.
   repo, folder, Compose project, database role, subdomain, Suite `labs.key`,
   platform product key and platform service-key name.
 - `npm run rename -- <name> "<Display Name>"` replaces it everywhere.
+- **The Lab registers itself.** On every start `src/instrumentation.ts` calls
+  `registerInBackground()` (`src/lib/platform/register.ts`): `POST
+  /api/registry/self` with the Lab's own service key, body `{ name, kind:
+  "lab", baseUrl, toolDoorUrl, toolDoorProtocol: "mcp" }` from `LAB_NAME` and
+  `NEXT_PUBLIC_APP_URL`. The platform files it in its product registry, the
+  Suite reads the registry and creates the Lab's release switch (`labs`,
+  `enabled = FALSE`). No platform migration, no Suite migration, no Suite
+  list. It never blocks the start and does nothing without a platform door.
+  What stays manual: the service key named exactly `LAB_KEY`, and releasing
+  the Lab under `/operator/labs`. Protection and product-specific role names
+  are set by a platform migration only. Fallback for a Lab that cannot
+  register: the two migrations as before (platform `products`, Suite `labs`).
 
 ## 2. Sign-in: the Suite is the only login
 
@@ -63,7 +75,7 @@ Every page behind the login looks the same in every Beyondles product
 (design system "closed pages v1", approved 2026-10-13, card #350). The frame
 is not built here; it comes from `beyondles-ai/beyondles-shared`, module
 `app-shell`, as a generated copy in `src/components/app-shell/` (manifest
-`.beyondles-shared.json`, version 1.3.3). Never edit the copy: the CI step
+`.beyondles-shared.json`, version 1.4.0). Never edit the copy: the CI step
 "Shared code is unchanged" fails on any difference. What a host must do is
 in `app-shell/HOST-CONTRACT.md` in the shared repo.
 
@@ -141,15 +153,91 @@ in `app-shell/HOST-CONTRACT.md` in the shared repo.
 
 ## 4. The platform door
 
-- No provider key, no mail key, no provider SDK. AI through
-  `POST /api/llm/complete` (`src/lib/platform/llm.ts`), mail through
-  `POST /api/mail/send` (`src/lib/platform/mail.ts`), both with
-  `X-API-Key: PLATFORM_API_KEY`.
+- No provider key, no mail key, no provider SDK. Text AI through
+  `POST /api/llm/complete` (`src/lib/platform/llm.ts`), images and speech to
+  text through `POST /api/media/image` and `/api/media/stt`
+  (`src/lib/platform/media.ts`), embeddings through `POST /api/embeddings`
+  (`src/lib/platform/embeddings.ts`), mail through `POST /api/mail/send`
+  (`src/lib/platform/mail.ts`), all with `X-API-Key: PLATFORM_API_KEY`.
+- The Lab names what it needs, never a model: `useCase` (`general`,
+  `writing`, `verification`, ...; `image` and `stt` on the media door) plus
+  `level` (`economy`, `workhorse`, `frontier`). A model the CUSTOMER chose
+  goes as `{ model, fallback }`. The old `tier` (`fast`/`balanced`/`best`)
+  still works for existing callers of `complete` and is sent as
+  `useCase: "general"` with the matching level (`TIER_TO_LEVEL`).
+- Embeddings go into a store named `<LAB_KEY>.<name>` (`storeFor`); the
+  platform pins each store to one model. `needsReembedding: true` in an
+  answer means the stored vectors must be rebuilt.
 - Purposes are `<LAB_KEY>.<action>` (`purposeFor`), stable forever.
-- Retry only on 429/503. Mail only with an `idempotencyKey`.
+- Retry only on 429/503 (`postDoor`), never after a timeout or a lost
+  connection: a completion, an image or a transcription may already be
+  billed. Embeddings are the exception (free, no side effect) and retry a
+  network error too. Mail only with an `idempotencyKey`.
 - Fixed variable names: `PLATFORM_API_URL`, `PLATFORM_API_KEY`,
   `PLATFORM_EXPORT_KEY`, `PLATFORM_DELETE_KEY`, `NEXT_PUBLIC_PLATFORM_URL`,
-  `ON_BEHALF_ISSUER`. `PLATFORM_SSO_URL` is retired and refused by the frame check.
+  `ON_BEHALF_ISSUER`, `BRAIN_API_URL`. `PLATFORM_SSO_URL` is retired and refused by the frame check.
+
+## 4a. The memory door (The Brain)
+
+Every Lab is connected to The Brain, the organisation's knowledge layer
+(card #377). A Lab drops its finished RESULTS there (a decision, a fact, an
+event such as "signed", a task with owner and due date) and reads what the
+organisation already knows. Never raw material: no transcripts, documents,
+contact lists, drafts or e-mail addresses.
+
+- **The client is shared.** `src/lib/brain-client/` is a generated copy of
+  the module `brain-client` from `beyondles-ai/beyondles-shared` (manifest
+  `.beyondles-shared.json`). Never edit it; usage and retry guidance are in
+  `brain-client/README.md` in the shared repo. The client is mandatory, also
+  for a Lab that writes nothing yet.
+- **The wrapper is the Lab's.** `src/lib/platform/memory.ts` builds the
+  client lazily (`brain()`, `null` while not configured) with an on-behalf
+  token from the platform (audience `brain`) through the Lab's own token
+  helper `src/lib/platform/on-behalf.ts`. A Lab holds NO Brain key.
+- **The address** is `BRAIN_API_URL`, the Brain API host of THIS
+  environment: `https://api.beyondles.ai` in production, the staging Brain
+  API on staging, `http://localhost:3336` locally. The platform registry's
+  `brain` entry is the dashboard address and is not used. Refused, and
+  reported as `brain: "wrong-host"` in `/api/health`: the dashboard hosts
+  (`brain.`, `brain-staging.`, `brain-admin.`), a platform host
+  (`api-staging.beyondles.ai` is the PLATFORM on staging), plain `http://` to
+  a public host, an `/api` suffix, and the production Brain from a staging
+  Lab (`ON_BEHALF_ISSUER` ending in `:staging`). Missing settings are
+  `unconfigured`; the Lab then sends nothing and everything else works.
+- **What a function does with The Brain** is declared in the functions
+  manifest, field `memory` of every entry: `{ writes: [kinds], reads: bool }`
+  (kinds `fact`, `decision`, `event`, `task`, `text`) or
+  `{ excluded: "<reason>" }`. The template's notes are raw material and say
+  so. Write with `brain()?.remember(ctx, { sourceRef, kind, title, content,
+  object })`: `sourceRef` is stable (`note:<id>`, `noteSourceRef`), `object`
+  carries the record's visibility, owner and collection, and The Brain picks
+  the brain of that level. Write from a job, not from the request: the
+  client's `enqueueRemember` builds the payload for the Lab's own queue,
+  `retryAdvice` says what to do with each error (402 park with a notice,
+  429 back off, 401/404 mark the edge broken). Read with `recall`, which
+  never throws (an empty list and a `failure` for a notice).
+- **Deleting an object forgets it.** Every delete path calls the wrapper's
+  forget: `deleteNote` and `expireNotes` (`forgetDeletedObjects`, after the
+  delete and its audit row, never failing it, waiting at most the client's
+  10 s, failures logged with ids and codes), the tenant
+  deletion (one forget per prefix in `MEMORY_REF_PREFIXES`, after the commit
+  and again on a repeated run, reported as a `brain` item) and the person
+  deletion (the person's PRIVATE notes, BEFORE the transaction, so a failure
+  leaves the database untouched and the next run still finds every id). A
+  refusal for an organisation that is no longer active is a `skipped` item:
+  The Brain erases that tenant itself in the platform's deletion run.
+  `tests/unit/platform-delete-coverage.test.ts` fails a service file that
+  removes rows without a forget. Retention redaction does not forget: the
+  results in The Brain outlive the raw material on purpose.
+- **The edge is checked daily.** `brain-memory-recall` in
+  `src/server/jobs/contract-edges.ts`: the host check above, then one
+  `POST /api/memory/recall` with a real token against the staging Brain.
+- **Block 14 of `npm run check:frame`** (rule in
+  `scripts/support/memory-door.mjs`, tested in
+  `tests/unit/memory-door.test.ts`) fails a Lab without the module or the
+  wrapper, a manifest entry without `memory` (or with an unknown kind or an
+  exclusion without a reason), and, as soon as any function writes, a delete
+  path without a forget.
 
 ## 5. Headless: one function, three doors
 
@@ -222,6 +310,31 @@ test fails when it is stale. `docs/OFFEN.md` no longer lists missing doors.
 
 ### 5.3 The machine doors
 
+**The door code is the shared module `doors`** (beyondles-shared 1.5.1,
+card #383), generated into `src/lib/doors` and never edited here: the door
+contract (`src/lib/doors/door-contract.md`: order, error codes, JSON-RPC
+mapping, credentials, scope names), manifest types, parity check and reader,
+OpenAPI and exclusions renderers, scope model, rate limiter, on-behalf
+verifier, token door, release gate, tool markers, describe answer and call
+log. The Lab keeps what is its own: the manifest, its scope vocabulary
+(`LAB_SCOPES`), the settings the shared code reads
+(`src/lib/tool-door/host.ts`), `openMachineDoor`, `requireApiKey` and thin
+wrappers that keep the import paths (`src/lib/scopes.ts`,
+`src/lib/rate-limit.ts`, `src/lib/openapi.ts`, `src/server/parity.ts`,
+`src/server/exclusions.ts`, `src/lib/platform/on-behalf.ts`,
+`src/lib/tool-door/*.ts`). The door also accepts a **Beyondles key**, created
+by a person in the Suite (Settings, Access): sent as `x-api-key`, it is
+exchanged at the platform (`POST /api/keys/exchange` with
+`PLATFORM_API_KEY`, `src/lib/tool-door/key-exchange.ts`: shape filter, token
+reused for at most 60 seconds, refusals remembered for 60 seconds, 30 new
+exchanges per minute and client address) for a key token
+(`typ: beyondles-obo-key+jwt`) that then takes the token path; a client
+that exchanged the key itself sends that token as `Bearer`. In both forms a
+Beyondles key is a key: release gate, rate limit per key (`key:<id>`), and
+exactly the scopes of its `scp` claim with the Lab prefix stripped
+(`examplelab:write` becomes `write`); its owner is checked at the platform
+like every person.
+
 - `POST /api/mcp` serves the tool catalogue (`src/lib/mcp/catalog.ts`) over
   Streamable HTTP; `mcp/server.mjs` is the stdio bridge for Claude Desktop/Code.
 - **`openMachineDoor(request, "<functionId>")`** (`src/server/machine-door.ts`)
@@ -235,7 +348,7 @@ test fails when it is stale. `docs/OFFEN.md` no longer lists missing doors.
     (Beyondles HorAIzon, another Lab) calling for an organisation, a person
     or an agent. The platform signed it for audience = `LAB_KEY`; the Lab
     verifies it with the platform's public keys (`src/lib/platform/on-behalf.ts`,
-    a verbatim copy, checked by the frame check). The view follows the agent:
+    the re-export of the shared verifier, checked by the frame check). The view follows the agent:
     organisation agent = worker view, collection agent = its collection only
     (`source: "agent"`), private agent = its owner, no agent = the person
     (`sub`), neither = worker view. Every named person is checked at the
@@ -248,7 +361,8 @@ test fails when it is stale. `docs/OFFEN.md` no longer lists missing doors.
   the Lab is released for in the Suite (`src/lib/tool-door/release-gate.ts`,
   `GET /api/registry/released` at the platform, 60 s cache, 15 minutes of
   grace during an outage, not applied by a platform without the route).
-  Tokens are not gated here: the platform issues none for an unreleased Lab.
+  Classic tokens are not gated here: the platform issues none for an
+  unreleased Lab. A Beyondles key is gated in both forms.
 - **Markers.** Every tool says what it does: `access` (`read`, `write`,
   `destructive` = deletes, reaches somebody outside, spends money or credits),
   `idempotent`, `title` in German and English, and a `capability`
@@ -262,13 +376,27 @@ test fails when it is stale. `docs/OFFEN.md` no longer lists missing doors.
   `/api/mcp`) lists every tool with markers, titles, `scopes` and
   `available` (the caller's credential carries the tool's scopes).
 - One log line per `tools/call`: `[tool-door] via=… cp=… org=… sub=… agent=…
-  tool=… outcome=… jti=…`, never arguments or results.
+  tool=… outcome=… jti=… key=…` (`key` = the Beyondles key behind the call),
+  never arguments or results.
 - `GET /api/health` reports `onBehalf: "ok" | "unconfigured"`.
 - Lab-to-Lab calls: `createLabToolClient` (`src/lib/tool-door/lab-client.ts`)
   gets a token with the Lab's own service key and calls the target's door.
-- The shared files under `src/lib/tool-door/` (except `lab-client.ts`) and
-  `src/lib/platform/on-behalf.ts` are copied verbatim into every Lab; change
-  them here, never in a copy.
+- The door code under `src/lib/doors/` is generated from beyondles-shared
+  (`.beyondles-shared.json`, checked by `beyondles-shared/check`); change it
+  there, never in a Lab. That shared check does not run in the public
+  template or in a Lab outside the organisation, so `check:frame` block 5d
+  also pins the sha256 of every file of the copy (`scripts/support/doors-pin.mjs`,
+  doors 1.5.1). A doors sync updates that pin in the same PR.
+- The core products (The Brain, Beyondles HorAIzon, Beyondles Suite) carry the
+  same doors. `node scripts/check-frame.mjs --profile core --root <product>`
+  checks one of them: its `doors.config.json` names the manifest, the parity
+  test, the machine door, the MCP and OpenAPI routes, the exclusions doc and
+  the doors copy (with `variant` for the CommonJS copy); block 5d holds that
+  copy to the same pin, in the flavour the product declares (`ts`, `ts+.js`
+  or `cjs`). Block 4 fails a Lab-style provider key or an AI SDK; provider
+  keys under the platform's names (`PLATFORM_LLM_*_KEY`) and calls to
+  provider hosts print as a `warn` row that names them, never as `ok`
+  (The Brain still holds such keys; profile lab fails them as rule 11).
 
 ### 5.4 Scopes on machine credentials
 
@@ -283,11 +411,13 @@ manifest entry names; no scope implies another.
 - **Keys from before scopes** carry `*` (full access, also to scopes added
   later), set by migration `0002_api_key_scopes`. Their owners narrow them by
   creating a new key and revoking the old one; the list marks them.
-- **On-behalf tokens** carry no scopes; `onBehalfScopes` is the one mapping:
-  a token that names a person gets every scope (the person is checked at the
+- **On-behalf tokens**: `scopesFromClaims` is the one mapping. A classic
+  token carries no scopes and gets the fallback rule (`onBehalfScopes`): a
+  token that names a person gets every scope (the person is checked at the
   platform per request, and the calling product's agent safety asks a human
   before a `destructive` tool); a token without a person gets `read` and
-  `write` only.
+  `write` only. A Beyondles key's token gets exactly its `scp` entries for
+  this Lab, prefix stripped, never the fallback.
 - **People in the screen** are not scoped: their limit is the container rule
   in the service, which every door shares.
 - `requireScope` (`api-auth.ts`) answers `403 insufficient_scope` and names
@@ -297,7 +427,8 @@ manifest entry names; no scope implies another.
 
 ### 5.5 Rate limit
 
-In `requireApiKey`, after the credential is known, for `/api/v1` and
+In `requireApiKey`, after the credential is known and (for a key) after the
+release gate, as door contract section 2 orders it, for `/api/v1` and
 `/api/mcp` separately (`src/lib/rate-limit.ts`). Per key (`key:<id>`) or per
 calling product and organisation (`cp:<product>:<org>`). Defaults per
 minute: 120 per key on `/api/v1`, 60 per key on `/api/mcp`, 600 per calling
@@ -468,7 +599,8 @@ it true by construction; `npm run check:frame` and the unit tests keep it so.
 - **Contract test per platform edge.** `npm run contract:check`
   (`src/server/jobs/contract-edges.ts`) makes one real, cheap call per edge
   against staging: door `/api/llm/complete` and `/api/media`, Suite
-  `auth/me`, the export key (Brain: add an edge when used). Daily via
+  `auth/me`, the export key and the memory door (`brain-memory-recall`,
+  section 4a). Daily via
   `.github/workflows/contract-check.yml`; a missing setting fails, it is
   never skipped. The repo secrets it needs are listed in that file and are
   set by a human.

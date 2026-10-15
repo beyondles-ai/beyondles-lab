@@ -47,8 +47,9 @@ Never change (this is the frame, reviewed centrally):
   `src/lib/platform-access.ts`, `src/lib/platform/**`, `src/lib/api-auth.ts`,
   `src/lib/api-keys.ts`, `src/lib/api-errors.ts`, `src/lib/service-errors.ts`,
   `src/lib/scopes.ts`, `src/lib/rate-limit.ts`, `src/lib/actor.ts`,
-  `src/lib/audit.ts`, `src/lib/tool-door/**`, `src/lib/platform-client/**`
-  (generated from `beyondles-ai/beyondles-shared`), `src/server/machine-door.ts`,
+  `src/lib/audit.ts`, `src/lib/tool-door/**`, `src/lib/platform-client/**`,
+  `src/lib/brain-client/**` and `src/lib/doors/**` (generated from `beyondles-ai/beyondles-shared`),
+  `src/server/machine-door.ts`,
   `src/server/jobs/**` (add jobs, do not change the frame files),
   `src/app/api/platform/**`, `src/app/api/mcp/**`, `src/app/api/health/**`,
   `src/app/kein-zugriff/**`, `src/components/app-shell/**` (the shared frame,
@@ -121,7 +122,10 @@ Never change (this is the frame, reviewed centrally):
    (`access`, `idempotent`, `title` de/en, `capability` when the effect leaves
    the organisation) and `scopes`.
 6. Manifest: the entry in `src/server/functions.manifest.ts` naming all
-   three doors and the scopes.
+   three doors, the scopes and the memory door (`memory`: which results it
+   writes into The Brain and whether it reads, or `excluded` with the
+   reason; docs/FRAME.md 4a). A function whose objects are written there
+   forgets them on every delete path.
 7. Texts in both language files. Tests next to the existing ones.
 8. `npm run check:frame && npm test && npm run build` — all green before you
    say "done".
@@ -161,7 +165,7 @@ section is a claim that everything was tested). Then follow
   the tests that enforce the frame).
 - Small commits with English messages in the form `feat(notes): …`,
   `fix(export): …`, `test(parity): …`.
-- Never edit generated files (`src/lib/platform-client/**`,
+- Never edit generated files (`src/lib/platform-client/**`, `src/lib/brain-client/**`, `src/lib/doors/**`,
   `docs/EXCLUSIONS.md`, `docs/RETENTION.md`); regenerate them.
 - When a check fails, read its message: every message names the rule and the
   file. Fix the cause, never the check.

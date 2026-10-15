@@ -9,7 +9,7 @@ const TO = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const RUN = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
 const h = vi.hoisted(() => {
-  const note = { deleteMany: vi.fn(), updateMany: vi.fn() };
+  const note = { deleteMany: vi.fn(), updateMany: vi.fn(), findMany: vi.fn() };
   const apiKey = { deleteMany: vi.fn(), updateMany: vi.fn() };
   const organisationFindFirst = vi.fn();
   const dbMock: Record<string, unknown> = {
@@ -31,6 +31,7 @@ const { note, apiKey, organisationFindFirst, transaction } = h;
 vi.mock("@/lib/db", () => ({ db: h.dbMock }));
 
 import { DELETE } from "@/app/api/platform/member/route";
+import { resetBrainClientForTests } from "@/lib/platform/memory";
 import {
   PERSON_PLAN,
   deletePerson,
@@ -51,6 +52,7 @@ beforeEach(() => {
   organisationFindFirst.mockResolvedValue({ id: STORED_ORG });
   note.deleteMany.mockResolvedValue({ count: 2 });
   note.updateMany.mockResolvedValue({ count: 3 });
+  note.findMany.mockResolvedValue([]);
   apiKey.deleteMany.mockResolvedValue({ count: 1 });
   apiKey.updateMany.mockResolvedValue({ count: 1 });
   vi.spyOn(console, "info").mockImplementation(() => {});
@@ -189,6 +191,97 @@ describe("deletePerson", () => {
       maxWait: 10_000,
       timeout: 100_000,
     });
+  });
+});
+
+describe("deletePerson and the memory door", () => {
+  const BRAIN_ENV = {
+    BRAIN_API_URL: "https://brain-api.test",
+    PLATFORM_API_URL: "https://platform.test",
+    PLATFORM_API_KEY: "lab-service-key",
+  };
+  type Answer = { status: number; body: unknown };
+  const ok = (data: unknown): Answer => ({ status: 200, body: { success: true, data } });
+  const err = (status: number, code: string): Answer => ({
+    status,
+    body: { success: false, error: { code, message: code } },
+  });
+
+  function network(forget: (body: Record<string, unknown>) => Answer) {
+    const forgets: { body: Record<string, unknown>; transactionStarted: boolean }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        let answer: Answer = err(404, "NOT_FOUND");
+        if (url === "https://platform.test/api/on-behalf/token") {
+          answer = ok({ token: "obo", expiresAt: new Date(Date.now() + 300_000).toISOString() });
+        }
+        if (url === "https://brain-api.test/api/memory/forget") {
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          forgets.push({ body, transactionStarted: transaction.mock.calls.length > 0 });
+          answer = forget(body);
+        }
+        return new Response(JSON.stringify(answer.body), { status: answer.status });
+      }),
+    );
+    return forgets;
+  }
+
+  beforeEach(() => {
+    resetBrainClientForTests();
+    for (const [name, value] of Object.entries(BRAIN_ENV)) vi.stubEnv(name, value);
+    note.findMany.mockResolvedValue([{ id: "n1" }, { id: "n2" }]);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("forgets the person's PRIVATE notes in The Brain BEFORE the transaction, one by one", async () => {
+    const forgets = network(() => ok({ deleted: 1 }));
+    const out = await deletePerson(ORG, USER, TO, RUN);
+    expect(note.findMany).toHaveBeenCalledWith({
+      where: { organisationId: STORED_ORG, ownerUserId: CI_USER, visibility: "PRIVATE" },
+      select: { id: true },
+    });
+    expect(forgets.map((f) => f.body.sourceRef).sort()).toEqual(["note:n1", "note:n2"]);
+    expect(forgets.every((f) => f.body.source === "examplelab" && !f.transactionStarted)).toBe(true);
+    expect(out.ok).toBe(true);
+    expect(out.items.at(-1)).toEqual({
+      store: "brain",
+      target: "memory note:* (private notes)",
+      action: "forget",
+      itemCount: 2,
+      outcome: "success",
+      detail: null,
+    });
+  });
+
+  it("leaves the database untouched when The Brain cannot forget, so the next run still finds every id", async () => {
+    network((body) => (body.sourceRef === "note:n2" ? err(503, "DOWN") : ok({ deleted: 1 })));
+    const out = await deletePerson(ORG, USER, TO, RUN);
+    expect(out.ok).toBe(false);
+    expect(transaction).not.toHaveBeenCalled();
+    expect(note.deleteMany).not.toHaveBeenCalled();
+    expect(out.items).toEqual([
+      expect.objectContaining({ store: "brain", outcome: "failed", detail: "The Brain did not forget (UNREACHABLE)" }),
+    ]);
+  });
+
+  it("deletes as before when The Brain is not configured, with a skipped line that says so", async () => {
+    vi.stubEnv("BRAIN_API_URL", "");
+    const forgets = network(() => ok({ deleted: 1 }));
+    const out = await deletePerson(ORG, USER, TO, RUN);
+    expect(forgets).toEqual([]);
+    expect(out.ok).toBe(true);
+    expect(note.deleteMany).toHaveBeenCalledTimes(1);
+    expect(out.items.at(-1)).toMatchObject({ store: "brain", outcome: "skipped", detail: expect.stringMatching(/BRAIN_API_URL/) });
+  });
+
+  it("sends nothing to The Brain when the person has no private note", async () => {
+    note.findMany.mockResolvedValue([]);
+    const forgets = network(() => ok({ deleted: 1 }));
+    const out = await deletePerson(ORG, USER, TO, RUN);
+    expect(forgets).toEqual([]);
+    expect(out.items.some((i) => i.store === "brain")).toBe(false);
   });
 });
 

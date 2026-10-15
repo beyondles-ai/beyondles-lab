@@ -421,8 +421,8 @@ describe("logToolCall", () => {
       tokenId: null,
     });
     expect(log.mock.calls.map((c) => c[0])).toEqual([
-      `[tool-door] via=on-behalf cp=bookinglab org=${ORG} sub=${USER} agent=private tool=examplelab_list_notes outcome=ok jti=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1`,
-      `[tool-door] via=api-key cp=- org=${ORG} sub=- agent=- tool=examplelab_get_note outcome=error jti=-`,
+      `[tool-door] via=on-behalf cp=bookinglab org=${ORG} sub=${USER} agent=private tool=examplelab_list_notes outcome=ok jti=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1 key=-`,
+      `[tool-door] via=api-key cp=- org=${ORG} sub=- agent=- tool=examplelab_get_note outcome=error jti=- key=-`,
     ]);
   });
 });

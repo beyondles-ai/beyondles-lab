@@ -12,8 +12,9 @@ import { describeToolDoor } from "@/lib/tool-door/describe";
  * German and English, what it does (`access`, `idempotent`, `capability`) and
  * whether the caller's credential covers it (`available`).
  *
- * Same credential and checks as `POST /api/mcp` (an `x-api-key` of this Lab,
- * release gate included, or an on-behalf token for this Lab). Errors come in
+ * Same credential and checks as `POST /api/mcp` (an `x-api-key` of this Lab
+ * or a Beyondles key, release gate included, or an on-behalf token for this
+ * Lab). Errors come in
  * the Lab's own JSON envelope (`src/lib/api-errors.ts`). The middleware lets
  * it through as part of `/api/mcp`.
  */

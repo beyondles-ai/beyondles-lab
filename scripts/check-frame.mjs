@@ -9,15 +9,45 @@
  * stay with `/lab-pipeline check`.
  *
  * Exit code 1 on the first group of findings; every finding is printed.
+ *
+ *   node scripts/check-frame.mjs                                  this repo, profile lab
+ *   node scripts/check-frame.mjs --profile core --root <product>  a core product
+ *
+ * Profile "lab" (the default) checks a Lab built from this template; with
+ * `--root` it checks another Lab's folder instead of this repo. Profile
+ * "core" checks a core product (The Brain, Beyondles HorAIzon, Beyondles
+ * Suite): the template layout (blocks 1, 2 and 8) is replaced by the door
+ * files the product names in its `doors.config.json`; the principle blocks
+ * run where they apply and print "n/a" with the reason where they do not.
+ * The rules of that profile are in scripts/support/core-profile.mjs.
+ * Exit code 2 = wrong usage.
  */
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { parseFrameArgs, runCoreProfile } from "./support/core-profile.mjs";
+import { doorsPinFindings } from "./support/doors-pin.mjs";
+import {
+  AI_PROVIDER_ENV,
+  AI_PROVIDER_SDKS,
+  DARK_MODE,
+  MAIL_ENV,
+  MAIL_SDKS,
+  RETIRED_ENV,
+  SWALLOW,
+} from "./support/frame-rules.mjs";
 import { informalAddressFindings } from "./support/informal-address.mjs";
+import { memoryDoorFindings } from "./support/memory-door.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const args = parseFrameArgs(process.argv.slice(2));
+if (args.error) {
+  console.error(`${args.error}\n${args.usage}`);
+  process.exit(2);
+}
+if (args.profile === "core") process.exit(runCoreProfile(args.root));
+
+const root = args.root ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const findings = [];
 const fail = (msg) => findings.push(msg);
 const read = (rel) => readFileSync(path.join(root, rel), "utf8");
@@ -36,6 +66,8 @@ for (const rel of [
   "src/lib/jwt-guard.ts",
   "src/middleware.ts",
   "src/instrumentation.ts",
+  // Self-registration at the platform registry (product registry follow-up).
+  "src/lib/platform/register.ts",
   "src/app/api/health/route.ts",
   "src/app/api/platform/export/route.ts",
   "src/app/api/platform/organisation/route.ts",
@@ -47,10 +79,18 @@ for (const rel of [
   "src/app/api/mcp/route.ts",
   "src/app/api/mcp/describe/route.ts",
   "src/app/api/platform/reassign-owner/route.ts",
+  // The door code is the shared module `doors` (beyondles-shared, card #383),
+  // generated into src/lib/doors and drift-checked by the shared check action.
+  // The Lab keeps its manifest, scopes, settings and the thin wrappers.
+  "src/lib/doors/.shared-version",
+  "src/lib/doors/door-contract.md",
+  "src/lib/doors/on-behalf.ts",
+  "src/lib/doors/tool-door/markers.ts",
+  "src/lib/doors/tool-door/obo-door.ts",
+  "src/lib/doors/tool-door/release-gate.ts",
   "src/lib/platform/on-behalf.ts",
-  "src/lib/tool-door/markers.ts",
-  "src/lib/tool-door/obo-door.ts",
-  "src/lib/tool-door/release-gate.ts",
+  "src/lib/tool-door/host.ts",
+  "src/lib/tool-door/key-exchange.ts",
   "tests/unit/tool-catalog.test.ts",
   // Headless by construction (06.10.2026): the manifest, its parity test and
   // the generated exclusions list.
@@ -132,22 +172,16 @@ if (exists(".github/workflows/ci.yml")) {
 // 4. No provider or mail SDK, no provider key, no retired variable.
 const pkg = JSON.parse(read("package.json"));
 const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-for (const sdk of [
-  "@anthropic-ai/sdk",
-  "openai",
-  "@google/generative-ai",
-  "@google/genai",
-  "resend",
-  "nodemailer",
-  "@mistralai/mistralai",
-]) {
+for (const sdk of [...AI_PROVIDER_SDKS, ...MAIL_SDKS]) {
   if (deps[sdk]) fail(`provider/mail SDK in package.json: ${sdk} (use the platform door)`);
 }
 if (pkg.scripts?.start && /\bnext start\b/.test(pkg.scripts.start))
   fail('"start" uses `next start` — standalone output needs scripts/start.mjs');
 
-const FORBIDDEN_ENV =
-  /\b(ANTHROPIC_API_KEY|OPENAI_API_KEY|GOOGLE_[A-Z_]*API_KEY|MISTRAL_API_KEY|DEEPSEEK_API_KEY|RESEND_API_KEY|RESEND_ENDPOINT|MAILER_MODE|SMTP_(HOST|PORT|USER|PASS|PASSWORD)|PLATFORM_SSO_URL)\b/;
+// Provider keys, mail settings and retired names (scripts/support/frame-rules.mjs).
+const FORBIDDEN_ENV = {
+  test: (line) => AI_PROVIDER_ENV.test(line) || MAIL_ENV.test(line) || RETIRED_ENV.test(line),
+};
 function walk(dir, out = []) {
   if (!existsSync(dir)) return out;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -158,9 +192,17 @@ function walk(dir, out = []) {
   }
   return out;
 }
+// The frame check's own files name every rule they enforce; they are not
+// scanned by those rules.
+const FRAME_CHECK_FILES = [
+  ["scripts", "check-frame.mjs"],
+  ["scripts", "support", "frame-rules.mjs"],
+  ["scripts", "support", "core-profile.mjs"],
+].map((parts) => path.join(root, ...parts));
+const isFrameCheckFile = (f) => FRAME_CHECK_FILES.includes(f);
 const sourceFiles = ["src", "docker", "ops", "scripts", "mcp", ".github"]
   .flatMap((d) => walk(path.join(root, d)))
-  .filter((f) => !f.endsWith("check-frame.mjs"))
+  .filter((f) => !isFrameCheckFile(f))
   .concat([path.join(root, ".env.example")]);
 
 // JWT_SECRET must never be passed by Compose (a server .env must not carry it).
@@ -237,17 +279,42 @@ if (/^JWT_SECRET=/m.test(envExample) || /^ALLOW_LOCAL_JWT=/m.test(envExample))
     fail("src/app/api/platform/organisation/route.ts exports no DELETE handler");
 }
 
-// 5c. The on-behalf module is a VERBATIM copy (connection layer contract,
-//     stage 6, 2.5). A changed byte means a Lab verifies tokens differently
-//     from every other product. Line endings are normalised to LF first, so a
-//     Windows checkout with CRLF does not count as a change.
+// 5c. One on-behalf verifier (connection layer contract, stage 6, 2.5). Its
+//     source is the shared module `doors` (src/lib/doors/on-behalf.ts, synced
+//     from beyondles-shared). src/lib/platform/on-behalf.ts only keeps the
+//     Lab's import path: after its comments it must be exactly the re-export,
+//     so nobody re-inlines a verifier that checks tokens differently from every
+//     other product.
 {
-  const ON_BEHALF_SHA256 = "25f16f34f9653690f59a5cb3ea89060592c78cc0f88299dd61aed7aa5c5b1175";
   const rel = "src/lib/platform/on-behalf.ts";
+  const WRAPPER = 'export * from "@/lib/doors/on-behalf";';
   if (exists(rel)) {
-    const digest = createHash("sha256").update(read(rel).replace(/\r\n/g, "\n"), "utf8").digest("hex");
-    if (digest !== ON_BEHALF_SHA256)
-      fail(`${rel} is not the verbatim copy of the contract (sha256 ${digest}, expected ${ON_BEHALF_SHA256})`);
+    const code = read(rel)
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (code !== WRAPPER)
+      fail(`${rel} must be only the re-export of the shared verifier (${WRAPPER}); found other code`);
+  }
+}
+
+// 5d. The generated copy of `doors` is byte-for-byte the pinned shared version.
+//     The shared check action compares it with beyondles-shared, but that job
+//     does not run in this public template or in a Lab outside the
+//     organisation. This pin is the check that always runs: an edited verifier,
+//     token door, release gate or scope model fails here. Line endings are
+//     normalised to LF first. After each doors sync, replace the "ts" table in
+//     scripts/support/doors-pin.mjs with the digests the failure lists (and
+//     review that diff like code); the core profile reads the same pin.
+{
+  const DOORS_DIR = "src/lib/doors";
+  if (exists(DOORS_DIR)) {
+    const list = (dir) =>
+      readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory() ? list(`${dir}/${entry.name}`) : [`${dir}/${entry.name}`],
+      );
+    for (const finding of doorsPinFindings({ read, exists, list }, DOORS_DIR, "ts")) fail(finding);
   }
 }
 
@@ -257,6 +324,13 @@ for (const file of sourceFiles.filter((f) => /\.tsx?$/.test(f))) {
   if (text.includes("beyondles.ai/api/auth/me"))
     fail(`${path.relative(root, file)} hard-codes the Suite address for /api/auth/me`);
 }
+
+// 6b. The Lab registers itself at the platform on start (product registry follow-up):
+// without it the Suite never lists the Lab and somebody writes the migrations by hand again.
+if (exists("src/instrumentation.ts") && !/registerInBackground\(\)/.test(read("src/instrumentation.ts")))
+  fail("src/instrumentation.ts does not call registerInBackground() (self-registration at the platform registry)");
+if (exists("src/lib/platform/register.ts") && !/\/api\/registry\/self/.test(read("src/lib/platform/register.ts")))
+  fail("src/lib/platform/register.ts does not post to /api/registry/self");
 
 // 7. Both languages carry the same keys and no empty text.
 const keys = (obj, prefix = "") =>
@@ -299,11 +373,6 @@ if (!IS_TEMPLATE_REPO) {
 //    `.catch(() => {})`, no `|| true` in code and scripts. A failure is
 //    handled, logged with a reason, or it propagates.
 {
-  const SWALLOW = [
-    [/catch\s*(\([^)]*\))?\s*\{\s*\}/, "empty catch block"],
-    [/\.catch\(\s*(\(\s*\w*\s*\)|\w+)\s*=>\s*(\{\s*\}|undefined\s*\))/, "promise error swallowed by .catch"],
-    [/\|\|\s*true\b/, "`|| true` hides a failed command"],
-  ];
   const generated = [
     `${path.sep}src${path.sep}lib${path.sep}platform-client${path.sep}`,
     `${path.sep}src${path.sep}components${path.sep}share${path.sep}`,
@@ -312,7 +381,7 @@ if (!IS_TEMPLATE_REPO) {
   const files = ["src", "scripts", "ops", "mcp", "docker"]
     .flatMap((d) => walk(path.join(root, d)))
     .filter((f) => /\.(ts|tsx|mjs|js|sh)$/.test(f) || path.basename(f) === "Dockerfile")
-    .filter((f) => !f.endsWith("check-frame.mjs") && !generated.some((g) => f.includes(g)));
+    .filter((f) => !isFrameCheckFile(f) && !generated.some((g) => f.includes(g)));
   for (const file of files) {
     readFileSync(file, "utf8")
       .split("\n")
@@ -420,11 +489,7 @@ if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((
     "slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose";
   const TOKENS = "use the Beyondles names from src/app/globals.css";
   const DESIGN = [
-    [/(^|[\s"'`{(])dark:/, "dark: class (light only, no dark mode)"],
-    [/prefers-color-scheme/, "prefers-color-scheme (light only)"],
-    [/color-scheme:\s*dark/, "color-scheme: dark (light only)"],
-    [/@custom-variant\s+dark/, "dark variant (light only)"],
-    [/next-themes|\bThemeProvider\b|\buseTheme\b/, "theme switching (light only)"],
+    ...DARK_MODE,
     [new RegExp(`\\b[a-z-]+-(${PALETTE})-\\d{2,3}\\b`), `Tailwind default palette class: ${TOKENS}`],
     [new RegExp(`--color-(${PALETTE})-\\d{2,3}\\b`), `Tailwind default palette value: ${TOKENS}`],
     [/\b[a-z-]+-\[(#|rgb|hsl|oklch)/, `arbitrary colour class: ${TOKENS}`],
@@ -469,6 +534,14 @@ if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((
     if (hit) fail(`${rel}: "${hit}" is an own "Back to Suite" text; the frame's topbar has the way back`);
   }
 }
+
+// 14. Memory door (card #377, docs/FRAME.md 4a). Every Lab carries the
+//     shared Brain client (module brain-client) and its wrapper
+//     src/lib/platform/memory.ts; every manifest function declares `memory`
+//     (what it writes and reads, or why not); when any function writes,
+//     every delete path forgets in The Brain. A Lab without the client
+//     fails. Rule and scanner in scripts/support/memory-door.mjs.
+for (const finding of memoryDoorFindings({ read, exists })) fail(finding);
 
 if (findings.length > 0) {
   console.error("Frame check FAILED:\n" + findings.map((f) => `  - ${f}`).join("\n"));

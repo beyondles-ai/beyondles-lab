@@ -7,6 +7,9 @@
  *    (`reportDoorOnce`): one loud line when the Suite is configured but the
  *    platform door is not, so the operator sees why nobody gets in.
  *    `/api/health` reports the same as `access: "unconfigured"`.
+ * 3. Self-registration at the platform registry (`src/lib/platform/register.ts`),
+ *    in the background: the Lab appears in the Suite without a manual
+ *    migration. Never blocks the start, does nothing without a platform door.
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -14,7 +17,10 @@ export async function register(): Promise<void> {
   const { reportDoorOnce } = await import("@/lib/platform-client/core/config");
   const { door } = await import("@/lib/platform/door");
   const { LAB_NAME } = await import("@/lib/lab");
+  const { registerInBackground } = await import("@/lib/platform/register");
 
   assertProductionEnvSane();
   reportDoorOnce(door(), LAB_NAME);
+  // Fire and forget: never awaited, never rejects (it catches everything itself).
+  void registerInBackground();
 }

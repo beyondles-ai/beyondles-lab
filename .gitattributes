@@ -16,3 +16,9 @@ src/lib/platform-client/** text eol=lf
 
 # Generated from beyondles-ai/beyondles-shared (app-shell). Never edited here.
 src/components/app-shell/** text eol=lf
+
+# Generated from beyondles-ai/beyondles-shared (brain-client). Never edited here.
+src/lib/brain-client/** text eol=lf
+
+# Generated from beyondles-ai/beyondles-shared (doors). Never edited here.
+src/lib/doors/** text eol=lf

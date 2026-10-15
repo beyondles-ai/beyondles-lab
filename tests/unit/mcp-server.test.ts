@@ -107,7 +107,7 @@ describe("callTool", () => {
     expect(log).toHaveBeenCalledTimes(1);
     const line = String(log.mock.calls[0][0]);
     expect(line).toBe(
-      `[tool-door] via=api-key cp=- org=${ORG} sub=- agent=- tool=${LAB_KEY}_get_note outcome=error jti=-`,
+      `[tool-door] via=api-key cp=- org=${ORG} sub=- agent=- tool=${LAB_KEY}_get_note outcome=error jti=- key=-`,
     );
     expect(line).not.toContain("secret-argument");
     log.mockRestore();

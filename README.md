@@ -75,6 +75,7 @@ server — see `src/lib/jwt-guard.ts`.
 | `docs/EXCLUSIONS.md`, `docs/HEADLESS-MIGRATION.md` | the generated exclusions list; how an existing Lab adopts the headless pieces |
 | `src/components/share/`, `.beyondles-shared.json` | the share blocks (picker, badge, people picker, dialog): **generated from `beyondles-ai/beyondles-shared`, never edited here** |
 | `src/lib/platform-client/` | the access client, decisions and container rules behind `platform-access.ts`, `platform/access.ts`, `access-rules.ts`, `rbac.ts` and `api-auth.ts`: **generated from `beyondles-ai/beyondles-shared`, never edited here** |
+| `src/lib/doors/` | the door code of the three doors (door contract, manifest types, parity check and reader, OpenAPI, exclusions, scopes, rate limit, on-behalf verifier, token door, release gate, tool markers, describe, call log) behind the thin wrappers in `src/lib/scopes.ts`, `rate-limit.ts`, `openapi.ts`, `platform/on-behalf.ts`, `tool-door/` and `src/server/parity.ts`, `exclusions.ts`: **generated from `beyondles-ai/beyondles-shared` (module `doors`), never edited here** |
 | `src/components/ui/share-primitives/` | the four small components the share blocks draw with (in the Beyondles look) |
 | `src/components/app-shell/` | the shared Beyondles frame for every page behind the login (sidebar, topbar, person menu, footer, no-access page, states, page blocks): **generated from `beyondles-ai/beyondles-shared` (module `app-shell`), never edited here** |
 | `src/app/(app)/layout.tsx`, `src/lib/frame.ts`, `src/lib/suite-url.ts`, `src/lib/lab-nav.tsx` | the signed-in layout that renders the frame, the Suite links, language and session hint it gets from the server, and the sidebar entries |
@@ -82,7 +83,7 @@ server — see `src/lib/jwt-guard.ts`.
 | `src/app/kein-zugriff/` | the no-access page (shared `NoAccess`), outside the signed-in layout on purpose |
 | `src/app/globals.css`, `src/components/ui/form-classes.ts` | the Beyondles colours, fonts and radii for Tailwind, and the form field styles |
 | `docker/`, `ops/deploy/` | container stack and host scripts |
-| `scripts/check-frame.mjs` | the repo half of `/lab-pipeline check`, runs in CI |
+| `scripts/check-frame.mjs` | the repo half of `/lab-pipeline check`, runs in CI; `--profile core --root <product>` checks a core product (The Brain, Beyondles HorAIzon, Beyondles Suite) against its `doors.config.json` (rules in `scripts/support/core-profile.mjs`) |
 | `docs/FRAME.md` | what the frame guarantees |
 | `docs/SUBMISSION.md` | how a Lab gets into the ecosystem (concept) |
 | `docs/OFFEN.md` | what is deliberately not finished |
