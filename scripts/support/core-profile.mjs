@@ -26,8 +26,15 @@
  *   1   the config is valid and every named file is there
  *   2   no environment file is tracked by git
  *   3   CI runs the shared quality gates and the shared check at the pinned version
- *   4   no AI provider SDK or key in the product (mail is reported, see below)
- *   5c  the machine door uses the shared doors code
+ *   4   no AI provider SDK or Lab-style provider key (ANTHROPIC_API_KEY and the
+ *       like) in the code, .env examples and Compose files. Provider keys
+ *       under the platform's names (PLATFORM_LLM_*_KEY) and calls to provider
+ *       hosts are a "warn" row naming them, never "ok": profile lab fails
+ *       them (rule 11), the core products have not moved them to the
+ *       platform door yet. Mail is reported the same way. CI workflows are
+ *       not counted: the AI review gate of beyondles-ci reads its own secret
+ *       there, and the row names those lines as exempt.
+ *   5c  the machine door builds its door with createOboDoor from the shared copy
  *   5d  the shared copy is byte for byte doors 1.5.1 and declared as such
  *   6   no hard-coded Suite address for /api/auth/me
  *   7   every messages/ folder has the same keys in de.json and en.json
@@ -51,11 +58,13 @@ import path from "node:path";
 import { DOORS_PIN_VERSION, doorsPinFindings } from "./doors-pin.mjs";
 import {
   AI_PROVIDER_ENV,
+  AI_PROVIDER_HOST,
   AI_PROVIDER_SDKS,
   COMMENT_LINE,
   DARK_MODE,
   MAIL_ENV,
   MAIL_SDKS,
+  PLATFORM_PROVIDER_KEY_ENV,
   RETIRED_ENV,
   SWALLOW,
   messageKeys,
@@ -205,20 +214,21 @@ export function readDoorsConfig(io) {
 
 // --- reading the product -------------------------------------------------------
 
-/** Folders never walked: dependencies, build output, git. */
+/** Folders never read, at any depth: dependencies, git, tool output and caches. */
 const SKIP_DIRS = new Set([
   "node_modules",
   ".git",
   ".next",
-  "coverage",
-  "dist",
-  "build",
-  "out",
   ".test-out",
   ".turbo",
   ".vercel",
   ".cache",
 ]);
+/**
+ * Build output names. Skipped only in a package root (next to a
+ * package.json), so a route folder such as app/(dashboard)/build stays in.
+ */
+const BUILD_DIRS = new Set(["coverage", "dist", "build", "out"]);
 const TEST_SEGMENTS = new Set([
   "tests",
   "test",
@@ -229,32 +239,86 @@ const TEST_SEGMENTS = new Set([
 ]);
 const CODE_FILE = /\.(ts|tsx|js|jsx|mjs|cjs)$/;
 
-/** File access below `root`; every path in and out is relative, with "/". */
+/**
+ * File access below `root`; every path in and out is relative, with "/".
+ * `list()` lists the product: in a git checkout the files git tracks plus the
+ * untracked ones it does not ignore (`git ls-files`), else a walk of the
+ * folder. Both leave out SKIP_DIRS at any depth and BUILD_DIRS in a package
+ * root. `list(folder)` walks that one folder completely (the shared copy of
+ * doors is compared file by file, ignored or not).
+ */
 export function productIo(root) {
   const abs = (rel) => path.join(root, ...rel.split("/"));
-  const list = (rel = "") => {
+  const isFile = (rel) => existsSync(abs(rel)) && statSync(abs(rel)).isFile();
+  const packageRoots = new Map();
+  const skipped = (parentRel, name) => {
+    if (SKIP_DIRS.has(name)) return true;
+    if (!BUILD_DIRS.has(name)) return false;
+    if (!packageRoots.has(parentRel))
+      packageRoots.set(
+        parentRel,
+        isFile(parentRel ? `${parentRel}/package.json` : "package.json"),
+      );
+    return packageRoots.get(parentRel);
+  };
+  const walk = (rel, skip) => {
     const out = [];
     const visit = (dirRel) => {
       const dirAbs = dirRel ? abs(dirRel) : root;
       for (const entry of readdirSync(dirAbs, { withFileTypes: true })) {
-        if (SKIP_DIRS.has(entry.name)) continue;
+        if (entry.isDirectory() && skip(dirRel, entry.name)) continue;
         const childRel = dirRel ? `${dirRel}/${entry.name}` : entry.name;
         if (entry.isDirectory()) visit(childRel);
         else if (entry.isFile()) out.push(childRel);
       }
     };
-    if (
-      rel === "" ||
-      (existsSync(abs(rel)) && statSync(abs(rel)).isDirectory())
-    )
-      visit(rel);
+    visit(rel);
     return out;
+  };
+  let product;
+  const listProduct = () => {
+    if (product) return product;
+    const git = spawnSync(
+      "git",
+      [
+        "-C",
+        root,
+        "ls-files",
+        "-z",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+      ],
+      { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
+    );
+    const listed =
+      git.error || git.status !== 0
+        ? []
+        : [...new Set(git.stdout.split("\0").filter(Boolean))];
+    product =
+      listed.length > 0
+        ? listed.filter((rel) => {
+            const dirs = rel.split("/").slice(0, -1);
+            return (
+              !dirs.some((name, i) =>
+                skipped(dirs.slice(0, i).join("/"), name),
+              ) && isFile(rel)
+            );
+          })
+        : walk("", skipped);
+    product.sort();
+    return product;
+  };
+  const list = (rel = "") => {
+    if (rel === "") return listProduct();
+    if (!(existsSync(abs(rel)) && statSync(abs(rel)).isDirectory())) return [];
+    return walk(rel, () => false);
   };
   return {
     root,
     read: (rel) => readFileSync(abs(rel), "utf8"),
     exists: (rel) => existsSync(abs(rel)),
-    isFile: (rel) => existsSync(abs(rel)) && statSync(abs(rel)).isFile(),
+    isFile,
     isDir: (rel) => existsSync(abs(rel)) && statSync(abs(rel)).isDirectory(),
     list,
   };
@@ -416,6 +480,38 @@ export function importSpecifiers(text) {
     /\bfrom\s*(['"])([^'"\n]+)\1|\brequire\(\s*(['"])([^'"\n]+)\3\s*\)|\bimport\(\s*(['"])([^'"\n]+)\5\s*\)|^\s*import\s*(['"])([^'"\n]+)\7/gm,
   ))
     out.push(m[2] ?? m[4] ?? m[6] ?? m[8]);
+  return out;
+}
+
+/** The shared doors entry point a machine door is built with (block 5c). */
+export const SHARED_DOOR_ENTRY = "createOboDoor";
+
+/**
+ * The named value imports of a source text: `{ name, local, spec }` for every
+ * binding of `import { a, b as c } from "..."` and
+ * `const { a, b: c } = require("...")`. Type-only imports
+ * (`import type { ... }`, `type a`) are left out.
+ */
+export function valueImports(text) {
+  const src = withoutComments(text);
+  const out = [];
+  const add = (list, spec, separator) => {
+    for (const raw of list.split(",")) {
+      const part = raw.trim();
+      if (part === "" || /^type\s/.test(part)) continue;
+      const [name, local] = part.split(separator).map((s) => s.trim());
+      if (/^[A-Za-z_$][\w$]*$/.test(name))
+        out.push({ name, local: local || name, spec });
+    }
+  };
+  for (const m of src.matchAll(
+    /\bimport\s+(type\s+)?(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from\s*(['"])([^'"\n]+)\3/g,
+  ))
+    if (!m[1]) add(m[2], m[4], /\s+as\s+/);
+  for (const m of src.matchAll(
+    /\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*require\(\s*(['"])([^'"\n]+)\2\s*\)/g,
+  ))
+    add(m[1], m[3], ":");
   return out;
 }
 
@@ -709,18 +805,27 @@ export function coreProfileReport(root) {
     }
   }
 
-  // 4. No AI provider SDK or key; mail SDKs and settings are reported.
+  // 4. No AI provider SDK or key. Provider keys under the platform's names,
+  //    provider hosts and mail are reported as warnings, never as "ok".
   {
     const out = [];
+    /** Settings files: the .env examples and the Compose files. */
+    const settings = allFiles.filter(
+      (rel) =>
+        !isTest(rel) &&
+        !inGenerated(rel) &&
+        ((isEnvFile(rel) && /\.(example|sample|template)$/.test(rel)) ||
+          (!isUnder(rel, ".github") &&
+            /(^|\/)[^/]*compose[^/]*\.ya?ml$/.test(rel))),
+    );
+    const scanned = [...runtimeCode, ...settings];
     for (const { rel, deps } of dependencies)
       for (const sdk of AI_PROVIDER_SDKS)
         if (deps[sdk])
           out.push(
             `${rel} depends on ${sdk} (AI goes through the platform door)`,
           );
-    for (const hit of codeLines(runtimeCode, (line) =>
-      AI_PROVIDER_ENV.test(line),
-    ))
+    for (const hit of codeLines(scanned, (line) => AI_PROVIDER_ENV.test(line)))
       out.push(
         `${hit} reads an AI provider key (keys live on the platform only)`,
       );
@@ -728,16 +833,45 @@ export function coreProfileReport(root) {
       out.push(
         `${hit} uses the retired PLATFORM_SSO_URL (NEXT_PUBLIC_PLATFORM_URL)`,
       );
-    failBlock(
-      "4",
-      out,
-      `no AI provider SDK or key in ${packageFiles.length} package.json and ${runtimeCode.length} source files`,
+    const providerKeys = codeLines(
+      scanned,
+      (line) =>
+        PLATFORM_PROVIDER_KEY_ENV.test(line) || AI_PROVIDER_HOST.test(line),
     );
+    // CI is not product code: the AI review gate of beyondles-ci reads its own
+    // provider secret there. Named in the row, so the exemption is visible.
+    const ciKeys = codeLines(
+      allFiles.filter(
+        (rel) => isUnder(rel, ".github/workflows") && /\.ya?ml$/.test(rel),
+      ),
+      (line) => AI_PROVIDER_ENV.test(line),
+    );
+    const exempt =
+      ciKeys.length > 0
+        ? `; exempt: ${ciKeys.length} CI line${ciKeys.length === 1 ? "" : "s"} with an AI provider secret (the review gate of beyondles-ci): ${sample(ciKeys)}`
+        : "";
+    const where = `${packageFiles.length} package.json, ${runtimeCode.length} source files and ${settings.length} .env example/Compose files`;
+    if (out.length > 0) failBlock("4", out, "");
+    if (providerKeys.length > 0) {
+      warnings.push(
+        `[4] AI provider keys or provider addresses in the product (it calls the providers itself, not through the platform door): ${sample(providerKeys)}`,
+      );
+      row(
+        "4",
+        "warn",
+        `${providerKeys.length} AI provider key/address hit${providerKeys.length === 1 ? "" : "s"} (PLATFORM_LLM_*_KEY or a provider host): the product holds provider keys and calls the providers directly. Profile lab fails this (rule 11); not enforced for core products yet${exempt}`,
+      );
+    } else if (out.length === 0)
+      row(
+        "4",
+        "ok",
+        `no AI provider SDK, key or provider address in ${where}${exempt}`,
+      );
     const mail = [
       ...dependencies.flatMap(({ rel, deps }) =>
         MAIL_SDKS.filter((sdk) => deps[sdk]).map((sdk) => `${rel}: ${sdk}`),
       ),
-      ...codeLines(runtimeCode, (line) => MAIL_ENV.test(line)),
+      ...codeLines(scanned, (line) => MAIL_ENV.test(line)),
     ];
     if (mail.length > 0) {
       warnings.push(
@@ -763,22 +897,40 @@ export function coreProfileReport(root) {
     "the Lab's tenant deletion route and PLATFORM_DELETE_KEY: core products have their own deletion paths (card #335)",
   );
 
-  // 5c. One door implementation: the machine door uses the shared doors code.
+  // 5c. One door implementation: the machine door builds its door with
+  //     createOboDoor (token check, rate windows, refusal log) from the shared
+  //     copy. A type-only import or an unrelated helper is not enough.
   {
-    const specs = importSpecifiers(io.read(config.machineDoor));
-    const fromShared = specs.filter((spec) =>
+    const text = io.read(config.machineDoor);
+    const inShared = (spec) =>
       specifierTargets(config.machineDoor, spec).some((target) =>
         isUnder(target.replace(/\.(js|mjs|cjs|ts)$/, ""), config.sharedCopy),
-      ),
+      );
+    const fromShared = importSpecifiers(text).filter(inShared);
+    const door = valueImports(text).find(
+      ({ name, spec }) =>
+        name === SHARED_DOOR_ENTRY &&
+        inShared(spec) &&
+        /(^|\/)tool-door\/obo-door(\.[cm]?[jt]s)?$/.test(spec),
     );
+    const calls = (
+      withoutComments(text).match(
+        new RegExp(`\\b${door?.local ?? SHARED_DOOR_ENTRY}\\s*\\(`, "g"),
+      ) ?? []
+    ).length;
+    const out = [];
+    if (!door)
+      out.push(
+        `${config.machineDoor} does not import ${SHARED_DOOR_ENTRY} (as a value) from ${config.sharedCopy}/tool-door/obo-door: the machine door must be built from the shared doors code`,
+      );
+    else if (calls === 0)
+      out.push(
+        `${config.machineDoor} imports ${SHARED_DOOR_ENTRY} from the shared copy but never calls it: the machine door must be built from the shared doors code`,
+      );
     failBlock(
       "5c",
-      fromShared.length > 0
-        ? []
-        : [
-            `${config.machineDoor} imports nothing from ${config.sharedCopy}: the machine door must use the shared doors code`,
-          ],
-      `${config.machineDoor} imports ${fromShared.length} module${fromShared.length === 1 ? "" : "s"} of the shared copy`,
+      out,
+      `${config.machineDoor} builds its door with ${SHARED_DOOR_ENTRY} from the shared copy (${fromShared.length} module${fromShared.length === 1 ? "" : "s"} of the copy imported)`,
     );
   }
 
@@ -906,6 +1058,7 @@ export function coreProfileReport(root) {
 
     const doc = io.read(config.exclusionsDoc);
     const marker = generatedMarker(doc);
+    let generatorNote = "";
     if (!marker)
       out.push(
         `${config.exclusionsDoc} has no "<!-- GENERATED from <manifest> by \`<command>\`" line: it must be generated from the manifest`,
@@ -925,11 +1078,7 @@ export function coreProfileReport(root) {
             `${config.exclusionsDoc} names \`${marker.command}\`, but ${generator.packageJson} has no script "${generator.script}"`,
           );
       } else
-        row(
-          "8",
-          "n/a",
-          `generator \`${marker.command}\` is not an npm script: only the parity test holds the doc current`,
-        );
+        generatorNote = `; the generator \`${marker.command}\` is not an npm script, so only the parity test holds the doc current`;
       const listed = exclusionsDocEntries(doc);
       const gone = [...listed.ids].filter((id) => !ids.has(id));
       if (gone.length > 0 && ids.size > 0)
@@ -955,7 +1104,7 @@ export function coreProfileReport(root) {
     failBlock(
       "8",
       out,
-      `${ids.size} functions in ${sources.length} manifest file${sources.length === 1 ? "" : "s"}; ${config.exclusionsDoc} generated from it and held by ${config.parityTest}`,
+      `${ids.size} functions in ${sources.length} manifest file${sources.length === 1 ? "" : "s"}; ${config.exclusionsDoc} generated from it and held by ${config.parityTest}${generatorNote}`,
     );
   }
 

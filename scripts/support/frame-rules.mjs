@@ -21,6 +21,16 @@ export const MAIL_SDKS = ["resend", "nodemailer"];
 export const AI_PROVIDER_ENV =
   /\b(ANTHROPIC_API_KEY|OPENAI_API_KEY|GOOGLE_[A-Z_]*API_KEY|MISTRAL_API_KEY|DEEPSEEK_API_KEY)\b/;
 
+/**
+ * The platform's own names for AI provider keys (PLATFORM_LLM_OPENAI_KEY and
+ * so on). A product that reads them holds provider keys itself.
+ */
+export const PLATFORM_PROVIDER_KEY_ENV = /\bPLATFORM_LLM_[A-Z0-9_]*_KEY\b/;
+
+/** API hosts of AI providers: a product that calls them bypasses the platform door. */
+export const AI_PROVIDER_HOST =
+  /\b(api\.openai\.com|api\.anthropic\.com|generativelanguage\.googleapis\.com|aiplatform\.googleapis\.com|api\.mistral\.ai|api\.deepseek\.com)\b/;
+
 /** Environment variables of mail providers. */
 export const MAIL_ENV =
   /\b(RESEND_API_KEY|RESEND_ENDPOINT|MAILER_MODE|SMTP_(HOST|PORT|USER|PASS|PASSWORD))\b/;

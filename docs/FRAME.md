@@ -393,7 +393,10 @@ like every person.
   test, the machine door, the MCP and OpenAPI routes, the exclusions doc and
   the doors copy (with `variant` for the CommonJS copy); block 5d holds that
   copy to the same pin, in the flavour the product declares (`ts`, `ts+.js`
-  or `cjs`).
+  or `cjs`). Block 4 fails a Lab-style provider key or an AI SDK; provider
+  keys under the platform's names (`PLATFORM_LLM_*_KEY`) and calls to
+  provider hosts print as a `warn` row that names them, never as `ok`
+  (The Brain still holds such keys; profile lab fails them as rule 11).
 
 ### 5.4 Scopes on machine credentials
 

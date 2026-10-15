@@ -325,7 +325,7 @@ function product(overrides: Record<string, string | null> = {}) {
     }),
     "lib/doors/functions.manifest.ts": MANIFEST,
     "lib/doors/machine-door.ts":
-      'import { createOboDoor } from "@/lib/shared-doors/tool-door/obo-door";\nexport const door = createOboDoor;\n',
+      'import { createOboDoor } from "@/lib/shared-doors/tool-door/obo-door";\nimport { host } from "./host";\nexport const door = createOboDoor(host);\n',
     "app/api/mcp/route.ts":
       "// The MCP door.\nexport const POST = () => null;\n",
     "app/api/v1/openapi.json/route.ts":
@@ -512,8 +512,149 @@ describe("profile core", () => {
       }),
     );
     expect(report.findings).toEqual([
-      "[5c] lib/doors/machine-door.ts imports nothing from lib/shared-doors: the machine door must use the shared doors code",
+      "[5c] lib/doors/machine-door.ts does not import createOboDoor (as a value) from lib/shared-doors/tool-door/obo-door: the machine door must be built from the shared doors code",
     ]);
+  });
+
+  it("fails a machine door that imports only types or helpers from the shared copy, or never calls the door", () => {
+    const typesOnly = coreProfileReport(
+      product({
+        "lib/doors/machine-door.ts": [
+          'import type { DoorHost } from "@/lib/shared-doors/door-host";',
+          'import { type OboDoor } from "@/lib/shared-doors/tool-door/obo-door";',
+          'import { rateLimitFor } from "@/lib/shared-doors/rate-limit";',
+          "export const door = (host: DoorHost): OboDoor => own(host, rateLimitFor);",
+        ].join("\n"),
+      }),
+    );
+    expect(typesOnly.findings).toEqual([
+      expect.stringContaining(
+        "[5c] lib/doors/machine-door.ts does not import createOboDoor (as a value)",
+      ),
+    ]);
+    const uncalled = coreProfileReport(
+      product({
+        "lib/doors/machine-door.ts":
+          'import { createOboDoor } from "@/lib/shared-doors/tool-door/obo-door";\n// createOboDoor(host) is only named here\nexport const door = own();\n',
+      }),
+    );
+    expect(uncalled.findings).toEqual([
+      "[5c] lib/doors/machine-door.ts imports createOboDoor from the shared copy but never calls it: the machine door must be built from the shared doors code",
+    ]);
+  });
+
+  it("accepts the CommonJS door with a renamed binding", () => {
+    const report = coreProfileReport(
+      product({
+        "lib/doors/machine-door.ts":
+          "const { createOboDoor: makeDoor } = require('../shared-doors/tool-door/obo-door.js');\nmodule.exports = makeDoor(host);\n",
+      }),
+    );
+    expect(report.findings).toEqual([]);
+    expect(statusOf(report, "5c")).toEqual(["ok"]);
+  });
+
+  it("reports provider keys under the platform's names and provider hosts as a warning, never ok", () => {
+    const report = coreProfileReport(
+      product({
+        "lib/llm-routing.ts":
+          "const KEYS = { openai: 'PLATFORM_LLM_OPENAI_KEY' };\nexport const key = process.env[KEYS.openai];\n",
+        "lib/llm-clients.ts":
+          "export const endpoint = 'https://api.mistral.ai/v1/chat/completions';\n",
+        ".github/workflows/review.yml":
+          "jobs:\n  review:\n    env:\n      API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}\n",
+      }),
+    );
+    expect(report.findings).toEqual([]);
+    expect(statusOf(report, "4")).toEqual(["warn"]);
+    const row = report.rows.find((r) => r.block === "4");
+    expect(row?.text).toMatch(/^2 AI provider key\/address hits/);
+    expect(row?.text).toContain(
+      "exempt: 1 CI line with an AI provider secret (the review gate of beyondles-ci): .github/workflows/review.yml:4",
+    );
+    expect(report.warnings.join("\n")).toContain(
+      "lib/llm-clients.ts:1, lib/llm-routing.ts:1",
+    );
+  });
+
+  it("names the CI exemption in an ok row", () => {
+    const report = coreProfileReport(
+      product({
+        ".github/workflows/review.yml":
+          "jobs:\n  review:\n    env:\n      API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}\n",
+      }),
+    );
+    expect(statusOf(report, "4")).toEqual(["ok"]);
+    expect(report.rows.find((r) => r.block === "4")?.text).toContain(
+      "exempt: 1 CI line",
+    );
+  });
+
+  it("scans .env examples and Compose files for AI keys and mail settings", () => {
+    const report = coreProfileReport(
+      product({
+        ".env.example":
+          "# OPENAI_API_KEY is named in a comment only\nOPENAI_API_KEY=\n",
+        "docker-compose.yml":
+          "services:\n  app:\n    environment:\n      SMTP_HOST: mail\n",
+      }),
+    );
+    expect(report.findings).toEqual([
+      "[4] .env.example:2 reads an AI provider key (keys live on the platform only)",
+    ]);
+    expect(statusOf(report, "4")).toEqual(["fail", "warn"]);
+    expect(report.warnings.join("\n")).toContain("docker-compose.yml:4");
+  });
+
+  it("reads route folders named build, out or dist and skips build output only in a package root", () => {
+    const report = coreProfileReport(
+      product({
+        "app/(dashboard)/build/page.tsx":
+          'export default function Page() { return <main className="dark:bg-black">Build</main>; }\n',
+        "app/out/page.tsx": "export const key = process.env.OPENAI_API_KEY;\n",
+        "dist/bundle.js": "export const key = process.env.OPENAI_API_KEY;\n",
+        "coverage/lcov.js": "try { x(); } catch {}\n",
+      }),
+    );
+    expect(report.findings).toEqual([
+      "[4] app/out/page.tsx:1 reads an AI provider key (keys live on the platform only)",
+      "[13] app/(dashboard)/build/page.tsx:1: dark: class (light only, no dark mode)",
+    ]);
+  });
+
+  it("lists a git checkout with git: ignored files stay out, route folders named build stay in", () => {
+    const root = product({
+      ".gitignore": "generated/\n",
+      "generated/page.tsx":
+        'export const x = <main className="dark:bg-black" />;\n',
+      "app/(dashboard)/build/page.tsx":
+        'export default function Page() { return <main className="dark:bg-black">Build</main>; }\n',
+    });
+    const git = (...args: string[]) =>
+      spawnSync("git", ["-C", root, ...args], { encoding: "utf8" });
+    expect(git("init", "-q").status).toBe(0);
+    expect(git("add", "doors.config.json").status).toBe(0);
+    const report = coreProfileReport(root);
+    expect(report.findings).toEqual([
+      "[13] app/(dashboard)/build/page.tsx:1: dark: class (light only, no dark mode)",
+    ]);
+    expect(statusOf(report, "2")).toEqual(["ok"]);
+  });
+
+  it("folds a generator that is not an npm script into the one row of block 8", () => {
+    const report = coreProfileReport(
+      product({
+        "docs/EXCLUSIONS.md": EXCLUSIONS.replace(
+          "`npm run docs:exclusions`",
+          "`node scripts/docs-exclusions.js`",
+        ),
+      }),
+    );
+    expect(report.findings).toEqual([]);
+    expect(statusOf(report, "8")).toEqual(["ok"]);
+    expect(report.rows.find((r) => r.block === "8")?.text).toContain(
+      "the generator `node scripts/docs-exclusions.js` is not an npm script",
+    );
   });
 
   it("fails an AI provider SDK, an AI key, different message keys and dark mode", () => {
