@@ -82,6 +82,11 @@ describe("the address of The Brain", () => {
     expect(brainAddressProblem("http://localhost:3336", "unknown")).toBeNull();
   });
 
+  it("accepts a local Brain next to a local platform: same host, different port", () => {
+    expect(brainAddressProblem("http://localhost:3336", "staging", "http://localhost:3345")).toBeNull();
+    expect(brainAddressProblem("http://localhost:3345", "staging", "http://localhost:3345")).toMatch(/platform API/);
+  });
+
   it("refuses the dashboard, the platform, plain http to a public host and an /api suffix", () => {
     expect(brainAddressProblem("https://brain.beyondles.ai", "production")).toMatch(/dashboard/);
     expect(brainAddressProblem("https://brain-staging.beyondles.ai", "staging")).toMatch(/dashboard/);
