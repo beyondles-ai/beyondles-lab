@@ -93,6 +93,15 @@ function value(env: Env, name: string): string {
   return env[name]?.trim() ?? "";
 }
 
+/** Host and port, so that two services on one machine (local development) are told apart. */
+function authorityOf(raw: string): string | null {
+  try {
+    return new URL(raw).host.toLowerCase().replace(/.$/, "") || null;
+  } catch {
+    return null;
+  }
+}
+
 function hostnameOf(raw: string): string | null {
   try {
     return new URL(raw).hostname.toLowerCase().replace(/\.$/, "") || null;
@@ -129,7 +138,7 @@ export function brainAddressProblem(
   const checked = checkBrainBaseUrl(url);
   if (!checked.ok) return checked.reason;
   const host = hostnameOf(checked.baseUrl) ?? "";
-  if (PLATFORM_API_HOSTS.includes(host) || (platformApiUrl !== "" && host === hostnameOf(platformApiUrl))) {
+  if (PLATFORM_API_HOSTS.includes(host) || (platformApiUrl !== "" && authorityOf(checked.baseUrl) === authorityOf(platformApiUrl))) {
     return `${host} is the platform API, not the Brain API host.`;
   }
   if (environment === "staging" && PRODUCTION_BRAIN_API_HOSTS.includes(host)) {
