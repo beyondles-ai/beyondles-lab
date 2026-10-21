@@ -345,7 +345,9 @@ if (exists("src/middleware.ts") && exists("src/lib/public-paths.ts")) {
     fail("src/middleware.ts does not read LAB_PUBLIC_PATHS from src/lib/public-paths.ts (public paths belong there, not in the middleware)");
   const list = read("src/lib/public-paths.ts").match(/LAB_PUBLIC_PATHS[^=]*=\s*\[([\s\S]*?)\];/);
   if (!list) fail("src/lib/public-paths.ts does not export LAB_PUBLIC_PATHS = [...]");
-  for (const [, p] of (list?.[1] ?? "").matchAll(/"([^"]*)"/g)) {
+  // Comments next to an entry (the reason) are not entries.
+  const entries = (list?.[1] ?? "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  for (const [, p] of entries.matchAll(/"([^"]*)"/g)) {
     if (!p.startsWith("/")) fail(`src/lib/public-paths.ts: "${p}" must start with "/"`);
     else if (p === "/" || p === "/api" || p === "/api/") fail(`src/lib/public-paths.ts: "${p}" opens everything`);
     else if (["/api/platform", "/kein-zugriff", "/settings"].some((r) => r.startsWith(p) || p.startsWith(r)))
