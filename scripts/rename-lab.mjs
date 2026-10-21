@@ -36,6 +36,14 @@ if (!/^[A-Za-z0-9][A-Za-z0-9 .-]{0,39}$/.test(displayName)) {
 }
 
 const SKIP_DIRS = new Set(["node_modules", ".git", ".next", "coverage"]);
+// Generated copies of beyondles-shared modules (`.beyondles-shared.json`,
+// `dest` of every module) are never rewritten: they must stay byte-for-byte
+// the shared version (CI step "Shared code is unchanged", check-frame block
+// 5d pins `doors`). A template name inside them is the shared module's, not
+// this Lab's.
+const SHARED_COPIES = JSON.parse(readFileSync(path.join(root, ".beyondles-shared.json"), "utf8")).modules.map(
+  (m) => path.join(root, m.dest),
+);
 const SKIP_FILES = new Set(["rename-lab.mjs", "check-frame.mjs"]);
 const TEXT = /\.(ts|tsx|mjs|js|json|md|yml|yaml|prisma|sql|sh|css|example|txt)$/;
 // Files without an extension that still carry the name (comments, image tags).
@@ -45,6 +53,7 @@ function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (SKIP_DIRS.has(entry.name)) continue;
     const full = path.join(dir, entry.name);
+    if (entry.isDirectory() && SHARED_COPIES.includes(full)) continue;
     if (entry.isDirectory()) walk(full, out);
     else if (
       !SKIP_FILES.has(entry.name) &&

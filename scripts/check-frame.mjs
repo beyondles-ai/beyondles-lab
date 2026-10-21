@@ -358,9 +358,16 @@ const TEMPLATE_NAME = ["Example", "Lab"].join("");
 const IS_TEMPLATE_REPO = pkg.name === TEMPLATE_KEY && /\btemplate\b/.test(pkg.description ?? "");
 if (!IS_TEMPLATE_REPO) {
   const pattern = new RegExp(`${TEMPLATE_KEY}|${TEMPLATE_NAME}`);
+  // Generated copies of beyondles-shared modules keep the shared module's own
+  // wording (it names the template as an example) and must stay byte-for-byte
+  // (block 5d, CI "Shared code is unchanged"); `npm run rename` skips them too.
+  const sharedCopies = JSON.parse(read(".beyondles-shared.json")).modules.map(
+    (m) => path.join(root, m.dest) + path.sep,
+  );
   const leftovers = walk(root)
     .filter((f) => /\.(ts|tsx|json|yml|md|prisma|sh|mjs)$/.test(f) || path.basename(f) === "Dockerfile")
     .filter((f) => !f.endsWith("rename-lab.mjs") && !f.endsWith("check-frame.mjs"))
+    .filter((f) => !sharedCopies.some((dir) => f.startsWith(dir)))
     .filter((f) => pattern.test(readFileSync(f, "utf8")))
     .map((f) => path.relative(root, f));
   if (leftovers.length > 0)
