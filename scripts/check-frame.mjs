@@ -358,9 +358,15 @@ const TEMPLATE_NAME = ["Example", "Lab"].join("");
 const IS_TEMPLATE_REPO = pkg.name === TEMPLATE_KEY && /\btemplate\b/.test(pkg.description ?? "");
 if (!IS_TEMPLATE_REPO) {
   const pattern = new RegExp(`${TEMPLATE_KEY}|${TEMPLATE_NAME}`);
+  // The generated shared copies (rule 5d) are byte-for-byte the pinned
+  // version and may carry the template name in a comment; they are not
+  // the Lab's to rename, so they are not scanned here.
+  const sharedDests = ((exists(".beyondles-shared.json") ? JSON.parse(read(".beyondles-shared.json")) : {}).modules ?? [])
+    .map((m) => path.join(root, m.dest) + path.sep);
   const leftovers = walk(root)
     .filter((f) => /\.(ts|tsx|json|yml|md|prisma|sh|mjs)$/.test(f) || path.basename(f) === "Dockerfile")
     .filter((f) => !f.endsWith("rename-lab.mjs") && !f.endsWith("check-frame.mjs"))
+    .filter((f) => !sharedDests.some((d) => f.startsWith(d)))
     .filter((f) => pattern.test(readFileSync(f, "utf8")))
     .map((f) => path.relative(root, f));
   if (leftovers.length > 0)
