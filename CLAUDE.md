@@ -54,7 +54,7 @@ Never change (this is the frame, reviewed centrally):
   `src/app/api/platform/**`, `src/app/api/mcp/**`, `src/app/api/health/**`,
   `src/app/kein-zugriff/**`, `src/components/app-shell/**` (the shared frame,
   generated from `beyondles-ai/beyondles-shared`), `src/app/(app)/layout.tsx`,
-  `src/app/(app)/loading.tsx`, `src/app/(app)/error.tsx`,
+  `src/app/(app)/error.tsx`,
   `src/app/(app)/not-found.tsx`, `src/app/not-found.tsx`, `src/app/error.tsx`,
   `src/lib/frame.ts`, `src/lib/suite-url.ts`, the theme mapping in
   `src/app/globals.css`, `scripts/check-frame.mjs`, `scripts/rename-lab.mjs`,

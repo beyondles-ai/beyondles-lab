@@ -39,6 +39,7 @@ import {
 } from "./support/frame-rules.mjs";
 import { informalAddressFindings } from "./support/informal-address.mjs";
 import { memoryDoorFindings } from "./support/memory-door.mjs";
+import { loadMessages } from "./support/messages.mjs";
 
 const args = parseFrameArgs(process.argv.slice(2));
 if (args.error) {
@@ -50,8 +51,18 @@ if (args.profile === "core") process.exit(runCoreProfile(args.root));
 const root = args.root ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const findings = [];
 const fail = (msg) => findings.push(msg);
-const read = (rel) => readFileSync(path.join(root, rel), "utf8");
 const exists = (rel) => existsSync(path.join(root, rel));
+// A missing file reads as empty text: it is already reported by the
+// mandatory-file list, and the check must never crash on a Lab that lacks it.
+const read = (rel) => (exists(rel) ? readFileSync(path.join(root, rel), "utf8") : "");
+const readJson = (rel, fallback) => {
+  try {
+    return JSON.parse(read(rel));
+  } catch {
+    fail(`${rel} is missing or not valid JSON`);
+    return fallback;
+  }
+};
 
 // 1. Mandatory files of the frame.
 for (const rel of [
@@ -60,8 +71,6 @@ for (const rel of [
   "docker/compose.staging.yml",
   ".github/workflows/ci.yml",
   ".env.example",
-  "messages/de.json",
-  "messages/en.json",
   "src/lib/auth.ts",
   "src/lib/jwt-guard.ts",
   "src/middleware.ts",
@@ -110,7 +119,6 @@ for (const rel of [
   "src/components/app-shell/app-shell.css",
   "src/components/app-shell/.shared-version",
   "src/app/(app)/layout.tsx",
-  "src/app/(app)/loading.tsx",
   "src/app/(app)/error.tsx",
   "src/app/(app)/not-found.tsx",
   "src/app/not-found.tsx",
@@ -170,7 +178,7 @@ if (exists(".github/workflows/ci.yml")) {
 }
 
 // 4. No provider or mail SDK, no provider key, no retired variable.
-const pkg = JSON.parse(read("package.json"));
+const pkg = readJson("package.json", {});
 const deps = { ...pkg.dependencies, ...pkg.devDependencies };
 for (const sdk of [...AI_PROVIDER_SDKS, ...MAIL_SDKS]) {
   if (deps[sdk]) fail(`provider/mail SDK in package.json: ${sdk} (use the platform door)`);
@@ -203,7 +211,7 @@ const isFrameCheckFile = (f) => FRAME_CHECK_FILES.includes(f);
 const sourceFiles = ["src", "docker", "ops", "scripts", "mcp", ".github"]
   .flatMap((d) => walk(path.join(root, d)))
   .filter((f) => !isFrameCheckFile(f))
-  .concat([path.join(root, ".env.example")]);
+  .concat(exists(".env.example") ? [path.join(root, ".env.example")] : []);
 
 // JWT_SECRET must never be passed by Compose (a server .env must not carry it).
 {
@@ -337,18 +345,21 @@ const keys = (obj, prefix = "") =>
   Object.entries(obj).flatMap(([k, v]) =>
     v && typeof v === "object" ? keys(v, `${prefix}${k}.`) : [`${prefix}${k}`],
   );
-const de = JSON.parse(read("messages/de.json"));
-const en = JSON.parse(read("messages/en.json"));
+const deMessages = loadMessages(root, "de");
+const enMessages = loadMessages(root, "en");
+for (const problem of [...deMessages.problems, ...enMessages.problems]) fail(problem);
+const de = deMessages.tree;
+const en = enMessages.tree;
 const deKeys = keys(de).sort();
 const enKeys = keys(en).sort();
-if (JSON.stringify(deKeys) !== JSON.stringify(enKeys))
-  fail("messages/de.json and messages/en.json do not have the same keys");
+if (deMessages.problems.length === 0 && enMessages.problems.length === 0 && JSON.stringify(deKeys) !== JSON.stringify(enKeys))
+  fail("the German and English messages do not have the same keys");
 // 7b. German addresses the reader with the formal "Sie" (card #350): no
 //     "du/dich/dir/dein...", no informal plural "ihr/euch/euer...". Formal
 //     "Ihr/Ihre/Ihnen" is correct. Rule and allow-list in
 //     scripts/support/informal-address.mjs.
 for (const { key, hits } of informalAddressFindings(de))
-  fail(`messages/de.json "${key}" addresses the reader informally (${hits.join(", ")}); use the formal "Sie"`);
+  fail(`German messages "${key}" addresses the reader informally (${hits.join(", ")}); use the formal "Sie"`);
 
 // 8. The Lab still carries the template name? The literals are assembled at
 //    runtime so `npm run rename` cannot rewrite them (it skips this file too);
@@ -358,9 +369,15 @@ const TEMPLATE_NAME = ["Example", "Lab"].join("");
 const IS_TEMPLATE_REPO = pkg.name === TEMPLATE_KEY && /\btemplate\b/.test(pkg.description ?? "");
 if (!IS_TEMPLATE_REPO) {
   const pattern = new RegExp(`${TEMPLATE_KEY}|${TEMPLATE_NAME}`);
+  // The generated shared copies (rule 5d) are byte-for-byte the pinned
+  // version and may carry the template name in a comment; they are not
+  // the Lab's to rename, so they are not scanned here.
+  const sharedDests = ((exists(".beyondles-shared.json") ? readJson(".beyondles-shared.json", {}) : {}).modules ?? [])
+    .map((m) => path.join(root, m.dest) + path.sep);
   const leftovers = walk(root)
     .filter((f) => /\.(ts|tsx|json|yml|md|prisma|sh|mjs)$/.test(f) || path.basename(f) === "Dockerfile")
     .filter((f) => !f.endsWith("rename-lab.mjs") && !f.endsWith("check-frame.mjs"))
+    .filter((f) => !sharedDests.some((d) => f.startsWith(d)))
     .filter((f) => pattern.test(readFileSync(f, "utf8")))
     .map((f) => path.relative(root, f));
   if (leftovers.length > 0)
@@ -448,7 +465,7 @@ if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((
 //     to the Suite (the frame's topbar has it), no language switch (the
 //     language comes from the Suite through the NEXT_LOCALE cookie).
 {
-  const manifest = exists(".beyondles-shared.json") ? JSON.parse(read(".beyondles-shared.json")) : {};
+  const manifest = exists(".beyondles-shared.json") ? readJson(".beyondles-shared.json", {}) : {};
   if (!(manifest.modules ?? []).some((m) => m.name === "app-shell" && m.dest === "src/components/app-shell"))
     fail('.beyondles-shared.json has no module { "name": "app-shell", "dest": "src/components/app-shell" }');
 
@@ -483,6 +500,12 @@ if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((
   if (exists(noAccessLayout) && !/["']@\/components\/app-shell\/app-shell\.css["']/.test(code(noAccessLayout)))
     fail(`${noAccessLayout} does not import @/components/app-shell/app-shell.css`);
 
+  // A loading.tsx for the whole (app) group wraps every page in a Suspense
+  // boundary, so a notFound() thrown by a page streams after the status line
+  // was sent: the "not found" page then answers HTTP 200 instead of 404.
+  if (exists("src/app/(app)/loading.tsx"))
+    fail("src/app/(app)/loading.tsx: a group-wide (app)/loading.tsx turns notFound() into HTTP 200; show loading states per page instead");
+
   if (deps["next-themes"]) fail("package.json depends on next-themes: light only, no theme switch");
 
   const PALETTE =
@@ -494,7 +517,9 @@ if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((
     [new RegExp(`--color-(${PALETTE})-\\d{2,3}\\b`), `Tailwind default palette value: ${TOKENS}`],
     [/\b[a-z-]+-\[(#|rgb|hsl|oklch)/, `arbitrary colour class: ${TOKENS}`],
     [/(?<![\w&/])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])/, `raw hex colour: ${TOKENS}`],
-    [/\bback\s*to\s*(the\s+)?(beyondles\s+)?suite\b|\bbackToSuite\b|\/toolbox\b/i, "own way back to the Suite: the frame's topbar has it"],
+    // UI only (tsx/jsx): a server-side helper such as src/lib/suite-url.ts may
+    // build a Suite address without being a link in the page.
+    [/\bback\s*to\s*(the\s+)?(beyondles\s+)?suite\b|\bbackToSuite\b|\/toolbox\b/i, "own way back to the Suite: the frame's topbar has it", /\.[jt]sx$/],
     [/\b(Language|Locale|Lang)(Switch|Switcher|Select|Selector|Toggle|Picker|Menu)\b/, "language switch: the language comes from the Suite (NEXT_LOCALE)"],
     [/\.set\(\s*(LOCALE_COOKIE|["']NEXT_LOCALE["'])/, "writes the language cookie: only the Suite does"],
   ];
@@ -514,18 +539,20 @@ if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((
     let text = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, blank);
     // The theme mapping in globals.css is the one place that names colour
     // values; it is blanked, the rest of that file is checked like any other.
-    if (file === globalsCss) text = text.replace(/@theme[^{]*\{[^}]*\}/g, blank);
+    // The same holds for the custom properties declared in `:root { ... }`.
+    if (file === globalsCss) text = text.replace(/(?:@theme[^{]*|:root)\s*\{[^}]*\}/g, blank);
     text.split("\n").forEach((line, i) => {
       if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
-      for (const [pattern, what] of DESIGN) {
+      for (const [pattern, what, onlyFiles] of DESIGN) {
+        if (onlyFiles && !onlyFiles.test(file)) continue;
         if (pattern.test(line)) fail(`${path.relative(root, file)}:${i + 1}: ${what}`);
       }
     });
   }
   // The same rule for the texts: no own "Back to Suite" entry in the messages.
   for (const [rel, tree] of [
-    ["messages/en.json", en],
-    ["messages/de.json", de],
+    ["English messages", en],
+    ["German messages", de],
   ]) {
     const hit = keys(tree).find((k) => {
       const value = k.split(".").reduce((cur, part) => cur?.[part], tree);

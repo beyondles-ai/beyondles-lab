@@ -55,8 +55,15 @@ function walk(dir, out = []) {
   return out;
 }
 
+// The generated shared copies (.beyondles-shared.json, frame rule 5d) must
+// stay byte-for-byte the pinned version, so the rename never touches them.
+const sharedDests = (JSON.parse(readFileSync(path.join(root, ".beyondles-shared.json"), "utf8")).modules ?? []).map(
+  (m) => path.join(root, m.dest) + path.sep,
+);
+
 let changed = 0;
 for (const file of walk(root)) {
+  if (sharedDests.some((d) => file.startsWith(d))) continue;
   if (statSync(file).size > 2_000_000) continue;
   const before = readFileSync(file, "utf8");
   // Replacer FUNCTIONS: a display name containing a dollar sequence must be
