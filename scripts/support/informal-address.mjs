@@ -8,10 +8,12 @@
  *
  * Formal "Ihr/Ihre/Ihnen" is CORRECT and never reported. Third-person "ihr"
  * (her) is not reported either, except in the shapes that only the informal
- * plural takes: "ihr" + a lower-case verb ending in -t ("ihr habt", "Ihr
- * könnt"), "ihr seid", an inverted verb + "ihr" ("habt ihr"), and a lower-case
- * "ihr" at the start of a sentence. A formal possessive is followed by a noun
- * (upper case) or an inflected adjective (-e/-er/-es/-en/-em), never by -t.
+ * plural takes: "ihr" + any lower-case word ending in -t ("ihr habt", "ihr
+ * startet", "ihr bucht"), "ihr seid", an inverted verb + "ihr" ("habt ihr"),
+ * and a lower-case "ihr" at the start of a sentence. A formal possessive is
+ * followed by a noun (upper case) or an inflected adjective (-e/-er/-es/-en/
+ * -em), never by -t. The few non-verb words ending in -t that follow a dative
+ * "ihr" ("ihr nicht", "ihr jetzt") are excluded by IHR_NON_VERBS.
  */
 
 const NOT_LETTER_BEFORE = "(?<![\\p{L}\\p{N}_])";
@@ -27,16 +29,18 @@ const PLURAL_VERBS =
   "seid|habt|könnt|müsst|dürft|wollt|sollt|werdet|wisst|braucht|seht|findet|bekommt";
 
 /**
- * Verbs that follow a subject "ihr" (PLURAL_VERBS plus more common -t forms).
- * A closed list on purpose: a generic "-t word" also matches "nicht", "jetzt",
- * "selbst" or "etwas" and flags the correct third-person "ihr" (her/to her),
- * e.g. "Sie gehören ihr nicht an".
+ * Words ending in -t that are NOT plural verbs and can follow a third-person
+ * (dative/genitive) "ihr" in formal text: "Sie gehören ihr nicht an", "Das
+ * gehört ihr jetzt". Everything else ending in -t after "ihr" is treated as an
+ * informal plural verb ("ihr startet", "ihr bucht", "ihr loggt"). Add an entry
+ * only for a real false positive, and only for a word that is not a verb form.
  */
-const IHR_VERBS = `${PLURAL_VERBS}|macht|geht|kommt|nehmt|gebt|lasst|bleibt|fragt|schreibt|lest|klickt|wählt|nutzt|erhaltet|benötigt|möchtet|wünscht|mögt|versteht|arbeitet|erstellt|verwendet|speichert|sucht|schaut|tut|bringt|setzt|stellt|legt|lädt|ladet|hört|glaubt|denkt|meint|wisst|vergesst|bittet|merkt|zeigt|prüft|ändert|löscht|öffnet`;
-/** Informal plural "ihr" as the subject. */
+const IHR_NON_VERBS =
+  "nicht|nichts|jetzt|selbst|etwas|erst|fast|meist|bereits|zuletzt|zunächst|oft|sonst|bisher|gerade|insgesamt|mit|seit|samt|statt|trotz|nebst|längst|höchst|zumindest|vielleicht|leicht|gut|schlecht|recht|ist|zudem|jedoch|dort|dann|bald|kurz";
+/** Informal plural "ihr" as the subject: any "-t" word after it, plus "seid". */
 const INFORMAL_PLURAL = [
   new RegExp(
-    `${NOT_LETTER_BEFORE}[Ii]hr\\s+(?:${IHR_VERBS})${NOT_LETTER_AFTER}`,
+    `${NOT_LETTER_BEFORE}[Ii]hr\\s+(?:seid|(?!(?:${IHR_NON_VERBS})${NOT_LETTER_AFTER})[a-zäöüß]+t)${NOT_LETTER_AFTER}`,
     "gu",
   ),
   new RegExp(

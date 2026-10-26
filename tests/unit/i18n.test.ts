@@ -69,6 +69,8 @@ describe("German addresses the reader with the formal Sie (card #350)", () => {
   it("does not flag the third-person ihr (her)", () => {
     expect(findInformalAddress("Diese Sammlung gibt es nicht, oder Sie gehören ihr nicht an.")).toEqual([]);
     expect(findInformalAddress("Das gehört ihr jetzt, selbst etwas davon.")).toEqual([]);
+    expect(findInformalAddress("Diese Sammlung gehört ihr jetzt.")).toEqual([]);
+    expect(findInformalAddress("Sie gehören ihr nicht an.")).toEqual([]);
   });
 
   it("still flags the informal plural after ihr", () => {
@@ -76,6 +78,10 @@ describe("German addresses the reader with the formal Sie (card #350)", () => {
     expect(findInformalAddress("Ihr könnt starten.")).toEqual(["Ihr könnt"]);
     expect(findInformalAddress("Wir hoffen, ihr seid bereit.")).toEqual(["ihr seid"]);
     expect(findInformalAddress("Speichern, wenn ihr wollt.")).toEqual(["ihr wollt"]);
+    expect(findInformalAddress("Wenn ihr startet, geht es los.")).toEqual(["ihr startet"]);
+    expect(findInformalAddress("Sobald ihr bestätigt, ist es fertig.")).toEqual(["ihr bestätigt"]);
+    expect(findInformalAddress("Wenn ihr bucht, sparen Sie.")).toEqual(["ihr bucht"]);
+    expect(findInformalAddress("Dann ihr loggt Sie ein.")).toEqual(["ihr loggt"]);
   });
 
   it("finds the informal singular and plural forms", () => {
