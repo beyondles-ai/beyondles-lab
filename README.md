@@ -79,7 +79,7 @@ server — see `src/lib/jwt-guard.ts`.
 | `src/components/ui/share-primitives/` | the four small components the share blocks draw with (in the Beyondles look) |
 | `src/components/app-shell/` | the shared Beyondles frame for every page behind the login (sidebar, topbar, person menu, footer, no-access page, states, page blocks): **generated from `beyondles-ai/beyondles-shared` (module `app-shell`), never edited here** |
 | `src/app/(app)/layout.tsx`, `src/lib/frame.ts`, `src/lib/suite-url.ts`, `src/lib/lab-nav.tsx` | the signed-in layout that renders the frame, the Suite links, language and session hint it gets from the server, and the sidebar entries |
-| `src/app/(app)/loading.tsx`, `error.tsx`, `not-found.tsx`, `src/app/error.tsx`, `src/app/not-found.tsx` | the loading, error and not-found states of the signed-in area, and the not-found state for an unknown address |
+| `src/app/(app)/error.tsx`, `not-found.tsx`, `src/app/error.tsx`, `src/app/not-found.tsx` | the error and not-found states of the signed-in area, and the not-found state for an unknown address |
 | `src/app/kein-zugriff/` | the no-access page (shared `NoAccess`), outside the signed-in layout on purpose |
 | `src/app/globals.css`, `src/components/ui/form-classes.ts` | the Beyondles colours, fonts and radii for Tailwind, and the form field styles |
 | `docker/`, `ops/deploy/` | container stack and host scripts |

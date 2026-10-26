@@ -26,10 +26,17 @@ const INFORMAL_WORDS = new RegExp(
 const PLURAL_VERBS =
   "seid|habt|könnt|müsst|dürft|wollt|sollt|werdet|wisst|braucht|seht|findet|bekommt";
 
+/**
+ * Verbs that follow a subject "ihr" (PLURAL_VERBS plus more common -t forms).
+ * A closed list on purpose: a generic "-t word" also matches "nicht", "jetzt",
+ * "selbst" or "etwas" and flags the correct third-person "ihr" (her/to her),
+ * e.g. "Sie gehören ihr nicht an".
+ */
+const IHR_VERBS = `${PLURAL_VERBS}|macht|geht|kommt|nehmt|gebt|lasst|bleibt|fragt|schreibt|lest|klickt|wählt|nutzt|erhaltet|benötigt|möchtet|wünscht|mögt|versteht|arbeitet|erstellt|verwendet|speichert|sucht|schaut|tut|bringt|setzt|stellt|legt|lädt|ladet|hört|glaubt|denkt|meint|wisst|vergesst|bittet|merkt|zeigt|prüft|ändert|löscht|öffnet`;
 /** Informal plural "ihr" as the subject. */
 const INFORMAL_PLURAL = [
   new RegExp(
-    `${NOT_LETTER_BEFORE}[Ii]hr\\s+(?:[a-zäöüß]+t|seid)${NOT_LETTER_AFTER}`,
+    `${NOT_LETTER_BEFORE}[Ii]hr\\s+(?:${IHR_VERBS})${NOT_LETTER_AFTER}`,
     "gu",
   ),
   new RegExp(
