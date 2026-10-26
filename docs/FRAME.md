@@ -1,6 +1,6 @@
 # The frame — what every Beyondles Lab guarantees
 
-Checked on: 2026-10-15
+Checked on: 2026-10-26
 
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
@@ -128,7 +128,10 @@ in `app-shell/HOST-CONTRACT.md` in the shared repo.
   two-tone title, one sentence, at most one primary action). Content uses
   `Panel`, `StatGrid`/`StatCard`, `StatusPill`, `PageState` and the classes
   `by-app-table`, `by-app-rows`, `by-app-btn`, `by-app-text-link`.
-- **States.** `src/app/(app)/loading.tsx` (placeholder rows),
+- **States.** No `src/app/(app)/loading.tsx`: a group-wide loading boundary turns
+  `notFound()` into HTTP 200 instead of 404 (`check:frame` flags it). A page that
+  needs a loading state renders `PageState variant="loading"` in its own
+  `loading.tsx` next to a page that never calls `notFound()`.
   `src/app/(app)/error.tsx` ("Try again", "Contact support"),
   `src/app/(app)/not-found.tsx` (`notFound()` inside the signed-in area),
   `src/app/not-found.tsx` (an address that matches no page: inside the frame
