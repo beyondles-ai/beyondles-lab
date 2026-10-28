@@ -39,6 +39,10 @@ Change freely (this is the product):
   German always uses the formal "Sie" (see section 2).
 - `src/lib/lab-nav.tsx` — the sidebar entries of your Lab's pages (only
   pages of this Lab, never a link out of it).
+- `src/lib/public-paths.ts` — the prefixes your Lab opens without a Suite
+  cookie (reader pages, webhooks), one line each with the reason. Every
+  route behind them protects itself and answers 401/404, never a redirect.
+  The middleware stays the frame's and reads this list.
 - `README.md` (the one sentence and the product description), `docs/OFFEN.md`.
 
 Never change (this is the frame, reviewed centrally):

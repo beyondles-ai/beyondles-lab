@@ -74,6 +74,8 @@ for (const rel of [
   "src/lib/auth.ts",
   "src/lib/jwt-guard.ts",
   "src/middleware.ts",
+  "src/lib/public-paths.ts",
+  "tests/unit/public-paths.test.ts",
   "src/instrumentation.ts",
   // Self-registration at the platform registry (product registry follow-up).
   "src/lib/platform/register.ts",
@@ -339,6 +341,27 @@ if (exists("src/instrumentation.ts") && !/registerInBackground\(\)/.test(read("s
   fail("src/instrumentation.ts does not call registerInBackground() (self-registration at the platform registry)");
 if (exists("src/lib/platform/register.ts") && !/\/api\/registry\/self/.test(read("src/lib/platform/register.ts")))
   fail("src/lib/platform/register.ts does not post to /api/registry/self");
+
+// 6c. Public paths: the middleware stays the frame's, a Lab opens paths for
+//     readers without a Suite account only through LAB_PUBLIC_PATHS in
+//     src/lib/public-paths.ts (every such route protects itself). The entries
+//     are read here as literals (the file is TypeScript); the unit test
+//     tests/unit/public-paths.test.ts applies the same rules at runtime.
+if (exists("src/middleware.ts") && exists("src/lib/public-paths.ts")) {
+  const middleware = read("src/middleware.ts");
+  if (!/import \{ LAB_PUBLIC_PATHS \} from "@\/lib\/public-paths"/.test(middleware) || !/LAB_PUBLIC_PATHS\.some\(/.test(middleware))
+    fail("src/middleware.ts does not read LAB_PUBLIC_PATHS from src/lib/public-paths.ts (public paths belong there, not in the middleware)");
+  const list = read("src/lib/public-paths.ts").match(/LAB_PUBLIC_PATHS[^=]*=\s*\[([\s\S]*?)\];/);
+  if (!list) fail("src/lib/public-paths.ts does not export LAB_PUBLIC_PATHS = [...]");
+  // Comments next to an entry (the reason) are not entries.
+  const entries = (list?.[1] ?? "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  for (const [, p] of entries.matchAll(/"([^"]*)"/g)) {
+    if (!p.startsWith("/")) fail(`src/lib/public-paths.ts: "${p}" must start with "/"`);
+    else if (p === "/" || p === "/api" || p === "/api/") fail(`src/lib/public-paths.ts: "${p}" opens everything`);
+    else if (["/api/platform", "/kein-zugriff", "/settings"].some((r) => r.startsWith(p) || p.startsWith(r)))
+      fail(`src/lib/public-paths.ts: "${p}" covers a frame path`);
+  }
+}
 
 // 7. Both languages carry the same keys and no empty text.
 const keys = (obj, prefix = "") =>

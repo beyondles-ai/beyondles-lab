@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { LAB_PUBLIC_PATHS } from "@/lib/public-paths";
+
 /**
  * Upstream sign-in check. It only checks WHETHER a Suite cookie is present
  * and redirects to the Suite login otherwise. It verifies NO signature: the
@@ -8,7 +10,12 @@ import { NextResponse, type NextRequest } from "next/server";
  * server, where every data query hangs on the verified `organisationId`.
  */
 
-const PUBLIC_PATHS = [
+/**
+ * The frame's own list. A Lab does not change it: paths a Lab opens for
+ * readers without a Suite account go into `src/lib/public-paths.ts`
+ * (`LAB_PUBLIC_PATHS`), checked by its unit test and `npm run check:frame`.
+ */
+const FRAME_PUBLIC_PATHS = [
   "/_next",
   "/favicon.ico",
   "/icon.png",
@@ -24,7 +31,8 @@ const PUBLIC_PATHS = [
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) return NextResponse.next();
+  if (FRAME_PUBLIC_PATHS.some((path) => pathname.startsWith(path))) return NextResponse.next();
+  if (LAB_PUBLIC_PATHS.some((path) => pathname.startsWith(path))) return NextResponse.next();
 
   if (request.cookies.get("platform-auth-token")?.value) return NextResponse.next();
 
