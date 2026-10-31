@@ -30,7 +30,14 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) return NextResponse.next();
 
-  if (request.cookies.get("platform-auth-token")?.value) return NextResponse.next();
+  if (request.cookies.get("platform-auth-token")?.value) {
+    // The cookie may still hold an expired or revoked token. Pass the page on
+    // so `rbac.requireSession` can send the person back here after signing
+    // in. Always overwritten: a value sent by the client is never trusted.
+    const headers = new Headers(request.headers);
+    headers.set("x-lab-pathname", `${pathname}${request.nextUrl.search}`);
+    return NextResponse.next({ request: { headers } });
+  }
 
   // No production fallback: without the variable there is no Suite to send
   // people to, and the stack refuses to start without it anyway.
