@@ -15,10 +15,17 @@ import { db } from "@/lib/db";
  *    revoked (revoked, not deleted: the row stays as evidence). WORKER keys
  *    have no creator and are not touched, so nightly jobs survive a departure.
  *
+ * The platform compares ids case-insensitively; the stored id is the token's
+ * spelling. So organisation and person are matched without case (`ci()`);
+ * the new owner is written as given.
+ *
  * Idempotent: a second run, and an organisation this Lab never saw, count 0.
- * Every object table with an owner column belongs in here; the counts are
- * reported per object type.
+ * Every object table with an owner column belongs in here (match ids with
+ * `ci()`); the counts are reported per object type.
  */
+
+/** Match an id without regard to case, like the platform does. */
+const ci = (id: string) => ({ equals: id, mode: "insensitive" as const });
 
 export interface ReassignResult {
   reassigned: { note: number };
@@ -33,11 +40,11 @@ export async function reassignOwner(
 ): Promise<ReassignResult> {
   const [notes, keys] = await db.$transaction([
     db.note.updateMany({
-      where: { organisationId, ownerUserId: fromUserId },
+      where: { organisationId: ci(organisationId), ownerUserId: ci(fromUserId) },
       data: { ownerUserId: toUserId },
     }),
     db.apiKey.updateMany({
-      where: { organisationId, createdByUserId: fromUserId, revokedAt: null },
+      where: { organisationId: ci(organisationId), createdByUserId: ci(fromUserId), revokedAt: null },
       data: { revokedAt: now },
     }),
   ]);
