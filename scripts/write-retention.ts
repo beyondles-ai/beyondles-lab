@@ -35,9 +35,9 @@ const lines = [
   "migration (`ops/deploy/production-deploy.sh`). Tenant and member deletion and the retention job erase the",
   "live database only; a deleted or redacted row stays in these dumps until the dump itself is deleted.",
   "",
-  `- \`PRE_DEPLOY_DUMP_MAX_DAYS\` (days, default ${PRE_DEPLOY_DUMP_MAX_DAYS}): pre-deploy dumps older than this are deleted (at every deploy and by the daily \`--prune-dumps\` cron line); at most 5 are kept.`,
-  "- The dumps are readable by their owner only (file 600, folder 700). With `PRE_DEPLOY_AGE_RECIPIENT` set they are stored encrypted only (`.dump.age`).",
-  `- Privacy-note line: Deleted data and erased personal content can remain in internal safety backups until those backups are older than ${PRE_DEPLOY_DUMP_MAX_DAYS} days; they are checked and deleted daily.`,
+  `- \`PRE_DEPLOY_DUMP_MAX_DAYS\` (days, default ${PRE_DEPLOY_DUMP_MAX_DAYS}): a pre-deploy dump is deleted at the first check after it is older than this. Checks run at every deploy and daily (the \`--prune-dumps\` cron line from the script header), so no dump is older than ${PRE_DEPLOY_DUMP_MAX_DAYS + 1} days; without that cron line the limit holds only on days with a deploy. At most 5 are kept.`,
+  "- Nothing is readable for other users of the host: the folder is `root:docker` 2770 and the dumps are 640. The `docker` group (root and the dev-* deploy users) can read the live database anyway. With `PRE_DEPLOY_AGE_RECIPIENT` set they are stored encrypted only (`.dump.age`).",
+  `- Privacy-note line: Deleted data and erased personal content can remain in internal safety backups for at most ${PRE_DEPLOY_DUMP_MAX_DAYS + 1} days: a backup is deleted once it is older than ${PRE_DEPLOY_DUMP_MAX_DAYS} days, checked daily.`,
   "",
 ];
 writeFileSync(path.resolve(__dirname, "..", "docs", "RETENTION.md"), lines.join("\n"), "utf8");

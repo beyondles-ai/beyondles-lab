@@ -106,32 +106,106 @@ describe("poolMax", () => {
 /**
  * The production deploy writes a full dump of ALL tenants before every
  * migration. Erasure (tenant/member delete, retention redaction) only touches
- * the live database, so these dumps must be private (umask 077, 600/700),
- * must age out on a fixed clock and must be named in docs/RETENTION.md.
+ * the live database, so these dumps must be closed to "other" users of the
+ * host, must age out on a fixed clock and must be named in docs/RETENTION.md.
+ * Root (the production watcher) and dev-* users (docker group) both run the
+ * script, so the folder is shared through the docker group, not owner-only.
  */
 describe("pre-deploy safety dumps", () => {
   const script = () => readFileSync(path.join(root, "ops", "deploy", "production-deploy.sh"), "utf8");
 
-  it("sets umask 077 before the dump folder and file are created", () => {
+  /** One shell function of the script, verbatim. */
+  const shellFunction = (name: string) => {
+    const hit = script().match(new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}$`, "m"));
+    expect(hit, `function ${name} not found in production-deploy.sh`).not.toBeNull();
+    return hit![0];
+  };
+
+  // Via stdin: a Windows path means nothing to a WSL bash. /usr/bin first:
+  // on Windows the inherited PATH would find find.exe before GNU find.
+  const runBash = (body: string) =>
+    spawnSync("bash", ["-s"], { input: `export PATH="/usr/bin:/bin:$PATH"\n${body}\n`, encoding: "utf8" });
+  const bashWorks = (() => {
+    let works: boolean | undefined;
+    return () => (works ??= runBash("echo ok").stdout?.trim() === "ok");
+  })();
+
+  it("sets a umask that leaves nothing for other users before the dump folder and file are created", () => {
     const text = script();
-    const umask = text.search(/^umask 077$/m);
-    expect(umask, "production-deploy.sh has no `umask 077`").toBeGreaterThan(-1);
+    const umask = text.search(/^umask 027$/m);
+    expect(umask, "production-deploy.sh has no `umask 027`").toBeGreaterThan(-1);
     expect(umask).toBeLessThan(text.indexOf("mkdir -p"));
     expect(umask).toBeLessThan(text.indexOf("pg_dump"));
   });
 
-  it("restricts the backup directory to 700 and every dump to 600", () => {
+  it("shares the backup folder through the docker group (2770) and makes every dump 640", () => {
     const text = script();
-    expect(text).toMatch(/chmod 700 "\$BACKUPS"/);
-    expect(text).toMatch(/chmod 600 "\$DUMP"/);
+    expect(text).toContain('BACKUP_GROUP="docker"');
+    expect(text).toMatch(/chgrp "\$BACKUP_GROUP" "\$BACKUPS" && chmod 2770 "\$BACKUPS"/);
+    expect(text).toMatch(/chmod 640 "\$DUMP"/);
     expect(text).toMatch(/pg_dump[^\n]*>\s*"\$DUMP"/);
+    // An owner-only folder locks out every other user who deploys.
+    expect(text).not.toMatch(/chmod 700 "\$BACKUPS"/);
   });
 
-  it("prunes dumps by age, not only by count, also without a deploy", () => {
+  it("prunes dumps by age in minutes (find -mtime drops the fractional day), also without a deploy", () => {
     const text = script();
-    expect(text).toMatch(/-name 'pre-deploy-\*\.dump\*' -mtime \+"\$DUMP_MAX_DAYS" -delete/);
+    expect(text).toMatch(/-name 'pre-deploy-\*\.dump\*' -mmin \+\$\(\(DUMP_MAX_DAYS \* 1440\)\) -delete/);
+    expect(text).not.toMatch(/^\s*find [^\n]*-mtime/m);
     expect(text).toContain(`\${PRE_DEPLOY_DUMP_MAX_DAYS:-${PRE_DEPLOY_DUMP_MAX_DAYS}}`);
     expect(text).toMatch(/"\$\{1:-\}" = "--prune-dumps"/);
+  });
+
+  it("deletes a dump as soon as it is older than the maximum age, not a day later", { timeout: 60_000 }, () => {
+    if (!bashWorks()) return; // no bash on this machine
+    const check = runBash(
+      [
+        "set -euo pipefail", // as in the script
+        'BACKUPS="$(mktemp -d)"',
+        `DUMP_MAX_DAYS=${PRE_DEPLOY_DUMP_MAX_DAYS}`,
+        "now=$(date +%s)",
+        // just over the limit (with -mtime +N this one survived a whole day)
+        `touch -d "@$((now - ${PRE_DEPLOY_DUMP_MAX_DAYS} * 86400 - 600))" "$BACKUPS/pre-deploy-old.dump"`,
+        `touch -d "@$((now - ${PRE_DEPLOY_DUMP_MAX_DAYS} * 86400 - 600))" "$BACKUPS/pre-deploy-old.dump.age"`,
+        // just under the limit
+        `touch -d "@$((now - ${PRE_DEPLOY_DUMP_MAX_DAYS} * 86400 + 3600))" "$BACKUPS/pre-deploy-young.dump"`,
+        // not a pre-deploy dump
+        `touch -d "@$((now - 30 * 86400))" "$BACKUPS/other.dump"`,
+        shellFunction("prune_dumps"),
+        "prune_dumps",
+        'ls "$BACKUPS" | sort | tr "\\n" " "',
+        'rm -rf "$BACKUPS"',
+        // the daily cron call on a folder without dumps must not fail
+        'BACKUPS="$(mktemp -d)"',
+        "prune_dumps",
+        'rmdir "$BACKUPS"',
+      ].join("\n"),
+    );
+    expect(check.status, check.stderr).toBe(0);
+    expect(check.stdout.trim()).toBe("other.dump pre-deploy-young.dump");
+  });
+
+  it("reads host settings from the .env like docker compose: quotes, CRLF and comments dropped", { timeout: 60_000 }, () => {
+    if (!bashWorks()) return; // no bash on this machine
+    const check = runBash(
+      [
+        'REPO="$(mktemp -d)"',
+        `printf '%s\\r\\n' 'ZZ_DQ="age1abc"' 'ZZ_NUM=14 # days' "export ZZ_SQ='x y'" 'ZZ_EMPTY=' > "$REPO/.env"`,
+        "printf 'ZZ_LF=plain\\n' >> \"$REPO/.env\"",
+        shellFunction("host_setting"),
+        'for k in ZZ_DQ ZZ_NUM ZZ_SQ ZZ_EMPTY ZZ_LF ZZ_MISSING; do printf "%s=[%s]\\n" "$k" "$(host_setting $k)"; done',
+        'rm -rf "$REPO"',
+      ].join("\n"),
+    );
+    expect(check.status, check.stderr).toBe(0);
+    expect(check.stdout.trim().split("\n")).toEqual([
+      "ZZ_DQ=[age1abc]",
+      "ZZ_NUM=[14]",
+      "ZZ_SQ=[x y]",
+      "ZZ_EMPTY=[]",
+      "ZZ_LF=[plain]",
+      "ZZ_MISSING=[]",
+    ]);
   });
 
   it("encrypts with age when a recipient is set, and keeps no plaintext then", () => {
@@ -139,10 +213,12 @@ describe("pre-deploy safety dumps", () => {
     expect(text).toMatch(/\| age -r "\$PRE_DEPLOY_AGE_RECIPIENT" > "\$DUMP"/);
   });
 
-  it("docs/RETENTION.md names the dumps and their maximum age", () => {
+  it("docs/RETENTION.md names the dumps and their real maximum age (limit plus the daily check)", () => {
     const doc = readFileSync(path.join(root, "docs", "RETENTION.md"), "utf8");
     expect(doc).toContain("pre-deploy");
     expect(doc).toContain(`\`PRE_DEPLOY_DUMP_MAX_DAYS\` (days, default ${PRE_DEPLOY_DUMP_MAX_DAYS})`);
+    expect(doc).toContain(`can remain in internal safety backups for at most ${PRE_DEPLOY_DUMP_MAX_DAYS + 1} days`);
+    expect(doc).toContain("`root:docker` 2770");
   });
 
   // Starting bash (WSL on Windows) can take seconds on a busy machine.

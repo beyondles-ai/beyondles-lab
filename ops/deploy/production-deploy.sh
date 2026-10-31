@@ -10,10 +10,15 @@
 #
 # Safety dumps (docs/RETENTION.md): every deploy dumps ALL tenants before the
 # migration. Tenant/member deletion and retention only erase the live
-# database, so the dumps are private (umask 077, dir 700, file 600) and are
-# deleted once older than PRE_DEPLOY_DUMP_MAX_DAYS (default 7), at most 5 are
-# kept. The age rule must hold without a deploy too, so add a daily line to
-# /etc/cron.d/beyondles-jobs, e.g.
+# database, so the dumps are private and age out:
+#  - nothing for "other": the folder is root:docker 2770 (setgid, so every
+#    dump gets the docker group, and root and every dev-* user can write and
+#    prune it), the dumps are 640. The docker group can read the live
+#    database anyway (docker exec), so the group adds no reader.
+#  - a dump is deleted once older than PRE_DEPLOY_DUMP_MAX_DAYS (default 7),
+#    checked at every deploy and daily, so none lives longer than that plus
+#    one day; at most 5 are kept. The daily check needs a line in
+#    /etc/cron.d/beyondles-jobs, e.g.
 #   15 3 * * * root /opt/scripts/examplelab-production-deploy.sh --prune-dumps
 # Set PRE_DEPLOY_AGE_RECIPIENT (an age public key, same tool as the backups)
 # to store the dumps encrypted only (pre-deploy-*.dump.age). Both settings
@@ -26,24 +31,44 @@ BRANCH="main"
 PORT="__PROD_PORT__"
 LOG="/var/log/examplelab-production-deploy.log"
 BACKUPS="/opt/examplelab/backups"
-# Host setting: environment first, then the production .env.
+BACKUP_GROUP="docker"
+# Host setting: environment first, then the production .env, read the way
+# `docker compose --env-file` reads it: CR (CRLF file), surrounding blanks,
+# one pair of quotes and, when unquoted, a trailing " # comment" are dropped.
 host_setting() {
-  if printenv "$1"; then return 0; fi
+  local v
+  if v="$(printenv "$1")"; then printf '%s' "$v"; return 0; fi
   [ -f "$REPO/.env" ] || return 0
-  sed -n "s/^$1=//p" "$REPO/.env" | tail -n 1
+  local dq='^"(.*)"[[:space:]]*(#.*)?$' sq="^'(.*)'[[:space:]]*(#.*)?\$"
+  v="$(sed -n "s/^[[:space:]]*\(export[[:space:]]\+\)\?$1=//p" "$REPO/.env" | tail -n 1 | tr -d '\r')"
+  v="${v#"${v%%[![:space:]]*}"}"
+  if [[ $v =~ $dq || $v =~ $sq ]]; then
+    v="${BASH_REMATCH[1]}"
+  else
+    v="${v%%[[:space:]]#*}"
+    v="${v%"${v##*[![:space:]]}"}"
+  fi
+  printf '%s' "$v"
 }
 PRE_DEPLOY_DUMP_MAX_DAYS="$(host_setting PRE_DEPLOY_DUMP_MAX_DAYS)"
 PRE_DEPLOY_AGE_RECIPIENT="$(host_setting PRE_DEPLOY_AGE_RECIPIENT)"
 DUMP_MAX_DAYS="${PRE_DEPLOY_DUMP_MAX_DAYS:-7}"
-[[ "$DUMP_MAX_DAYS" =~ ^[0-9]+$ ]] || DUMP_MAX_DAYS=7
+# Whole days, never 0 (and no leading zero: bash would read 08 as octal).
+[[ "$DUMP_MAX_DAYS" =~ ^[1-9][0-9]*$ ]] || DUMP_MAX_DAYS=7
 
 say() { echo "[$(date '+%F %T')] $*" | tee -a "$LOG"; }
 
-# Age rule first, then keep at most the 5 newest.
+# Age rule first, then keep at most the 5 newest. Minutes, not -mtime: find
+# drops the fractional day there, so -mtime +7 only matches from 8 days on.
 prune_dumps() {
   [ -d "$BACKUPS" ] || return 0
-  find "$BACKUPS" -maxdepth 1 -type f -name 'pre-deploy-*.dump*' -mtime +"$DUMP_MAX_DAYS" -delete
-  ls -t "$BACKUPS"/pre-deploy-*.dump* 2>/dev/null | tail -n +6 | xargs -r rm --
+  local rc=0
+  find "$BACKUPS" -maxdepth 1 -type f -name 'pre-deploy-*.dump*' -mmin +$((DUMP_MAX_DAYS * 1440)) -delete || rc=1
+  local dumps=("$BACKUPS"/pre-deploy-*.dump*)
+  if [ -e "${dumps[0]}" ]; then
+    ls -t "${dumps[@]}" | tail -n +6 | xargs -r rm -- || rc=1
+  fi
+  return "$rc"
 }
 
 if [ "${1:-}" = "--prune-dumps" ]; then
@@ -75,20 +100,25 @@ done
 say "[safety dump before migrations]"
 # Private only for the dump: the checkout above keeps the host's umask.
 OLD_UMASK="$(umask)"
-umask 077
+umask 027
 mkdir -p "$BACKUPS"
-chmod 700 "$BACKUPS" 2>/dev/null || say "could not set $BACKUPS to 700 (not the owner); the dump file itself is 600"
+if [ "$(stat -c '%G %a' "$BACKUPS")" != "$BACKUP_GROUP 2770" ]; then
+  { chgrp "$BACKUP_GROUP" "$BACKUPS" && chmod 2770 "$BACKUPS"; } 2>/dev/null \
+    || say "could not set $BACKUPS to group $BACKUP_GROUP, mode 2770 (only its owner or root can); the dump file itself is 640"
+fi
 DUMP="$BACKUPS/pre-deploy-$(date +%Y%m%d-%H%M%S).dump"
 if [ -n "${PRE_DEPLOY_AGE_RECIPIENT:-}" ]; then
   DUMP="$DUMP.age"
   docker exec examplelab-production-postgres-1 pg_dump -U examplelab -d examplelab -Fc | age -r "$PRE_DEPLOY_AGE_RECIPIENT" > "$DUMP"
 else
-  say "PRE_DEPLOY_AGE_RECIPIENT not set: dump is NOT encrypted (mode 600, deleted after ${DUMP_MAX_DAYS} days)"
+  say "PRE_DEPLOY_AGE_RECIPIENT not set: dump is NOT encrypted (mode 640, deleted once older than ${DUMP_MAX_DAYS} days)"
   docker exec examplelab-production-postgres-1 pg_dump -U examplelab -d examplelab -Fc > "$DUMP"
 fi
-chmod 600 "$DUMP"
+chmod 640 "$DUMP"
 umask "$OLD_UMASK"
-prune_dumps
+# A dump another user cannot delete must not stop the deploy; the daily
+# root cron run catches it.
+prune_dumps || say "WARNING: could not prune every pre-deploy dump in $BACKUPS"
 
 say "[migrate]"
 "${COMPOSE[@]}" run --rm --no-deps toolchain npx prisma migrate deploy 2>&1 | tee -a "$LOG" | tail -3
