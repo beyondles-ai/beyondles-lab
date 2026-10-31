@@ -6,7 +6,7 @@ import { PageHeader, Panel } from "@/components/app-shell";
 import { NoteError } from "@/components/notes/note-error";
 import { DANGER_BUTTON, FIELD, LABEL, TEXTAREA } from "@/components/ui/form-classes";
 import { uiActor } from "@/lib/actor";
-import { canEdit } from "@/lib/access-rules";
+import { canEdit, canManage } from "@/lib/access-rules";
 import { requireAccess } from "@/lib/rbac";
 import { ServiceError } from "@/lib/service-errors";
 import { deleteNoteAction, updateNoteAction } from "@/server/actions/notes";
@@ -37,6 +37,8 @@ export default async function NotePage({
     throw e;
   }
   const editable = canEdit(ctx.access, "note", note);
+  // Delete is the owner's alone; an owner of a read-only private note still sees it.
+  const manageable = canManage(ctx.access, note);
 
   return (
     <div className="space-y-6">
@@ -66,9 +68,18 @@ export default async function NotePage({
               {t("save")}
             </button>
           </form>
+        </Panel>
+      ) : (
+        <Panel>
+          <p className="p-5 text-[15px] whitespace-pre-wrap text-body md:px-[22px]">{note.body}</p>
+        </Panel>
+      )}
+
+      {manageable ? (
+        <Panel>
           <form
             action={deleteNoteAction}
-            className="flex flex-wrap items-center gap-3 border-t border-line p-5 md:px-[22px]"
+            className="flex flex-wrap items-center gap-3 p-5 md:px-[22px]"
           >
             <input type="hidden" name="noteId" value={note.id} />
             <button type="submit" className={DANGER_BUTTON}>
@@ -77,11 +88,7 @@ export default async function NotePage({
             <span className="text-sm text-muted">{t("deleteHint")}</span>
           </form>
         </Panel>
-      ) : (
-        <Panel>
-          <p className="p-5 text-[15px] whitespace-pre-wrap text-body md:px-[22px]">{note.body}</p>
-        </Panel>
-      )}
+      ) : null}
     </div>
   );
 }

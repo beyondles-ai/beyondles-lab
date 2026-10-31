@@ -19,11 +19,14 @@ export interface ScheduledJob {
 /**
  * Every scheduled job of this Lab. A new nightly job is added HERE, or the
  * heartbeat does not watch it. `tests/unit/jobs.test.ts` checks every runnable
- * job except the heartbeat itself is listed.
+ * job except the heartbeat itself is listed, and every worker route's `runJob`
+ * name (`src/app/api/v1/worker/`, called by a scheduler) as well.
  */
 export const SCHEDULED_JOBS: readonly ScheduledJob[] = [
   // Nightly, plus a few hours of slack for a slow run.
   { name: "retention", windowHours: 26 },
+  // Worker route, nightly through ops/cron/expire-notes.sh.
+  { name: "expire-notes", windowHours: 26 },
 ];
 
 export interface JobState {
