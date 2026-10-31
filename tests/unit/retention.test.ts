@@ -5,6 +5,13 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+const h = vi.hoisted(() => {
+  const note = { count: vi.fn(), groupBy: vi.fn() };
+  return { note, dbMock: { note } };
+});
+vi.mock("@/lib/db", () => ({ db: h.dbMock }));
+
+import { prismaRetentionStore } from "@/server/jobs/jobs";
 import { TENANT_TABLES } from "@/server/services/platform-export";
 import { assertNotRedacted, REDACTED_TEXT, redactedValues } from "@/server/retention/redaction";
 import { NO_PERSONAL_DATA, privacyNoteLines, RETENTION_REGISTRY, type RetentionEntry } from "@/server/retention/registry";
@@ -13,11 +20,25 @@ import { runRetention, type RetentionStore } from "@/server/retention/retention-
 const root = path.resolve(__dirname, "..", "..");
 const now = new Date("2026-10-07T02:00:00Z");
 
+type Row = { organisationId?: string; createdAt: Date; title: string; body: string; redactedAt: Date | null };
+
 /** In-memory table that behaves like the database trigger of migration 0003. */
-function memoryStore(rows: { createdAt: Date; title: string; body: string; redactedAt: Date | null }[]) {
+function memoryStore(rows: Row[]) {
+  const live = () => rows.filter((r) => !r.redactedAt);
   const store: RetentionStore = {
-    countAll: async () => rows.length,
-    countExpired: async (_t, cutoff) => rows.filter((r) => r.createdAt < cutoff && !r.redactedAt).length,
+    countAll: async () => live().length,
+    countExpired: async (_t, cutoff) => live().filter((r) => r.createdAt < cutoff).length,
+    countByOrganisation: async (_t, cutoff) => {
+      const byOrg = new Map<string, { organisationId: string; live: number; expired: number }>();
+      for (const r of live()) {
+        const organisationId = r.organisationId ?? "org-1";
+        const entry = byOrg.get(organisationId) ?? { organisationId, live: 0, expired: 0 };
+        entry.live += 1;
+        if (r.createdAt < cutoff) entry.expired += 1;
+        byOrg.set(organisationId, entry);
+      }
+      return [...byOrg.values()];
+    },
     redactExpired: async (entry, cutoff, at) => {
       let n = 0;
       for (const r of rows.filter((x) => x.createdAt < cutoff && !x.redactedAt)) {
@@ -59,6 +80,29 @@ describe("retention job", () => {
     expect(rows[0].title).toBe("Passport 1");
   });
 
+  it("judges the share against live rows only, not rows redacted on earlier nights", async () => {
+    const redacted = Array.from({ length: 9_500 }, (_, i) => ({ ...old(i), title: REDACTED_TEXT, body: "", redactedAt: now }));
+    const { store, rows } = memoryStore([...redacted, ...Array.from({ length: 500 }, (_, i) => old(i))]);
+    const outcome = await runRetention(store, { RETENTION_DRY_RUN: "false", RETENTION_MAX_SHARE: "0.1" }, now);
+    expect(outcome).toMatchObject({ complete: false, reason: "notes_share_exceeded" });
+    expect(outcome.counts.notes_total).toBe(500);
+    expect(rows[9_500].title).toBe("Passport 0");
+  });
+
+  it("guards every organisation on its own: a large tenant cannot hide a small one being wiped", async () => {
+    const orgA = [
+      ...Array.from({ length: 10 }, (_, i) => ({ ...old(i), organisationId: "a" })),
+      ...Array.from({ length: 990 }, () => ({ ...fresh(), organisationId: "a" })),
+    ];
+    const orgB = Array.from({ length: 50 }, (_, i) => ({ ...old(100 + i), organisationId: "b" }));
+    const { store, rows } = memoryStore([...orgA, ...orgB]);
+    const outcome = await runRetention(store, { RETENTION_DRY_RUN: "false" }, now);
+    expect(outcome).toMatchObject({ complete: false, reason: "notes_share_exceeded" });
+    expect(outcome.counts).toMatchObject({ notes_total: 1_050, notes_expired: 60, notes_orgs_refused: 1 });
+    expect(outcome.counts.notes_redacted).toBeUndefined();
+    expect(rows.every((r) => r.redactedAt === null)).toBe(true);
+  });
+
   it("an empty table is fine for retention", async () => {
     const { store } = memoryStore([]);
     expect((await runRetention(store, { RETENTION_DRY_RUN: "0" }, now)).complete).toBeUndefined();
@@ -81,6 +125,38 @@ describe("retention job", () => {
     for (const column of RETENTION_REGISTRY.find((e) => e.table === "notes")!.personalColumns) {
       expect(sql).toContain(`NEW."${column}" IS DISTINCT FROM OLD."${column}"`);
     }
+  });
+});
+
+describe("prisma retention store", () => {
+  const cutoff = new Date("2026-09-07T02:00:00Z");
+
+  it("countAll counts only rows not yet redacted", async () => {
+    h.note.count.mockResolvedValueOnce(500);
+    expect(await prismaRetentionStore.countAll("notes")).toBe(500);
+    expect(h.note.count).toHaveBeenLastCalledWith({ where: { redactedAt: null } });
+  });
+
+  it("countByOrganisation returns live and expired rows per organisation", async () => {
+    h.note.groupBy
+      .mockResolvedValueOnce([
+        { organisationId: "a", _count: 1_000 },
+        { organisationId: "b", _count: 50 },
+      ])
+      .mockResolvedValueOnce([
+        { organisationId: "a", _count: 10 },
+        { organisationId: "b", _count: 50 },
+      ]);
+    expect(await prismaRetentionStore.countByOrganisation("notes", cutoff)).toEqual([
+      { organisationId: "a", live: 1_000, expired: 10 },
+      { organisationId: "b", live: 50, expired: 50 },
+    ]);
+    expect(h.note.groupBy).toHaveBeenCalledWith({ by: ["organisationId"], where: { redactedAt: null }, _count: true });
+    expect(h.note.groupBy).toHaveBeenCalledWith({
+      by: ["organisationId"],
+      where: { createdAt: { lt: cutoff }, redactedAt: null },
+      _count: true,
+    });
   });
 });
 

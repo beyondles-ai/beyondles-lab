@@ -4,10 +4,14 @@ import { periodDays, RETENTION_REGISTRY, type RetentionEntry } from "@/server/re
 
 /**
  * The nightly retention job. For every registry entry:
- *   1. count the table and the rows past their period (not yet redacted),
- *   2. ask the deletion guard (empty table is fine here; more than
- *      `RETENTION_MAX_SHARE` of the table in one night is NOT — then the job
- *      stops as `incomplete` and alerts, and a human decides),
+ *   1. count the live rows (not yet redacted) and the live rows past their
+ *      period, for the whole table and per organisation,
+ *   2. ask the deletion guard for the table AND for every organisation (empty
+ *      is fine here; more than `RETENTION_MAX_SHARE` of the live rows in one
+ *      night is NOT — then the job stops as `incomplete` before redacting
+ *      anything, alerts, and a human decides). Rows redacted on earlier nights
+ *      never count, or the guarded share would shrink every night; and a large
+ *      tenant must not hide a small one being wiped completely,
  *   3. in a dry run (the default!) only count, otherwise redact.
  *
  * Settings: `RETENTION_DRY_RUN` (anything but an explicit false/0/no is a
@@ -17,9 +21,21 @@ import { periodDays, RETENTION_REGISTRY, type RetentionEntry } from "@/server/re
  * handover, then go back to the default.
  */
 
+export interface OrganisationRetentionCount {
+  organisationId: string;
+  /** Rows of this organisation not yet redacted. */
+  live: number;
+  /** Of those, the rows past their period. */
+  expired: number;
+}
+
 export interface RetentionStore {
+  /** Rows not yet redacted (all organisations). Already redacted rows are NOT counted. */
   countAll(table: string): Promise<number>;
+  /** Rows not yet redacted and past the cutoff (all organisations). */
   countExpired(table: string, cutoff: Date): Promise<number>;
+  /** `countAll` and `countExpired` per organisation. */
+  countByOrganisation(table: string, cutoff: Date): Promise<OrganisationRetentionCount[]>;
   /** Redacts the expired rows in ONE statement and returns how many it changed. */
   redactExpired(entry: RetentionEntry, cutoff: Date, at: Date): Promise<number>;
 }
@@ -43,6 +59,21 @@ export async function runRetention(
 
     const verdict = checkDeletion({ toDelete: expired, total, maxShare, allowEmpty: true });
     if (!verdict.ok) return { counts, complete: false, reason: `${entry.table}_${verdict.reason}` };
+
+    // Counts only in the outcome (job frame rule): the refused organisations
+    // are counted, never named.
+    let firstRefusal: string | undefined;
+    let refused = 0;
+    for (const org of await store.countByOrganisation(entry.table, cutoff)) {
+      const orgVerdict = checkDeletion({ toDelete: org.expired, total: org.live, maxShare, allowEmpty: true });
+      if (orgVerdict.ok) continue;
+      refused += 1;
+      firstRefusal ??= orgVerdict.reason;
+    }
+    if (firstRefusal) {
+      counts[`${entry.table}_orgs_refused`] = refused;
+      return { counts, complete: false, reason: `${entry.table}_${firstRefusal}` };
+    }
     if (dryRun || expired === 0) continue;
 
     counts[`${entry.table}_redacted`] = await store.redactExpired(entry, cutoff, now);

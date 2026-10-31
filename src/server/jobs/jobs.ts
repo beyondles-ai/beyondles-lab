@@ -14,11 +14,26 @@ import { runRetention, type RetentionStore } from "@/server/retention/retention-
 /** Prisma store for the retention job. One `case` per registry table. */
 export const prismaRetentionStore: RetentionStore = {
   async countAll(table) {
-    if (table === "notes") return db.note.count();
+    if (table === "notes") return db.note.count({ where: { redactedAt: null } });
     throw new Error(`no retention store for table ${table}`);
   },
   async countExpired(table, cutoff) {
     if (table === "notes") return db.note.count({ where: { createdAt: { lt: cutoff }, redactedAt: null } });
+    throw new Error(`no retention store for table ${table}`);
+  },
+  async countByOrganisation(table, cutoff) {
+    if (table === "notes") {
+      const [live, expired] = await Promise.all([
+        db.note.groupBy({ by: ["organisationId"], where: { redactedAt: null }, _count: true }),
+        db.note.groupBy({ by: ["organisationId"], where: { createdAt: { lt: cutoff }, redactedAt: null }, _count: true }),
+      ]);
+      const expiredByOrg = new Map(expired.map((row) => [row.organisationId, row._count]));
+      return live.map((row) => ({
+        organisationId: row.organisationId,
+        live: row._count,
+        expired: expiredByOrg.get(row.organisationId) ?? 0,
+      }));
+    }
     throw new Error(`no retention store for table ${table}`);
   },
   async redactExpired(entry, cutoff, at) {
