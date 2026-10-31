@@ -490,7 +490,9 @@ the path prefix and the excluded MCP door. Example:
 `POST /api/v1/worker/expire-notes` (`expireNotes`), scheduled by
 `ops/cron/expire-notes.sh`. A worker route that deletes is a dry run unless
 the body says `"dryRun": false`; the scheduled caller sends that explicitly
-and a unit test feeds its exact body through the route.
+and a unit test feeds its exact body through the route. A scheduled worker
+route is a scheduled job: its `runJob` name goes into `SCHEDULED_JOBS`, and
+`tests/unit/jobs.test.ts` fails for a worker route that is not listed.
 
 ## 6. Tenant export
 

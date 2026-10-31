@@ -24,6 +24,9 @@ import { expireNotes } from "@/server/services/notes";
  * incomplete) and the service asks the deletion guard before it deletes.
  * Dry run unless the body says `"dryRun": false`, so every SCHEDULED caller
  * sends it explicitly (the template's caller: ops/cron/expire-notes.sh).
+ * The `runJob` name is listed in SCHEDULED_JOBS (heartbeat.ts), so a deleted
+ * cron line alerts; tests/unit/jobs.test.ts fails for a worker route that is
+ * not listed.
  */
 export const dynamic = "force-dynamic";
 

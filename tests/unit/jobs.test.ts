@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
@@ -90,6 +90,26 @@ describe("deletion guard", () => {
   });
 });
 
+/**
+ * The `runJob` names of every `route.ts` under `src/app/api/v1/worker/`.
+ * A scheduler calls these routes, so each is a scheduled job the heartbeat
+ * must watch. The name must be a string literal so this scan can read it.
+ */
+function workerJobNames(): string[] {
+  const root = path.resolve(__dirname, "..", "..", "src", "app", "api", "v1", "worker");
+  const routes = readdirSync(root, { recursive: true, encoding: "utf8" }).filter(
+    (file) => path.basename(file) === "route.ts",
+  );
+  return routes.flatMap((file) => {
+    const source = readFileSync(path.join(root, file), "utf8");
+    const calls = source.match(/\brunJob\(/g)?.length ?? 0;
+    const names = [...source.matchAll(/\brunJob\(\s*"([^"]+)"/g)].map((m) => m[1]);
+    expect(calls, `${file}: every runJob call needs a literal job name`).toBe(names.length);
+    expect(names.length, `${file}: a worker route runs through runJob`).toBeGreaterThan(0);
+    return names;
+  });
+}
+
 describe("heartbeat", () => {
   const now = new Date("2026-10-07T06:00:00Z");
   it("reports a job that never ran and one that missed its window", () => {
@@ -104,12 +124,16 @@ describe("heartbeat", () => {
     expect(missed).toEqual([{ name: "a", hoursSince: null }, { name: "b", hoursSince: 53 }]);
   });
 
-  it("watches every runnable job except itself", () => {
+  it("watches every runnable job except itself, and every worker route", () => {
     const source = readFileSync(path.resolve(__dirname, "..", "..", "src", "server", "jobs", "jobs.ts"), "utf8");
     const block = /export const JOBS[^{]*\{([\s\S]*?)\n\};/.exec(source)?.[1] ?? "";
     const runnable = [...block.matchAll(/^\s+(\w+):/gm)].map((m) => m[1]).filter((n) => n !== "heartbeat");
     expect(runnable.length).toBeGreaterThan(0);
-    expect(SCHEDULED_JOBS.map((j) => j.name).sort()).toEqual(runnable.sort());
+    expect(SCHEDULED_JOBS.map((j) => j.name).sort()).toEqual([...runnable, ...workerJobNames()].sort());
+  });
+
+  it("finds the job name of every worker route, so a scheduled worker job cannot slip past the heartbeat", () => {
+    expect(workerJobNames()).toContain("expire-notes");
   });
 });
 
