@@ -1,6 +1,6 @@
 # The frame — what every Beyondles Lab guarantees
 
-Checked on: 2026-10-26
+Checked on: 2026-10-31
 
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
@@ -177,8 +177,8 @@ in `app-shell/HOST-CONTRACT.md` in the shared repo.
   billed. Embeddings are the exception (free, no side effect) and retry a
   network error too. Mail only with an `idempotencyKey`.
 - Fixed variable names: `PLATFORM_API_URL`, `PLATFORM_API_KEY`,
-  `PLATFORM_EXPORT_KEY`, `PLATFORM_DELETE_KEY`, `NEXT_PUBLIC_PLATFORM_URL`,
-  `ON_BEHALF_ISSUER`, `BRAIN_API_URL`. `PLATFORM_SSO_URL` is retired and refused by the frame check.
+  `PLATFORM_EXPORT_KEY`, `PLATFORM_DELETE_KEY`, `PLATFORM_REASSIGN_KEY`,
+  `NEXT_PUBLIC_PLATFORM_URL`, `ON_BEHALF_ISSUER`, `BRAIN_API_URL`. `PLATFORM_SSO_URL` is retired and refused by the frame check.
 
 ## 4a. The memory door (The Brain)
 
@@ -621,7 +621,10 @@ it true by construction; `npm run check:frame` and the unit tests keep it so.
   AI calls carry `{ useCase, level }` or `{ model, fallback }`, never a key.
   Each key has one job: `PLATFORM_API_KEY` (calls to the platform),
   `PLATFORM_EXPORT_KEY` (platform reads the export), `PLATFORM_DELETE_KEY`
-  (platform deletes), worker API keys (schedulers). Third-party images in
+  (platform deletes), `PLATFORM_REASSIGN_KEY` (platform hands a leaver's
+  objects over and revokes the leaver's keys; the third part of the Lab's
+  `EXPORT_SOURCES` entry, `name=baseUrl|exportKey|reassignKey`), worker API
+  keys (schedulers). Third-party images in
   Compose, CI and the Dockerfile are pinned by digest; check-frame warns on
   an unpinned one.
 

@@ -18,7 +18,11 @@ const PUBLIC_PATHS = [
   "/api/v1",
   /** Agent door (MCP): same reason. */
   "/api/mcp",
-  /** Platform calls (export): `X-API-Key` = PLATFORM_EXPORT_KEY, checked in the route. */
+  /**
+   * Platform calls: `X-API-Key` checked in each route, one key per purpose
+   * (export = PLATFORM_EXPORT_KEY, deletion = PLATFORM_DELETE_KEY, leaver
+   * hand-over = PLATFORM_REASSIGN_KEY).
+   */
   "/api/platform/",
 ];
 

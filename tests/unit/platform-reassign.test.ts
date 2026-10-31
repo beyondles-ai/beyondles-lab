@@ -133,17 +133,30 @@ describe("reassignOwner", () => {
 describe("POST /api/platform/reassign-owner", () => {
   const body = { organisationId: ORG, fromUserId: FROM, toUserId: TO };
 
-  it("is closed with 503 EXPORT_NOT_CONFIGURED while the export key is unset", async () => {
-    vi.stubEnv("PLATFORM_EXPORT_KEY", "");
-    const res = await POST(req(body, "anything"));
-    expect(res.status).toBe(503);
-    expect(res.headers.get("cache-control")).toBe("no-store");
-    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("EXPORT_NOT_CONFIGURED");
+  it("is closed with 503 REASSIGN_NOT_CONFIGURED while the reassign key is unset, even with the export key set", async () => {
+    vi.stubEnv("PLATFORM_REASSIGN_KEY", "");
+    vi.stubEnv("PLATFORM_EXPORT_KEY", "export-key");
+    for (const key of ["anything", "export-key"]) {
+      const res = await POST(req(body, key));
+      expect(res.status).toBe(503);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe("REASSIGN_NOT_CONFIGURED");
+    }
+    expect(h.transaction).not.toHaveBeenCalled();
+  });
+
+  it("does not accept the export key or the delete key: a key that may only read must not change ownership", async () => {
+    vi.stubEnv("PLATFORM_REASSIGN_KEY", "reassign-key");
+    vi.stubEnv("PLATFORM_EXPORT_KEY", "export-key");
+    vi.stubEnv("PLATFORM_DELETE_KEY", "delete-key");
+    for (const key of ["export-key", "delete-key"]) {
+      expect((await POST(req(body, key))).status).toBe(401);
+    }
     expect(h.transaction).not.toHaveBeenCalled();
   });
 
   it("answers 401 UNAUTHORIZED for a wrong or missing key", async () => {
-    vi.stubEnv("PLATFORM_EXPORT_KEY", "right");
+    vi.stubEnv("PLATFORM_REASSIGN_KEY", "right");
     vi.stubEnv("PLATFORM_DELETE_KEY", "delete-key");
     for (const key of ["wrong", "delete-key", undefined]) {
       const res = await POST(req(body, key));
@@ -154,7 +167,7 @@ describe("POST /api/platform/reassign-owner", () => {
   });
 
   it("answers 400 VALIDATION for bad ids, a missing body and the same person twice", async () => {
-    vi.stubEnv("PLATFORM_EXPORT_KEY", "right");
+    vi.stubEnv("PLATFORM_REASSIGN_KEY", "right");
     for (const bad of [
       "not json",
       {},
@@ -173,7 +186,7 @@ describe("POST /api/platform/reassign-owner", () => {
   });
 
   it("answers 200 with the counts, and zeros for an unknown organisation and a second run", async () => {
-    vi.stubEnv("PLATFORM_EXPORT_KEY", "right");
+    vi.stubEnv("PLATFORM_REASSIGN_KEY", "right");
     const first = await POST(req(body, "right"));
     expect(first.status).toBe(200);
     expect(first.headers.get("cache-control")).toBe("no-store");
@@ -201,7 +214,7 @@ describe("POST /api/platform/reassign-owner", () => {
   });
 
   it("hands over for upper-case organisation and person ids (the stored id is the token's spelling)", async () => {
-    vi.stubEnv("PLATFORM_EXPORT_KEY", "right");
+    vi.stubEnv("PLATFORM_REASSIGN_KEY", "right");
     const res = await POST(req({ organisationId: ORG.toUpperCase(), fromUserId: FROM.toUpperCase(), toUserId: TO }, "right"));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
@@ -213,7 +226,7 @@ describe("POST /api/platform/reassign-owner", () => {
   });
 
   it("answers 500 when the transaction fails", async () => {
-    vi.stubEnv("PLATFORM_EXPORT_KEY", "right");
+    vi.stubEnv("PLATFORM_REASSIGN_KEY", "right");
     h.transaction.mockRejectedValueOnce(new Error("db down"));
     const res = await POST(req(body, "right"));
     expect(res.status).toBe(500);

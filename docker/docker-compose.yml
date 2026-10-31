@@ -70,6 +70,9 @@ services:
       # Tenant export for the platform (GET /api/platform/export).
       PLATFORM_EXPORT_KEY: ${PLATFORM_EXPORT_KEY:-}
       PLATFORM_DELETE_KEY: ${PLATFORM_DELETE_KEY:-}
+      # Leaver hand-over (POST /api/platform/reassign-owner): its OWN key,
+      # never the export key; unset = 503.
+      PLATFORM_REASSIGN_KEY: ${PLATFORM_REASSIGN_KEY:-}
       ON_BEHALF_ISSUER: ${ON_BEHALF_ISSUER:-}
       # The memory door (The Brain API of THIS environment, never the
       # dashboard host). Empty = the Lab writes and reads nothing there.
