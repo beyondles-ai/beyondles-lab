@@ -8,6 +8,9 @@
 # __STAGING_PORT__, chmod 750, add to /etc/cron.d/beyondles-autodeploy.
 # ---------------------------------------------------------------------------
 set -u
+# Set to 1 only after a complete, verified deploy. Idle ticks, a busy lock or a
+# missing repo exit 0 too, but must not "resolve" an open deploy alert.
+DEPLOYED=0
 
 _beyondles_alert_on_exit() {
   local rc=$?
@@ -17,12 +20,12 @@ _beyondles_alert_on_exit() {
   if [ "$rc" -ne 0 ]; then
     {
       echo "The deployment was aborted (exit code $rc)."
-      echo "The running version is untouched -- nothing was half-rolled-out."
+      echo "Staging may be on the new commit, partly migrated, or on the old version; the next tick retries."
       echo
       echo "Last log lines from ${LOG:-(no log file configured)}:"
       if [ -n "${LOG:-}" ] && [ -r "${LOG:-}" ]; then tail -n 30 "$LOG"; fi
     } | "$mailer" --key "$name" --min-interval 3600 "Auto-deploy aborted: $name" >/dev/null 2>&1
-  else
+  elif [ "${DEPLOYED:-0}" = 1 ]; then
     "$mailer" --key "$name" --resolve "Auto-deploy: $name" </dev/null >/dev/null 2>&1
   fi
   return 0
@@ -34,6 +37,11 @@ BRANCH="develop"
 PORT="__STAGING_PORT__"
 LOG="/var/log/examplelab-staging-autodeploy.log"
 LOCK="/tmp/examplelab-staging-autodeploy.lock"
+# Commit of the last SUCCESSFUL deploy. HEAD is no proof: `git reset --hard`
+# runs before build/migrate/health, so after a failed deploy HEAD already equals
+# origin/develop. The marker makes the next tick retry until it succeeds.
+MARK="/var/lib/beyondles-autodeploy/examplelab-staging-deployed"
+mkdir -p "$(dirname "$MARK")" || exit 1
 
 exec 9>"$LOCK"
 flock -n 9 || exit 0
@@ -54,7 +62,7 @@ if [ -r "$FETCH_GUARD" ]; then . "$FETCH_GUARD"; fetch_ok "$(basename "$0" .sh)"
 LOCAL="$(git rev-parse @ 2>/dev/null)"
 REMOTE="$(git rev-parse "origin/$BRANCH" 2>/dev/null)"
 [ -n "$REMOTE" ] || { echo "[$(date '+%F %T')] cannot resolve origin/$BRANCH" >>"$LOG"; exit 1; }
-[ "$LOCAL" = "$REMOTE" ] && exit 0
+if [ -f "$MARK" ] && [ "$(cat "$MARK")" = "$REMOTE" ]; then exit 0; fi
 
 {
   # Inside the block every failing step aborts the run (a failed build must
@@ -101,4 +109,6 @@ REMOTE="$(git rev-parse "origin/$BRANCH" 2>/dev/null)"
   fi
   echo "[access door] ok"
   echo "[$(date '+%F %T')] deploy OK: $(git rev-parse --short @)"
+  echo "$REMOTE" > "$MARK"
+  DEPLOYED=1
 } >>"$LOG" 2>&1
