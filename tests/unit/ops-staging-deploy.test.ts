@@ -10,7 +10,9 @@ import { describe, expect, it } from "vitest";
  * deployed", a failed deploy is never retried (the next tick sees HEAD ==
  * origin/develop) and its alert is "resolved" two minutes later although
  * staging is still old or half-migrated. A marker written only after a
- * successful deploy decides instead, and only a real deploy resolves the alert.
+ * successful deploy decides instead. The alert is resolved only when staging is
+ * proven current (a real deploy, or an idle tick whose marker equals
+ * origin/develop), never on a busy lock or a missing repo.
  */
 
 const root = path.resolve(__dirname, "..", "..");
@@ -45,7 +47,7 @@ function harness(ticks: string): string {
     "cat > \"$T/bin/git\" <<'__STUB__'",
     "#!/bin/bash",
     'case "$1" in',
-    "  fetch) exit 0 ;;",
+    '  fetch) exit "$(cat "$STUB_DIR/fetch_rc")" ;;',
     '  rev-parse) if [ "$2" = "--short" ]; then cat "$STUB_DIR/local"; elif [ "$2" = "@" ]; then cat "$STUB_DIR/local"; else cat "$STUB_DIR/remote"; fi ;;',
     '  reset) cp "$STUB_DIR/remote" "$STUB_DIR/local" ;;',
     "esac",
@@ -67,7 +69,7 @@ function harness(ticks: string): string {
     'printf \'#!/bin/bash\nexit "$(cat "%s/flock_rc")"\n\' "$T" > "$T/bin/flock"',
     'chmod +x "$T/bin/"* "$T/scripts/alert-mail.sh"',
     'export STUB_DIR="$T" PATH="$T/bin:$PATH"',
-    'echo aaaa > "$T/local"; echo bbbb > "$T/remote"; echo 0 > "$T/flock_rc"',
+    'echo aaaa > "$T/local"; echo bbbb > "$T/remote"; echo 0 > "$T/flock_rc"; echo 0 > "$T/fetch_rc"',
     'tick() { echo "$1" > "$T/build_rc"; : > "$T/mail.log"; : > "$T/docker.log"; bash "$T/deploy.sh"; local rc=$?;',
     '  local builds; builds=$(grep -c " build " "$T/docker.log");',
     '  local resolves; resolves=$(grep -c -- "--resolve" "$T/mail.log");',
@@ -87,7 +89,7 @@ describe("staging auto-deploy retries a failed deploy", () => {
           "tick 1", // new commit, build fails -> alert
           "tick 1", // same commit: must be rebuilt, alert must stay open
           "tick 0", // build works -> marker, alert resolved
-          "tick 0", // idle -> nothing
+          "tick 0", // idle on the deployed commit -> --resolve (a no-op unless an alert is open)
           'echo 1 > "$T/flock_rc"; tick 0', // lock busy -> nothing
         ].join("\n"),
       ),
@@ -97,8 +99,31 @@ describe("staging auto-deploy retries a failed deploy", () => {
       "rc=1 builds=1 mails=1 resolves=0 mark=",
       "rc=1 builds=1 mails=1 resolves=0 mark=",
       "rc=0 builds=1 mails=1 resolves=1 mark=bbbb",
+      "rc=0 builds=0 mails=1 resolves=1 mark=bbbb",
       "rc=0 builds=0 mails=0 resolves=0 mark=bbbb",
-      "rc=0 builds=0 mails=0 resolves=0 mark=bbbb",
+    ]);
+  });
+
+  it("clears an alert that was not about the deploy itself once staging is proven current", { timeout: 120_000 }, () => {
+    if (!bashWorks()) return; // no bash on this machine
+    const run = runBash(
+      harness(
+        [
+          "tick 0", // deploy works -> marker
+          'echo 1 > "$T/fetch_rc"; tick 0', // GitHub down -> alert (no fetch guard installed)
+          'echo 0 > "$T/fetch_rc"; tick 0', // GitHub back, nothing new -> all-clear
+          'echo 1 > "$T/fetch_rc"; rm -f "$T/state/"*; tick 1', // alert, then no marker:
+          'echo 0 > "$T/fetch_rc"; tick 1', // the failed deploy is retried, alert stays open
+        ].join("\n"),
+      ),
+    );
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.stdout.trim().split("\n")).toEqual([
+      "rc=0 builds=1 mails=1 resolves=1 mark=bbbb",
+      "rc=1 builds=0 mails=1 resolves=0 mark=bbbb",
+      "rc=0 builds=0 mails=1 resolves=1 mark=bbbb",
+      "rc=1 builds=0 mails=1 resolves=0 mark=",
+      "rc=1 builds=1 mails=1 resolves=0 mark=",
     ]);
   });
 
@@ -111,9 +136,10 @@ describe("staging auto-deploy retries a failed deploy", () => {
     expect(text.indexOf('echo "$REMOTE" > "$MARK"')).toBeGreaterThan(text.indexOf("deploy OK"));
   });
 
-  it("resolves only after a successful deploy and no longer claims an aborted deploy left staging untouched", () => {
+  it("resolves only when staging is proven current and no longer claims an aborted deploy left staging untouched", () => {
     const text = script();
-    expect(text).toMatch(/elif \[ "\$\{DEPLOYED:-0\}" = 1 \]; then\n\s*"\$mailer" --key "\$name" --resolve/);
+    expect(text).toMatch(/elif \[ "\$\{CURRENT:-0\}" = 1 \]; then\n\s*"\$mailer" --key "\$name" --resolve/);
+    expect(text).toMatch(/\[ "\$\(cat "\$MARK"\)" = "\$REMOTE" \]; then CURRENT=1; exit 0; fi/);
     expect(text).not.toContain("nothing was half-rolled-out");
     expect(text).toContain("--min-interval 3600");
   });

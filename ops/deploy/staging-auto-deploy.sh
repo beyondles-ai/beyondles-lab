@@ -8,9 +8,11 @@
 # __STAGING_PORT__, chmod 750, add to /etc/cron.d/beyondles-autodeploy.
 # ---------------------------------------------------------------------------
 set -u
-# Set to 1 only after a complete, verified deploy. Idle ticks, a busy lock or a
-# missing repo exit 0 too, but must not "resolve" an open deploy alert.
-DEPLOYED=0
+# Set to 1 only when staging is proven to run the current origin/develop: after
+# a complete, verified deploy, or on an idle tick whose success marker equals
+# origin/develop (clears fetch or resolve alerts once the cause is gone). A busy
+# lock or a missing repo exit 0 too, but prove nothing and must not resolve.
+CURRENT=0
 
 _beyondles_alert_on_exit() {
   local rc=$?
@@ -25,7 +27,7 @@ _beyondles_alert_on_exit() {
       echo "Last log lines from ${LOG:-(no log file configured)}:"
       if [ -n "${LOG:-}" ] && [ -r "${LOG:-}" ]; then tail -n 30 "$LOG"; fi
     } | "$mailer" --key "$name" --min-interval 3600 "Auto-deploy aborted: $name" >/dev/null 2>&1
-  elif [ "${DEPLOYED:-0}" = 1 ]; then
+  elif [ "${CURRENT:-0}" = 1 ]; then
     "$mailer" --key "$name" --resolve "Auto-deploy: $name" </dev/null >/dev/null 2>&1
   fi
   return 0
@@ -62,7 +64,7 @@ if [ -r "$FETCH_GUARD" ]; then . "$FETCH_GUARD"; fetch_ok "$(basename "$0" .sh)"
 LOCAL="$(git rev-parse @ 2>/dev/null)"
 REMOTE="$(git rev-parse "origin/$BRANCH" 2>/dev/null)"
 [ -n "$REMOTE" ] || { echo "[$(date '+%F %T')] cannot resolve origin/$BRANCH" >>"$LOG"; exit 1; }
-if [ -f "$MARK" ] && [ "$(cat "$MARK")" = "$REMOTE" ]; then exit 0; fi
+if [ -f "$MARK" ] && [ "$(cat "$MARK")" = "$REMOTE" ]; then CURRENT=1; exit 0; fi
 
 {
   # Inside the block every failing step aborts the run (a failed build must
@@ -110,5 +112,5 @@ if [ -f "$MARK" ] && [ "$(cat "$MARK")" = "$REMOTE" ]; then exit 0; fi
   echo "[access door] ok"
   echo "[$(date '+%F %T')] deploy OK: $(git rev-parse --short @)"
   echo "$REMOTE" > "$MARK"
-  DEPLOYED=1
+  CURRENT=1
 } >>"$LOG" 2>&1
