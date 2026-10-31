@@ -36,10 +36,11 @@ export const prismaRetentionStore: RetentionStore = {
     }
     throw new Error(`no retention store for table ${table}`);
   },
-  async redactExpired(entry, cutoff, at) {
+  async redactExpired(entry, cutoff, at, skipOrganisations) {
     if (entry.table === "notes") {
+      const skip = skipOrganisations.length > 0 ? { organisationId: { notIn: [...skipOrganisations] } } : {};
       const result = await db.note.updateMany({
-        where: { createdAt: { lt: cutoff }, redactedAt: null },
+        where: { createdAt: { lt: cutoff }, redactedAt: null, ...skip },
         data: { ...redactedValues(entry.personalColumns), redactedAt: at },
       });
       return result.count;

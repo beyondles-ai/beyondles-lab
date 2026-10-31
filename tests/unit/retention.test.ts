@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 const h = vi.hoisted(() => {
-  const note = { count: vi.fn(), groupBy: vi.fn() };
+  const note = { count: vi.fn(), groupBy: vi.fn(), updateMany: vi.fn() };
   return { note, dbMock: { note } };
 });
 vi.mock("@/lib/db", () => ({ db: h.dbMock }));
@@ -15,7 +15,7 @@ import { prismaRetentionStore } from "@/server/jobs/jobs";
 import { TENANT_TABLES } from "@/server/services/platform-export";
 import { assertNotRedacted, REDACTED_TEXT, redactedValues } from "@/server/retention/redaction";
 import { NO_PERSONAL_DATA, privacyNoteLines, RETENTION_REGISTRY, type RetentionEntry } from "@/server/retention/registry";
-import { runRetention, type RetentionStore } from "@/server/retention/retention-job";
+import { RETENTION_FLOOR_ROWS, runRetention, type RetentionStore } from "@/server/retention/retention-job";
 
 const root = path.resolve(__dirname, "..", "..");
 const now = new Date("2026-10-07T02:00:00Z");
@@ -39,9 +39,10 @@ function memoryStore(rows: Row[]) {
       }
       return [...byOrg.values()];
     },
-    redactExpired: async (entry, cutoff, at) => {
+    redactExpired: async (entry, cutoff, at, skipOrganisations) => {
       let n = 0;
-      for (const r of rows.filter((x) => x.createdAt < cutoff && !x.redactedAt)) {
+      const skip = new Set(skipOrganisations);
+      for (const r of rows.filter((x) => x.createdAt < cutoff && !x.redactedAt && !skip.has(x.organisationId ?? "org-1"))) {
         Object.assign(r, redactedValues(entry.personalColumns), { redactedAt: at });
         n += 1;
       }
@@ -74,7 +75,7 @@ describe("retention job", () => {
   });
 
   it("stops as incomplete when one night would touch more than 10 %", async () => {
-    const { store, rows } = memoryStore([old(1), old(2), ...Array.from({ length: 8 }, fresh)]);
+    const { store, rows } = memoryStore([...Array.from({ length: 60 }, (_, i) => old(i + 1)), ...Array.from({ length: 440 }, fresh)]);
     const outcome = await runRetention(store, { RETENTION_DRY_RUN: "no" }, now);
     expect(outcome).toMatchObject({ complete: false, reason: "notes_share_exceeded" });
     expect(rows[0].title).toBe("Passport 1");
@@ -89,16 +90,59 @@ describe("retention job", () => {
     expect(rows[9_500].title).toBe("Passport 0");
   });
 
-  it("guards every organisation on its own: a large tenant cannot hide a small one being wiped", async () => {
+  it("a small Lab is not refused for good: a few expiring rows always pass the share guard", async () => {
+    // 1 of 5 live notes is 20 %, but refusing it would refuse every night after.
+    const { store, rows } = memoryStore([old(1), ...Array.from({ length: 4 }, fresh)]);
+    const outcome = await runRetention(store, { RETENTION_DRY_RUN: "false" }, now);
+    expect(outcome).toEqual({ counts: { dry_run: 0, notes_total: 5, notes_expired: 1, notes_redacted: 1 } });
+    expect(rows[0]).toMatchObject({ title: REDACTED_TEXT, redactedAt: now });
+  });
+
+  it("an idle tenant whose notes all age out together is ordinary retention", async () => {
     const orgA = [
       ...Array.from({ length: 10 }, (_, i) => ({ ...old(i), organisationId: "a" })),
       ...Array.from({ length: 990 }, () => ({ ...fresh(), organisationId: "a" })),
     ];
-    const orgB = Array.from({ length: 50 }, (_, i) => ({ ...old(100 + i), organisationId: "b" }));
+    const orgB = Array.from({ length: RETENTION_FLOOR_ROWS }, (_, i) => ({ ...old(100 + i), organisationId: "b" }));
     const { store, rows } = memoryStore([...orgA, ...orgB]);
     const outcome = await runRetention(store, { RETENTION_DRY_RUN: "false" }, now);
+    expect(outcome.complete).toBeUndefined();
+    expect(outcome.counts.notes_redacted).toBe(10 + RETENTION_FLOOR_ROWS);
+    expect(rows.filter((r) => r.organisationId === "b").every((r) => r.redactedAt === now)).toBe(true);
+  });
+
+  it("guards every organisation on its own and skips only the refused one", async () => {
+    const orgA = [
+      ...Array.from({ length: 10 }, (_, i) => ({ ...old(i), organisationId: "a" })),
+      ...Array.from({ length: 990 }, () => ({ ...fresh(), organisationId: "a" })),
+    ];
+    const orgB = [
+      ...Array.from({ length: 60 }, (_, i) => ({ ...old(100 + i), organisationId: "b" })),
+      ...Array.from({ length: 10 }, () => ({ ...fresh(), organisationId: "b" })),
+    ];
+    const { store, rows } = memoryStore([...orgA, ...orgB]);
+    const outcome = await runRetention(store, { RETENTION_DRY_RUN: "false" }, now);
+    // Incomplete (alert, a human decides about B), but A's expired notes are redacted tonight.
     expect(outcome).toMatchObject({ complete: false, reason: "notes_share_exceeded" });
-    expect(outcome.counts).toMatchObject({ notes_total: 1_050, notes_expired: 60, notes_orgs_refused: 1 });
+    expect(outcome.counts).toMatchObject({
+      notes_total: 1_070,
+      notes_expired: 70,
+      notes_orgs_refused: 1,
+      notes_refused_live: 70,
+      notes_refused_expired: 60,
+      notes_redacted: 10,
+    });
+    expect(rows.filter((r) => r.organisationId === "a" && r.createdAt < now && r.title.startsWith("Passport")).length).toBe(0);
+    expect(rows.filter((r) => r.organisationId === "b").every((r) => r.redactedAt === null)).toBe(true);
+  });
+
+  it("a dry run reports a refused organisation without redacting anything", async () => {
+    const orgA = Array.from({ length: 1_000 }, () => ({ ...fresh(), organisationId: "a" }));
+    const orgB = Array.from({ length: 60 }, (_, i) => ({ ...old(i), organisationId: "b" }));
+    const { store, rows } = memoryStore([...orgA, ...orgB]);
+    const outcome = await runRetention(store, {}, now);
+    expect(outcome).toMatchObject({ complete: false, reason: "notes_share_exceeded" });
+    expect(outcome.counts).toMatchObject({ dry_run: 1, notes_orgs_refused: 1, notes_refused_expired: 60 });
     expect(outcome.counts.notes_redacted).toBeUndefined();
     expect(rows.every((r) => r.redactedAt === null)).toBe(true);
   });
@@ -157,6 +201,22 @@ describe("prisma retention store", () => {
       where: { createdAt: { lt: cutoff }, redactedAt: null },
       _count: true,
     });
+  });
+
+  it("redactExpired leaves the refused organisations out of its one statement", async () => {
+    const entry = RETENTION_REGISTRY.find((e) => e.table === "notes")!;
+    h.note.updateMany.mockResolvedValue({ count: 3 });
+    expect(await prismaRetentionStore.redactExpired(entry, cutoff, now, ["b"])).toBe(3);
+    expect(h.note.updateMany).toHaveBeenLastCalledWith({
+      where: { createdAt: { lt: cutoff }, redactedAt: null, organisationId: { notIn: ["b"] } },
+      data: { ...redactedValues(entry.personalColumns), redactedAt: now },
+    });
+    await prismaRetentionStore.redactExpired(entry, cutoff, now, []);
+    expect(h.note.updateMany).toHaveBeenLastCalledWith({
+      where: { createdAt: { lt: cutoff }, redactedAt: null },
+      data: { ...redactedValues(entry.personalColumns), redactedAt: now },
+    });
+    expect(h.note.updateMany).toHaveBeenCalledTimes(2);
   });
 });
 
