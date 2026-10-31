@@ -7,6 +7,17 @@
 #
 # Install: copy to /opt/scripts/examplelab-production-deploy.sh, replace
 # __PROD_PORT__, chmod 750.
+#
+# Safety dumps (docs/RETENTION.md): every deploy dumps ALL tenants before the
+# migration. Tenant/member deletion and retention only erase the live
+# database, so the dumps are private (umask 077, dir 700, file 600) and are
+# deleted once older than PRE_DEPLOY_DUMP_MAX_DAYS (default 7), at most 5 are
+# kept. The age rule must hold without a deploy too, so add a daily line to
+# /etc/cron.d/beyondles-jobs, e.g.
+#   15 3 * * * root /opt/scripts/examplelab-production-deploy.sh --prune-dumps
+# Set PRE_DEPLOY_AGE_RECIPIENT (an age public key, same tool as the backups)
+# to store the dumps encrypted only (pre-deploy-*.dump.age). Both settings
+# come from the environment or, if unset there, from "$REPO/.env".
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -15,8 +26,31 @@ BRANCH="main"
 PORT="__PROD_PORT__"
 LOG="/var/log/examplelab-production-deploy.log"
 BACKUPS="/opt/examplelab/backups"
+# Host setting: environment first, then the production .env.
+host_setting() {
+  if printenv "$1"; then return 0; fi
+  [ -f "$REPO/.env" ] || return 0
+  sed -n "s/^$1=//p" "$REPO/.env" | tail -n 1
+}
+PRE_DEPLOY_DUMP_MAX_DAYS="$(host_setting PRE_DEPLOY_DUMP_MAX_DAYS)"
+PRE_DEPLOY_AGE_RECIPIENT="$(host_setting PRE_DEPLOY_AGE_RECIPIENT)"
+DUMP_MAX_DAYS="${PRE_DEPLOY_DUMP_MAX_DAYS:-7}"
+[[ "$DUMP_MAX_DAYS" =~ ^[0-9]+$ ]] || DUMP_MAX_DAYS=7
 
 say() { echo "[$(date '+%F %T')] $*" | tee -a "$LOG"; }
+
+# Age rule first, then keep at most the 5 newest.
+prune_dumps() {
+  [ -d "$BACKUPS" ] || return 0
+  find "$BACKUPS" -maxdepth 1 -type f -name 'pre-deploy-*.dump*' -mtime +"$DUMP_MAX_DAYS" -delete
+  ls -t "$BACKUPS"/pre-deploy-*.dump* 2>/dev/null | tail -n +6 | xargs -r rm --
+}
+
+if [ "${1:-}" = "--prune-dumps" ]; then
+  prune_dumps
+  say "pre-deploy dumps pruned (max ${DUMP_MAX_DAYS} days, max 5)"
+  exit 0
+fi
 
 cd "$REPO"
 git fetch origin "$BRANCH"
@@ -39,9 +73,22 @@ done
 [ "$("${COMPOSE[@]}" ps postgres --format '{{.Health}}')" = "healthy" ] || { say "postgres not healthy"; exit 1; }
 
 say "[safety dump before migrations]"
+# Private only for the dump: the checkout above keeps the host's umask.
+OLD_UMASK="$(umask)"
+umask 077
 mkdir -p "$BACKUPS"
-docker exec examplelab-production-postgres-1 pg_dump -U examplelab -d examplelab -Fc > "$BACKUPS/pre-deploy-$(date +%Y%m%d-%H%M%S).dump"
-ls -t "$BACKUPS"/pre-deploy-*.dump 2>/dev/null | tail -n +6 | xargs -r rm --
+chmod 700 "$BACKUPS" 2>/dev/null || say "could not set $BACKUPS to 700 (not the owner); the dump file itself is 600"
+DUMP="$BACKUPS/pre-deploy-$(date +%Y%m%d-%H%M%S).dump"
+if [ -n "${PRE_DEPLOY_AGE_RECIPIENT:-}" ]; then
+  DUMP="$DUMP.age"
+  docker exec examplelab-production-postgres-1 pg_dump -U examplelab -d examplelab -Fc | age -r "$PRE_DEPLOY_AGE_RECIPIENT" > "$DUMP"
+else
+  say "PRE_DEPLOY_AGE_RECIPIENT not set: dump is NOT encrypted (mode 600, deleted after ${DUMP_MAX_DAYS} days)"
+  docker exec examplelab-production-postgres-1 pg_dump -U examplelab -d examplelab -Fc > "$DUMP"
+fi
+chmod 600 "$DUMP"
+umask "$OLD_UMASK"
+prune_dumps
 
 say "[migrate]"
 "${COMPOSE[@]}" run --rm --no-deps toolchain npx prisma migrate deploy 2>&1 | tee -a "$LOG" | tail -3

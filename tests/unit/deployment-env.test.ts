@@ -1,9 +1,11 @@
+import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_POOL_MAX, poolMax } from "@/lib/db";
+import { PRE_DEPLOY_DUMP_MAX_DAYS } from "@/server/retention/registry";
 
 /**
  * Two traps between "is in .env.example" and "arrives in the running
@@ -98,5 +100,56 @@ describe("poolMax", () => {
     expect(poolMax(undefined)).toBe(DEFAULT_POOL_MAX);
     expect(poolMax("")).toBe(DEFAULT_POOL_MAX);
     for (const v of ["eight", "0", "-5", "2.5", "NaN"]) expect(poolMax(v)).toBe(DEFAULT_POOL_MAX);
+  });
+});
+
+/**
+ * The production deploy writes a full dump of ALL tenants before every
+ * migration. Erasure (tenant/member delete, retention redaction) only touches
+ * the live database, so these dumps must be private (umask 077, 600/700),
+ * must age out on a fixed clock and must be named in docs/RETENTION.md.
+ */
+describe("pre-deploy safety dumps", () => {
+  const script = () => readFileSync(path.join(root, "ops", "deploy", "production-deploy.sh"), "utf8");
+
+  it("sets umask 077 before the dump folder and file are created", () => {
+    const text = script();
+    const umask = text.search(/^umask 077$/m);
+    expect(umask, "production-deploy.sh has no `umask 077`").toBeGreaterThan(-1);
+    expect(umask).toBeLessThan(text.indexOf("mkdir -p"));
+    expect(umask).toBeLessThan(text.indexOf("pg_dump"));
+  });
+
+  it("restricts the backup directory to 700 and every dump to 600", () => {
+    const text = script();
+    expect(text).toMatch(/chmod 700 "\$BACKUPS"/);
+    expect(text).toMatch(/chmod 600 "\$DUMP"/);
+    expect(text).toMatch(/pg_dump[^\n]*>\s*"\$DUMP"/);
+  });
+
+  it("prunes dumps by age, not only by count, also without a deploy", () => {
+    const text = script();
+    expect(text).toMatch(/-name 'pre-deploy-\*\.dump\*' -mtime \+"\$DUMP_MAX_DAYS" -delete/);
+    expect(text).toContain(`\${PRE_DEPLOY_DUMP_MAX_DAYS:-${PRE_DEPLOY_DUMP_MAX_DAYS}}`);
+    expect(text).toMatch(/"\$\{1:-\}" = "--prune-dumps"/);
+  });
+
+  it("encrypts with age when a recipient is set, and keeps no plaintext then", () => {
+    const text = script();
+    expect(text).toMatch(/\| age -r "\$PRE_DEPLOY_AGE_RECIPIENT" > "\$DUMP"/);
+  });
+
+  it("docs/RETENTION.md names the dumps and their maximum age", () => {
+    const doc = readFileSync(path.join(root, "docs", "RETENTION.md"), "utf8");
+    expect(doc).toContain("pre-deploy");
+    expect(doc).toContain(`\`PRE_DEPLOY_DUMP_MAX_DAYS\` (days, default ${PRE_DEPLOY_DUMP_MAX_DAYS})`);
+  });
+
+  // Starting bash (WSL on Windows) can take seconds on a busy machine.
+  it("the script is valid bash", { timeout: 30_000 }, () => {
+    // Via stdin: a Windows path means nothing to a WSL bash.
+    const check = spawnSync("bash", ["-n"], { input: script(), encoding: "utf8" });
+    if (check.error) return; // no bash on this machine
+    expect(check.status, check.stderr).toBe(0);
   });
 });

@@ -6,7 +6,7 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { NO_PERSONAL_DATA, privacyNoteLines, RETENTION_REGISTRY } from "@/server/retention/registry";
+import { NO_PERSONAL_DATA, PRE_DEPLOY_DUMP_MAX_DAYS, privacyNoteLines, RETENTION_REGISTRY } from "@/server/retention/registry";
 
 const lines = [
   "# Retention",
@@ -28,6 +28,16 @@ const lines = [
   "## Tenant tables without personal data",
   "",
   ...Object.entries(NO_PERSONAL_DATA).map(([table, why]) => `- \`${table}\`: ${why}`),
+  "",
+  "## Backups",
+  "",
+  "Every production deploy writes a pre-deploy safety dump of the whole database (all tenants) before the",
+  "migration (`ops/deploy/production-deploy.sh`). Tenant and member deletion and the retention job erase the",
+  "live database only; a deleted or redacted row stays in these dumps until the dump itself is deleted.",
+  "",
+  `- \`PRE_DEPLOY_DUMP_MAX_DAYS\` (days, default ${PRE_DEPLOY_DUMP_MAX_DAYS}): pre-deploy dumps older than this are deleted (at every deploy and by the daily \`--prune-dumps\` cron line); at most 5 are kept.`,
+  "- The dumps are readable by their owner only (file 600, folder 700). With `PRE_DEPLOY_AGE_RECIPIENT` set they are stored encrypted only (`.dump.age`).",
+  `- Privacy-note line: Deleted data and erased personal content can remain in internal safety backups until those backups are older than ${PRE_DEPLOY_DUMP_MAX_DAYS} days; they are checked and deleted daily.`,
   "",
 ];
 writeFileSync(path.resolve(__dirname, "..", "docs", "RETENTION.md"), lines.join("\n"), "utf8");
