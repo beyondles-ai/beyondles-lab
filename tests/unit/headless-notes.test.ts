@@ -478,6 +478,58 @@ describe("service errors map the same way at every door", () => {
   });
 });
 
+describe("delete is the owner's alone, at every door", () => {
+  const othersOrgNote = () =>
+    h.note.findFirst.mockResolvedValue(
+      stored({ visibility: "ORGANISATION", ownerUserId: "someone-else" }),
+    );
+
+  it("REST: an editor who is not the owner gets 403; nothing deleted, nothing audited", async () => {
+    othersOrgNote();
+    const res = await deleteNoteRoute(
+      req(`/api/v1/notes/${NOTE_ID}`, "user_delete", { method: "DELETE" }),
+      params,
+    );
+    expect(res.status).toBe(403);
+    expect(await errorCode(res)).toBe("forbidden");
+    expect(h.note.delete).not.toHaveBeenCalled();
+    expect(audit.map((a) => a.line.action)).not.toContain("object.deleted");
+  });
+
+  it("MCP: the same refusal through the tool", async () => {
+    othersOrgNote();
+    const tool = await callTool("user_delete", "examplelab_delete_note", {
+      noteId: NOTE_ID,
+    });
+    expect(tool.result.isError).toBe(true);
+    expect(tool.result.content[0].text).toMatch(/^forbidden \(HTTP 403\): /);
+    expect(h.note.delete).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+
+  it("screen: the same refusal, the code in the address", async () => {
+    othersOrgNote();
+    await expect(deleteNoteAction(form({ noteId: NOTE_ID }))).rejects.toThrow(
+      `REDIRECT /notes/${NOTE_ID}?error=forbidden`,
+    );
+    expect(h.note.delete).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+
+  it("a worker key owns nothing, so it deletes no single note, not even an organisation one", async () => {
+    h.note.findFirst.mockResolvedValue(
+      stored({ visibility: "ORGANISATION", ownerUserId: "" }),
+    );
+    const res = await deleteNoteRoute(
+      req(`/api/v1/notes/${NOTE_ID}`, "worker_job", { method: "DELETE" }),
+      params,
+    );
+    expect(res.status).toBe(403);
+    expect(h.note.delete).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+});
+
 describe("worker-triggered route POST /api/v1/worker/expire-notes", () => {
   const run = (key: string, body: Record<string, unknown> = { olderThanDays: 30, dryRun: false }) =>
     expireRoute(
