@@ -7,7 +7,7 @@ vi.mock("server-only", () => ({}));
 
 import { sendOpsAlert } from "@/server/jobs/alert";
 import { checkDeletion, parseDryRun, parseMaxShare } from "@/server/jobs/deletion-guard";
-import { findMissedJobs, SCHEDULED_JOBS } from "@/server/jobs/heartbeat";
+import { findMissedJobs, PENDING_STATUS, runHeartbeat, SCHEDULED_JOBS } from "@/server/jobs/heartbeat";
 import { completionLine, runJob, type JobDeps, type JobResult } from "@/server/jobs/run-job";
 
 function fakeDeps(overrides: Partial<JobDeps> = {}) {
@@ -136,5 +136,78 @@ describe("ops alert", () => {
       "alert=failed source=s code=ALERT_NOT_CONFIGURED",
       "alert=failed source=s code=DOOR_NOT_CONFIGURED",
     ]);
+  });
+});
+
+describe("heartbeat: first runs and the digest", () => {
+  const now = new Date("2026-11-02T12:00:00Z");
+  const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000);
+  const jobs = [
+    { name: "nightly", windowHours: 26 },
+    { name: "often", windowHours: 1 },
+  ];
+  const pending = (name: string, h: number) => ({ name, lastRunAt: hoursAgo(h), lastStatus: PENDING_STATUS, lastSuccessAt: null });
+
+  it("a job waiting for its first run stays quiet for one window, then alarms", () => {
+    expect(findMissedJobs(jobs, [pending("nightly", 25), pending("often", 0.5)], now)).toEqual([]);
+    expect(findMissedJobs(jobs, [pending("nightly", 27), pending("often", 2)], now)).toEqual([
+      { name: "nightly", hoursSince: null },
+      { name: "often", hoursSince: null },
+    ]);
+  });
+
+  it("a first run that failed alarms at once, inside the window", () => {
+    const failed = { name: "nightly", lastRunAt: hoursAgo(1), lastStatus: "incomplete", lastSuccessAt: null };
+    expect(findMissedJobs([jobs[0]], [failed], now)).toEqual([{ name: "nightly", hoursSince: null }]);
+  });
+
+  it("a job that ran before alarms as soon as its window is over", () => {
+    const old = { name: "nightly", lastRunAt: hoursAgo(27), lastStatus: "complete", lastSuccessAt: hoursAgo(27) };
+    expect(findMissedJobs([jobs[0]], [old], now)).toEqual([{ name: "nightly", hoursSince: 27 }]);
+  });
+
+  it("the first look starts the window of every unseen job and sends nothing", async () => {
+    const marked: string[][] = [];
+    let mails = 0;
+    const outcome = await runHeartbeat(now, {
+      jobs,
+      readStates: async () => [],
+      markPending: async (names) => void marked.push(names),
+      sendAlert: async () => (mails++, true),
+    });
+    expect(marked).toEqual([["nightly", "often"]]);
+    expect(mails).toBe(0);
+    expect(outcome.complete).toBe(true);
+    expect(outcome.counts).toEqual({ watched: 2, pending: 2, missed: 0 });
+  });
+
+  it("many missed jobs make one mail and a complete run, so no second and third alarm follow", async () => {
+    const sent: { source: string; summary: string }[] = [];
+    const outcome = await runHeartbeat(now, {
+      jobs,
+      readStates: async () => [
+        pending("nightly", 30),
+        { name: "often", lastRunAt: hoursAgo(5), lastStatus: "complete", lastSuccessAt: hoursAgo(5) },
+      ],
+      markPending: async () => {},
+      sendAlert: async (message) => (sent.push(message), true),
+    });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].source).toBe("heartbeat");
+    expect(sent[0].summary).toContain("nightly (last success: never)");
+    expect(sent[0].summary).toContain("often (last success: 5 h ago)");
+    expect(outcome.complete).toBe(true);
+    expect(outcome.counts.missed).toBe(2);
+  });
+
+  it("when the digest cannot go out the run is incomplete, so the host cron still alarms", async () => {
+    const outcome = await runHeartbeat(now, {
+      jobs: [jobs[0]],
+      readStates: async () => [pending("nightly", 30)],
+      markPending: async () => {},
+      sendAlert: async () => false,
+    });
+    expect(outcome.complete).toBe(false);
+    expect(outcome.reason).toBe("alert_failed");
   });
 });
