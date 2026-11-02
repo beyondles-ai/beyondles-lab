@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { alertJobFailure, sendOpsAlert } from "@/server/jobs/alert";
-import { findMissedJobs, SCHEDULED_JOBS } from "@/server/jobs/heartbeat";
+import { PENDING_STATUS, runHeartbeat } from "@/server/jobs/heartbeat";
 import type { JobDeps, JobOutcome, JobResult } from "@/server/jobs/run-job";
 import { redactedValues } from "@/server/retention/redaction";
 import { runRetention, type RetentionStore } from "@/server/retention/retention-job";
@@ -34,19 +34,17 @@ export const prismaRetentionStore: RetentionStore = {
 };
 
 export async function heartbeatJob(now: Date): Promise<JobOutcome> {
-  const states = await db.jobRun.findMany({ select: { name: true, lastSuccessAt: true } });
-  const missed = findMissedJobs(SCHEDULED_JOBS, states, now);
-  for (const job of missed) {
-    await sendOpsAlert({
-      source: `heartbeat:${job.name}`,
-      summary: `job=${job.name} missed its window (last success: ${job.hoursSince === null ? "never" : `${job.hoursSince} h ago`})`,
-    });
-  }
-  return {
-    counts: { watched: SCHEDULED_JOBS.length, missed: missed.length },
-    complete: missed.length === 0,
-    reason: missed.length > 0 ? "missed_jobs" : undefined,
-  };
+  return runHeartbeat(now, {
+    readStates: () => db.jobRun.findMany({ select: { name: true, lastSuccessAt: true, lastRunAt: true, lastStatus: true } }),
+    markPending: async (names, at) => {
+      // skipDuplicates: a job that finishes its first run right now keeps its row.
+      await db.jobRun.createMany({
+        data: names.map((name) => ({ name, lastRunAt: at, lastStatus: PENDING_STATUS })),
+        skipDuplicates: true,
+      });
+    },
+    sendAlert: (message) => sendOpsAlert(message),
+  });
 }
 
 export const JOBS: Record<string, (now: Date) => Promise<JobOutcome>> = {

@@ -582,6 +582,10 @@ it true by construction; `npm run check:frame` and the unit tests keep it so.
   `job_runs.lastSuccessAt`; the `heartbeat` job alerts when a job in
   `SCHEDULED_JOBS` (`src/server/jobs/heartbeat.ts`) missed its window. Run
   the heartbeat from a different scheduler than the jobs where possible.
+  A job that has not run yet gets one window of its own from the heartbeat's
+  first look (`lastStatus = pending`), so a new Lab or a new job sends no false
+  alarm. One run sends at most one mail listing all missed jobs; the run stays
+  complete unless that mail could not go out.
 - **Deletion guards.** `src/server/jobs/deletion-guard.ts`: empty input
   stops, more than 10 % of a table in one run stops (`*_MAX_SHARE`), and a
   dry run is the default: only an explicit `false`/`0`/`no`/`off` is real,
