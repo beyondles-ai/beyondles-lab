@@ -17,9 +17,18 @@ const h = vi.hoisted(() => {
   type KeyRow = { id: string; organisationId: string; createdByUserId: string | null; revokedAt: Date | null; kind: string };
   const state = { notes: [] as NoteRow[], keys: [] as KeyRow[] };
 
+  // A where value is either a plain string (exact) or Prisma's
+  // `{ equals, mode: "insensitive" }`; only the latter ignores case.
+  type IdFilter = string | { equals: string; mode?: "insensitive" | "default" };
+  const matches = (value: string | null, filter: IdFilter): boolean => {
+    if (value === null) return false;
+    if (typeof filter === "string") return value === filter;
+    return filter.mode === "insensitive" ? value.toLowerCase() === filter.equals.toLowerCase() : value === filter.equals;
+  };
+
   const note = {
-    updateMany: vi.fn(async ({ where, data }: { where: { organisationId: string; ownerUserId: string }; data: { ownerUserId: string } }) => {
-      const hits = state.notes.filter((n) => n.organisationId === where.organisationId && n.ownerUserId === where.ownerUserId);
+    updateMany: vi.fn(async ({ where, data }: { where: { organisationId: IdFilter; ownerUserId: IdFilter }; data: { ownerUserId: string } }) => {
+      const hits = state.notes.filter((n) => matches(n.organisationId, where.organisationId) && matches(n.ownerUserId, where.ownerUserId));
       for (const n of hits) n.ownerUserId = data.ownerUserId;
       return { count: hits.length };
     }),
@@ -30,11 +39,11 @@ const h = vi.hoisted(() => {
         where,
         data,
       }: {
-        where: { organisationId: string; createdByUserId: string; revokedAt: null };
+        where: { organisationId: IdFilter; createdByUserId: IdFilter; revokedAt: null };
         data: { revokedAt: Date };
       }) => {
         const hits = state.keys.filter(
-          (k) => k.organisationId === where.organisationId && k.createdByUserId === where.createdByUserId && k.revokedAt === null,
+          (k) => matches(k.organisationId, where.organisationId) && matches(k.createdByUserId, where.createdByUserId) && k.revokedAt === null,
         );
         for (const k of hits) k.revokedAt = data.revokedAt;
         return { count: hits.length };
@@ -48,6 +57,8 @@ vi.mock("@/lib/db", () => ({ db: h.dbMock }));
 
 import { POST } from "@/app/api/platform/reassign-owner/route";
 import { reassignOwner } from "@/server/services/platform-reassign";
+
+const ci = (id: string) => ({ equals: id, mode: "insensitive" });
 
 function req(body: unknown, key?: string): NextRequest {
   return new NextRequest("http://lab.test/api/platform/reassign-owner", {
@@ -85,13 +96,20 @@ describe("reassignOwner", () => {
     await reassignOwner(ORG, FROM, TO, now);
     expect(h.transaction).toHaveBeenCalledTimes(1);
     expect(h.note.updateMany).toHaveBeenCalledWith({
-      where: { organisationId: ORG, ownerUserId: FROM },
+      where: { organisationId: ci(ORG), ownerUserId: ci(FROM) },
       data: { ownerUserId: TO },
     });
     expect(h.apiKey.updateMany).toHaveBeenCalledWith({
-      where: { organisationId: ORG, createdByUserId: FROM, revokedAt: null },
+      where: { organisationId: ci(ORG), createdByUserId: ci(FROM), revokedAt: null },
       data: { revokedAt: now },
     });
+  });
+
+  it("matches organisation and person without regard to case, like the platform", async () => {
+    const out = await reassignOwner(ORG.toUpperCase(), "CcCcCcCc-cccc-4CCC-8ccc-CCCCCCCCCCCC", TO);
+    expect(out).toEqual({ reassigned: { note: 2 }, revokedApiKeys: 1 });
+    expect(h.state.notes.filter((n) => n.ownerUserId === TO).map((n) => n.id)).toEqual(["n1", "n2"]);
+    expect(h.state.keys.filter((k) => k.revokedAt === null).map((k) => k.id)).toEqual(["k3", "k4"]);
   });
 
   it("touches one organisation only, keeps visibility and collection, leaves WORKER keys", async () => {
@@ -115,17 +133,30 @@ describe("reassignOwner", () => {
 describe("POST /api/platform/reassign-owner", () => {
   const body = { organisationId: ORG, fromUserId: FROM, toUserId: TO };
 
-  it("is closed with 503 EXPORT_NOT_CONFIGURED while the export key is unset", async () => {
-    vi.stubEnv("PLATFORM_EXPORT_KEY", "");
-    const res = await POST(req(body, "anything"));
-    expect(res.status).toBe(503);
-    expect(res.headers.get("cache-control")).toBe("no-store");
-    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("EXPORT_NOT_CONFIGURED");
+  it("is closed with 503 REASSIGN_NOT_CONFIGURED while the reassign key is unset, even with the export key set", async () => {
+    vi.stubEnv("PLATFORM_REASSIGN_KEY", "");
+    vi.stubEnv("PLATFORM_EXPORT_KEY", "export-key");
+    for (const key of ["anything", "export-key"]) {
+      const res = await POST(req(body, key));
+      expect(res.status).toBe(503);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe("REASSIGN_NOT_CONFIGURED");
+    }
+    expect(h.transaction).not.toHaveBeenCalled();
+  });
+
+  it("does not accept the export key or the delete key: a key that may only read must not change ownership", async () => {
+    vi.stubEnv("PLATFORM_REASSIGN_KEY", "reassign-key");
+    vi.stubEnv("PLATFORM_EXPORT_KEY", "export-key");
+    vi.stubEnv("PLATFORM_DELETE_KEY", "delete-key");
+    for (const key of ["export-key", "delete-key"]) {
+      expect((await POST(req(body, key))).status).toBe(401);
+    }
     expect(h.transaction).not.toHaveBeenCalled();
   });
 
   it("answers 401 UNAUTHORIZED for a wrong or missing key", async () => {
-    vi.stubEnv("PLATFORM_EXPORT_KEY", "right");
+    vi.stubEnv("PLATFORM_REASSIGN_KEY", "right");
     vi.stubEnv("PLATFORM_DELETE_KEY", "delete-key");
     for (const key of ["wrong", "delete-key", undefined]) {
       const res = await POST(req(body, key));
@@ -136,7 +167,7 @@ describe("POST /api/platform/reassign-owner", () => {
   });
 
   it("answers 400 VALIDATION for bad ids, a missing body and the same person twice", async () => {
-    vi.stubEnv("PLATFORM_EXPORT_KEY", "right");
+    vi.stubEnv("PLATFORM_REASSIGN_KEY", "right");
     for (const bad of [
       "not json",
       {},
@@ -155,7 +186,7 @@ describe("POST /api/platform/reassign-owner", () => {
   });
 
   it("answers 200 with the counts, and zeros for an unknown organisation and a second run", async () => {
-    vi.stubEnv("PLATFORM_EXPORT_KEY", "right");
+    vi.stubEnv("PLATFORM_REASSIGN_KEY", "right");
     const first = await POST(req(body, "right"));
     expect(first.status).toBe(200);
     expect(first.headers.get("cache-control")).toBe("no-store");
@@ -182,8 +213,20 @@ describe("POST /api/platform/reassign-owner", () => {
     });
   });
 
+  it("hands over for upper-case organisation and person ids (the stored id is the token's spelling)", async () => {
+    vi.stubEnv("PLATFORM_REASSIGN_KEY", "right");
+    const res = await POST(req({ organisationId: ORG.toUpperCase(), fromUserId: FROM.toUpperCase(), toUserId: TO }, "right"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      success: true,
+      data: { source: "examplelab", organisationId: ORG.toUpperCase(), reassigned: { note: 2 }, revokedApiKeys: 1 },
+    });
+    expect(h.state.notes.filter((n) => n.ownerUserId === TO).map((n) => n.id)).toEqual(["n1", "n2"]);
+    expect(h.state.keys.find((k) => k.id === "k1")?.revokedAt).toBeInstanceOf(Date);
+  });
+
   it("answers 500 when the transaction fails", async () => {
-    vi.stubEnv("PLATFORM_EXPORT_KEY", "right");
+    vi.stubEnv("PLATFORM_REASSIGN_KEY", "right");
     h.transaction.mockRejectedValueOnce(new Error("db down"));
     const res = await POST(req(body, "right"));
     expect(res.status).toBe(500);

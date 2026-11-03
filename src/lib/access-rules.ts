@@ -2,6 +2,7 @@ import type { Prisma, Visibility } from "@prisma/client";
 
 import {
   canEdit as sharedCanEdit,
+  canManage as sharedCanManage,
   canSee as sharedCanSee,
   mayChooseVisibility,
   visibilityWhere,
@@ -26,8 +27,11 @@ import { ServiceError } from "@/lib/service-errors";
  *               A view grant never yields edit. A product admin gets NO
  *               superset: an admin who cannot see a private row cannot edit
  *               it either.
+ *  - manageable = the owner only: delete, change visibility, change collection,
+ *               hand over. An edit right (organisation, collection, edit grant)
+ *               is NOT enough.
  *  - a worker key owns nothing, is in no collection and holds no grant, so it
- *    sees and edits ORGANISATION rows only.
+ *    sees and edits ORGANISATION rows only and manages (deletes) none.
  *
  * These are the same rules for the UI, `/api/v1` and MCP: all three go
  * through `visibleWhere` / `canEdit`. Copy this file's shape for every new
@@ -54,6 +58,11 @@ export function canSee(ctx: AccessContext, type: ObjectType, row: ContainerColum
 /** May this context CHANGE the row? */
 export function canEdit(ctx: AccessContext, type: ObjectType, row: ContainerColumns): boolean {
   return sharedCanEdit(ctx, type, row);
+}
+
+/** May this context MANAGE the row (delete it, move it, hand it over)? Owner only. */
+export function canManage(ctx: AccessContext, row: Pick<ContainerColumns, "ownerUserId">): boolean {
+  return sharedCanManage(ctx, row);
 }
 
 /**
