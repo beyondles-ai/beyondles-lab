@@ -110,6 +110,9 @@ for (const rel of [
   "src/app/icon.png",
   "src/app/apple-icon.png",
   "src/app/favicon.ico",
+  // Own app icon per lab (Niclas, 2026-11-07): source + render script.
+  "design/app-icon.svg",
+  "scripts/render-icons.mjs",
   "src/app/kein-zugriff/page.tsx",
   // Closed-pages design (card #350, 2026-10-13): the shared frame from
   // beyondles-shared (app-shell), the signed-in layout that renders it, the
