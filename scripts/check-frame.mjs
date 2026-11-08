@@ -23,6 +23,7 @@
  * Exit code 2 = wrong usage.
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -572,6 +573,30 @@ if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((
 //     every delete path forgets in The Brain. A Lab without the client
 //     fails. Rule and scanner in scripts/support/memory-door.mjs.
 for (const finding of memoryDoorFindings({ read, exists })) fail(finding);
+
+// Own app icon per lab (Niclas, 2026-11-07). A real lab (LAB_KEY is not the
+// template key "examplelab") must ship its own icon: the Beyondles tile with
+// the lab's Suite toolbox glyph in design/app-icon.svg, rendered by
+// scripts/render-icons.mjs. The generic template icon and the placeholder
+// glyph fail. The icons must also be public in the middleware, or the phone
+// home screen gets a redirect to the login instead of the icon.
+{
+  const TEMPLATE_ICON_MD5 = "fef079bc613c67b840a2b602d7d704f3";
+  const labKey = (read("src/lib/lab.ts").match(/LAB_KEY = "([^"]+)"/) ?? [])[1];
+  if (labKey && labKey !== "examplelab") {
+    if (exists("src/app/icon.png")) {
+      const md5 = createHash("md5").update(readFileSync(path.join(root, "src/app/icon.png"))).digest("hex");
+      if (md5 === TEMPLATE_ICON_MD5) {
+        fail("src/app/icon.png is still the generic template icon: put the lab's Suite toolbox glyph into design/app-icon.svg and run node scripts/render-icons.mjs");
+      }
+    }
+    if (read("design/app-icon.svg").includes("TEMPLATE:")) fail("design/app-icon.svg still has the template placeholder glyph");
+  }
+  const middleware = read("src/middleware.ts");
+  for (const icon of ["/icon.png", "/apple-icon.png", "/icon-maskable.png"]) {
+    if (!middleware.includes(`"${icon}"`)) fail(`src/middleware.ts: ${icon} is not in the public paths`);
+  }
+}
 
 if (findings.length > 0) {
   console.error("Frame check FAILED:\n" + findings.map((f) => `  - ${f}`).join("\n"));
