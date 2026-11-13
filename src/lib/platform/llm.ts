@@ -90,6 +90,13 @@ export type LlmResult =
       provider: string;
       usage: LlmUsage;
       ledgerId: string | null;
+      /**
+       * `true` when the model stopped at the output limit and the text is cut
+       * (a JSON answer is then usually incomplete). Absent otherwise.
+       */
+      truncated?: boolean;
+      /** The provider's own stop reason (`end_turn`, `max_tokens`, `length`, ...), when the door sent one. */
+      stopReason?: string;
     }
   | { ok: false; status: number; code: string; message: string };
 
@@ -244,6 +251,19 @@ export async function complete(
       costCents: safeNumber(usage.costCents),
     },
     ledgerId: typeof d.ledgerId === "string" ? d.ledgerId : null,
+    ...outputLimitFields(d),
+  };
+}
+
+/**
+ * The door's word on a cut answer (platform-api docs/API.md, "Cut and empty
+ * answers"): `truncated: true` at a token-limit stop with text left, and the
+ * provider's `stopReason`. Additive: a field the door did not send stays absent.
+ */
+export function outputLimitFields(data: Record<string, unknown>): { truncated?: true; stopReason?: string } {
+  return {
+    ...(data.truncated === true ? { truncated: true as const } : {}),
+    ...(typeof data.stopReason === "string" && data.stopReason ? { stopReason: data.stopReason } : {}),
   };
 }
 
