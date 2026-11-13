@@ -96,7 +96,9 @@ function value(env: Env, name: string): string {
 /** Host and port, so that two services on one machine (local development) are told apart. */
 function authorityOf(raw: string): string | null {
   try {
-    return new URL(raw).host.toLowerCase().replace(/.$/, "") || null;
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase().replace(/\.$/, "");
+    return host ? (url.port ? `${host}:${url.port}` : host) : null;
   } catch {
     return null;
   }

@@ -44,6 +44,14 @@ export const NO_PERSONAL_DATA: Readonly<Record<string, string>> = {
   api_keys: "Key hash, scopes and the Suite user id of the creator; deleted with the person (platform-delete-member).",
 };
 
+/**
+ * Pre-deploy safety dumps (ops/deploy/production-deploy.sh) hold ALL tenants,
+ * including rows deleted or redacted since. Default maximum age in days; the
+ * host setting `PRE_DEPLOY_DUMP_MAX_DAYS` overrides it. Keep in sync with the
+ * script's default (tests/unit/deployment-env.test.ts checks it).
+ */
+export const PRE_DEPLOY_DUMP_MAX_DAYS = 7;
+
 /** Period in days from the setting; empty or unusable = the default (never 0, never "forever"). */
 export function periodDays(entry: RetentionEntry, env: Record<string, string | undefined>): number {
   const raw = env[entry.periodSetting]?.trim();
