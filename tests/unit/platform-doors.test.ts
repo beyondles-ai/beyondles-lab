@@ -104,6 +104,26 @@ describe("llm.ts: useCase + level on the wire", () => {
     const result = await complete({ organisationId: ORG, action: "a", messages: [{ role: "user", content: "x" }] }, fetchImpl);
     expect(result).toMatchObject({ ok: true, usage: { inputTokens: 0, outputTokens: 0, costCents: 0 } });
   });
+
+  it("keeps the door's truncated flag and stop reason on a cut answer (Dev #459)", async () => {
+    const { fetchImpl } = platform(() =>
+      ok({ text: "{\"a\":", model: "m", provider: "p", stopReason: "max_tokens", truncated: true, usage: { inputTokens: 3, outputTokens: 1, costCents: 0.2 } }),
+    );
+    const result = await complete({ organisationId: ORG, action: "a", messages: [{ role: "user", content: "x" }] }, fetchImpl);
+    expect(result).toMatchObject({ ok: true, text: "{\"a\":", truncated: true, stopReason: "max_tokens" });
+  });
+
+  it("adds no truncated flag when the door sends none, and only takes a real stop reason", async () => {
+    const plain = platform(() => ok({ text: "hi", model: "m", provider: "p", stopReason: "end_turn" }));
+    const full = await complete({ organisationId: ORG, action: "a", messages: [{ role: "user", content: "x" }] }, plain.fetchImpl);
+    expect(full).toMatchObject({ ok: true, stopReason: "end_turn" });
+    expect("truncated" in full).toBe(false);
+
+    const odd = platform(() => ok({ text: "hi", truncated: "yes", stopReason: null }));
+    const oddResult = await complete({ organisationId: ORG, action: "a", messages: [{ role: "user", content: "x" }] }, odd.fetchImpl);
+    expect("truncated" in oddResult).toBe(false);
+    expect("stopReason" in oddResult).toBe(false);
+  });
 });
 
 describe("media.ts", () => {
