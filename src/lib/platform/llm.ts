@@ -24,6 +24,16 @@ import { readDoorConfig } from "@/lib/platform/door";
  * Purposes are `<lab>.<action>`, lower-case, stable: they are the ledger key
  * the Suite groups costs by. Renaming one splits a customer's cost history.
  *
+ * A message's `content` is a string, or an array of blocks: `text`, `image`
+ * and `document` (base64, in user messages only). The door passes a PDF to
+ * the model as it is, turns Word, PowerPoint and Excel files into text, and
+ * stores nothing (platform-api `src/llm/normalize.js`, `src/llm/files/`). A
+ * request with an image or a PDF goes only to a model that reads it; when no
+ * allowed model does, the door answers `422 MODEL_NO_FILE_SUPPORT`, so a
+ * caller that can live without the file should ask again without it.
+ * `complete` refuses what the door would refuse for size and shape before
+ * any call (`checkContent`, the `LLM_*` limits below).
+ *
  * Retry only on 429/503, never on other 4xx; the error code is surfaced to
  * the caller, never swallowed.
  */
@@ -48,9 +58,64 @@ export type LlmUseCase = "general" | "coding" | "reasoning" | "writing" | "math"
 export const DEFAULT_USE_CASE: LlmUseCase = "general";
 export const DEFAULT_LEVEL: LlmLevel = "workhorse";
 
+/** The image types the door accepts (platform-api `src/llm/files/validate.js`, `IMAGE_TYPES`). */
+export const LLM_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+export type LlmImageMediaType = (typeof LLM_IMAGE_TYPES)[number];
+
+/** The document types the door accepts (same file, `DOCUMENT_TYPES`): PDF, Word, PowerPoint, Excel. */
+export const LLM_DOCUMENT_TYPES = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+] as const;
+export type LlmDocumentMediaType = (typeof LLM_DOCUMENT_TYPES)[number];
+
+/**
+ * The door's limits for files, mirrored so a Lab never sends what the door
+ * refuses. Keep in step with platform-api: `src/llm/files/validate.js`
+ * (`MAX_IMAGE_BYTES`, `MAX_PDF_BYTES`, `MAX_OFFICE_BYTES`, all 20 MB decoded;
+ * `MAX_FILES_PER_REQUEST`; `MAX_NAME_LENGTH`) and `src/server.js`
+ * (`LLM_COMPLETE_BODY_LIMIT`, the whole JSON body of `/api/llm/complete`).
+ * The door also allows at most 100 PDF pages per request (`MAX_PDF_PAGES`,
+ * `src/llm/files/prepare.js`); counting pages needs a PDF parser, so that one
+ * is left to the door (`400 VALIDATION`).
+ */
+export const LLM_MAX_FILE_BYTES = 20 * 1024 * 1024;
+export const LLM_MAX_FILES_PER_REQUEST = 20;
+export const LLM_MAX_FILE_NAME_LENGTH = 200;
+export const LLM_MAX_BODY_BYTES = 50 * 1024 * 1024;
+
+export interface LlmTextBlock {
+  type: "text";
+  /** Non-empty. */
+  text: string;
+}
+
+export interface LlmImageBlock {
+  type: "image";
+  mediaType: LlmImageMediaType;
+  /** Plain base64 of the file, without a `data:` prefix or line breaks. */
+  data: string;
+  /** Optional file name the model may see; at most 200 characters. */
+  name?: string;
+}
+
+export interface LlmDocumentBlock {
+  type: "document";
+  mediaType: LlmDocumentMediaType;
+  /** Plain base64 of the file, without a `data:` prefix or line breaks. */
+  data: string;
+  /** Optional file name the model may see; at most 200 characters. */
+  name?: string;
+}
+
+export type LlmContentBlock = LlmTextBlock | LlmImageBlock | LlmDocumentBlock;
+
 export interface LlmMessage {
   role: "user" | "assistant";
-  content: string;
+  /** Plain text, or blocks; `image` and `document` blocks only in a `user` message. */
+  content: string | LlmContentBlock[];
 }
 
 export interface LlmRequest {
@@ -117,6 +182,55 @@ export function modelChoice(
   return { useCase: request.useCase ?? DEFAULT_USE_CASE, level };
 }
 
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+const IMAGE_TYPE_SET: ReadonlySet<string> = new Set(LLM_IMAGE_TYPES);
+const DOCUMENT_TYPE_SET: ReadonlySet<string> = new Set(LLM_DOCUMENT_TYPES);
+
+/** Decoded byte length of a well-formed base64 string. */
+export function base64DecodedBytes(data: string): number {
+  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
+  return (data.length / 4) * 3 - padding;
+}
+
+/**
+ * What the door would refuse in the message contents, as one sentence, or
+ * `null` when they are fine. Mirrors platform-api `validateContent` and
+ * `validateFileBlock` for shape and size (the door still checks the file's
+ * first bytes against `mediaType`). Never echoes a file's data.
+ */
+export function checkContent(messages: readonly LlmMessage[]): string | null {
+  let files = 0;
+  for (const [i, message] of messages.entries()) {
+    const content: unknown = message.content;
+    if (typeof content === "string") continue;
+    const at = `messages[${i}].content`;
+    if (!Array.isArray(content) || content.length === 0) return `${at} must be a string or a non-empty array of blocks`;
+    for (const [j, raw] of content.entries()) {
+      const where = `${at}[${j}]`;
+      const block = raw as Partial<Record<string, unknown>> | null;
+      if (!block || typeof block !== "object") return `${where} must be a block`;
+      if (block.type === "text") {
+        if (typeof block.text !== "string" || block.text.trim() === "") return `${where}.text must be a non-empty string`;
+        continue;
+      }
+      if (block.type !== "image" && block.type !== "document") return `${where}: unknown block type; allowed: text, image, document`;
+      if (message.role !== "user") return `${where}: ${block.type} blocks are only allowed in user messages`;
+      const allowed = block.type === "image" ? IMAGE_TYPE_SET : DOCUMENT_TYPE_SET;
+      if (typeof block.mediaType !== "string" || !allowed.has(block.mediaType)) return `${where}.mediaType is not supported for ${block.type} blocks`;
+      if (block.name !== undefined && (typeof block.name !== "string" || block.name.trim() === "" || block.name.length > LLM_MAX_FILE_NAME_LENGTH)) {
+        return `${where}.name must be a non-empty string of at most ${LLM_MAX_FILE_NAME_LENGTH} characters`;
+      }
+      const data = block.data;
+      if (typeof data !== "string" || data === "") return `${where}.data must be a non-empty base64 string`;
+      if (data.length % 4 !== 0 || !BASE64.test(data)) return `${where}.data is not plain base64 (no data: prefix, no line breaks)`;
+      if (base64DecodedBytes(data) > LLM_MAX_FILE_BYTES) return `${where}: the file is larger than ${LLM_MAX_FILE_BYTES / (1024 * 1024)} MB`;
+      files += 1;
+      if (files > LLM_MAX_FILES_PER_REQUEST) return `a request may carry at most ${LLM_MAX_FILES_PER_REQUEST} files`;
+    }
+  }
+  return null;
+}
+
 export function purposeFor(action: string): string {
   const clean = action.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
   return `${LAB_KEY}.${clean}`.slice(0, 120);
@@ -141,6 +255,8 @@ export interface DoorCallOptions {
    * may already have run and been billed when the answer got lost.
    */
   retryOnNetworkError?: boolean;
+  /** The door's body limit for this path: a larger JSON body is refused as `VALIDATION` without a call. */
+  maxBodyBytes?: number;
   /** Tests: the pause between attempts. */
   sleep?: (ms: number) => Promise<void>;
 }
@@ -163,6 +279,14 @@ export async function postDoor(
   }
   const sleep = options.sleep ?? wait;
   const payload = JSON.stringify(body);
+  if (options.maxBodyBytes !== undefined && Buffer.byteLength(payload, "utf8") > options.maxBodyBytes) {
+    return {
+      ok: false,
+      status: 400,
+      code: "VALIDATION",
+      message: `The request is larger than ${Math.floor(options.maxBodyBytes / (1024 * 1024))} MB; send fewer or smaller files.`,
+    };
+  }
 
   let last: DoorFailure = { ok: false, status: 0, code: "NETWORK", message: "no attempt made" };
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
@@ -221,6 +345,9 @@ export async function complete(
   fetchImpl: typeof fetch = fetch,
   options: Pick<DoorCallOptions, "sleep"> = {},
 ): Promise<LlmResult> {
+  // Refused here what the door would refuse anyway: no call, no cost, a clear message.
+  const problem = checkContent(request.messages);
+  if (problem) return { ok: false, status: 400, code: "VALIDATION", message: problem };
   const answer = await postDoor(
     "/api/llm/complete",
     {
@@ -235,7 +362,7 @@ export async function complete(
       metadata: request.metadata,
     },
     fetchImpl,
-    { timeoutMs: TIMEOUT_MS, sleep: options.sleep },
+    { timeoutMs: TIMEOUT_MS, sleep: options.sleep, maxBodyBytes: LLM_MAX_BODY_BYTES },
   );
   if (!answer.ok) return answer;
   const d = answer.data;

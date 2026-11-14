@@ -3,7 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { embed, storeFor } from "@/lib/platform/embeddings";
-import { complete, modelChoice, postDoor, TIER_TO_LEVEL } from "@/lib/platform/llm";
+import {
+  base64DecodedBytes,
+  checkContent,
+  complete,
+  LLM_DOCUMENT_TYPES,
+  LLM_IMAGE_TYPES,
+  LLM_MAX_BODY_BYTES,
+  LLM_MAX_FILE_BYTES,
+  LLM_MAX_FILES_PER_REQUEST,
+  type LlmMessage,
+  modelChoice,
+  postDoor,
+  TIER_TO_LEVEL,
+} from "@/lib/platform/llm";
 import { generateImage, MEDIA_IMAGE_PROMPT_MAX, transcribe } from "@/lib/platform/media";
 
 /**
@@ -123,6 +136,102 @@ describe("llm.ts: useCase + level on the wire", () => {
     const oddResult = await complete({ organisationId: ORG, action: "a", messages: [{ role: "user", content: "x" }] }, odd.fetchImpl);
     expect("truncated" in oddResult).toBe(false);
     expect("stopReason" in oddResult).toBe(false);
+  });
+});
+
+describe("llm.ts: content blocks (text, image, document)", () => {
+  const pdf = Buffer.from("%PDF-1.7\n%test\n").toString("base64");
+  const docx = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]).toString("base64");
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString("base64");
+  const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  const ask = (messages: LlmMessage[], fetchImpl: typeof fetch) => complete({ organisationId: ORG, action: "read", messages }, fetchImpl);
+
+  it("mirrors the door's limits and types (platform-api src/llm/files/validate.js, src/server.js)", () => {
+    expect(LLM_MAX_FILE_BYTES).toBe(20 * 1024 * 1024);
+    expect(LLM_MAX_FILES_PER_REQUEST).toBe(20);
+    expect(LLM_MAX_BODY_BYTES).toBe(50 * 1024 * 1024);
+    expect([...LLM_IMAGE_TYPES]).toEqual(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+    expect(LLM_DOCUMENT_TYPES).toContain("application/pdf");
+    expect(LLM_DOCUMENT_TYPES).toContain(DOCX);
+    expect(base64DecodedBytes(Buffer.alloc(10).toString("base64"))).toBe(10);
+    expect(base64DecodedBytes(Buffer.alloc(11).toString("base64"))).toBe(11);
+  });
+
+  it("keeps a string content exactly as it was", async () => {
+    const { seen, fetchImpl } = platform(() => ok({ text: "hi" }));
+    await ask([{ role: "user", content: "plain" }, { role: "assistant", content: "ok" }, { role: "user", content: "more" }], fetchImpl);
+    expect(seen[0].body.messages).toEqual([
+      { role: "user", content: "plain" },
+      { role: "assistant", content: "ok" },
+      { role: "user", content: "more" },
+    ]);
+  });
+
+  it("passes text, PDF, Word and image blocks through unchanged", async () => {
+    const { seen, fetchImpl } = platform(() => ok({ text: "read", model: "m", provider: "p" }));
+    const messages: LlmMessage[] = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Summarise the files." },
+          { type: "document", mediaType: "application/pdf", data: pdf, name: "handoff.pdf" },
+          { type: "document", mediaType: DOCX, data: docx },
+          { type: "image", mediaType: "image/png", data: png, name: "screen.png" },
+        ],
+      },
+    ];
+    const result = await ask(messages, fetchImpl);
+    expect(result).toMatchObject({ ok: true, text: "read" });
+    expect(seen[0].body.messages).toEqual(messages);
+    expect(seen[0].body).toMatchObject({ useCase: "general", level: "workhorse" });
+  });
+
+  it("refuses what the door would refuse, before any call, without echoing the data", async () => {
+    const { fetchImpl } = platform(() => ok({ text: "never" }));
+    const doc = (data: string, extra: Record<string, unknown> = {}) => ({ type: "document" as const, mediaType: "application/pdf" as const, data, ...extra });
+    const cases: LlmMessage[][] = [
+      [{ role: "user", content: [] }],
+      [{ role: "user", content: [{ type: "text", text: "  " }] }],
+      [{ role: "assistant", content: [doc(pdf)] }],
+      [{ role: "user", content: [{ type: "document", mediaType: "text/plain" as never, data: pdf }] }],
+      [{ role: "user", content: [{ type: "image", mediaType: "application/pdf" as never, data: pdf }] }],
+      [{ role: "user", content: [doc(`data:application/pdf;base64,${pdf}`)] }],
+      [{ role: "user", content: [doc("")] }],
+      [{ role: "user", content: [doc(pdf, { name: "x".repeat(201) })] }],
+      [{ role: "user", content: [{ type: "tool_result" } as never] }],
+      [{ role: "user", content: [doc("A".repeat(Math.ceil((LLM_MAX_FILE_BYTES + 3) / 3) * 4))] }],
+      [{ role: "user", content: Array.from({ length: LLM_MAX_FILES_PER_REQUEST + 1 }, () => doc(pdf)) }],
+    ];
+    for (const messages of cases) {
+      const result = await ask(messages, fetchImpl);
+      expect(result).toMatchObject({ ok: false, status: 400, code: "VALIDATION" });
+      if (!result.ok) expect(result.message).not.toContain(pdf);
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("accepts exactly the door's file count and a file at the size limit", () => {
+    const many = Array.from({ length: LLM_MAX_FILES_PER_REQUEST }, () => ({ type: "document" as const, mediaType: "application/pdf" as const, data: pdf }));
+    expect(checkContent([{ role: "user", content: many }])).toBeNull();
+    // Unpadded base64 of 4k characters decodes to 3k bytes: the largest k within the limit passes, k + 1 does not.
+    const k = Math.floor(LLM_MAX_FILE_BYTES / 3);
+    const file = (chars: number): LlmMessage[] => [{ role: "user", content: [{ type: "document", mediaType: "application/pdf", data: "A".repeat(chars) }] }];
+    expect(checkContent(file(4 * k))).toBeNull();
+    expect(checkContent(file(4 * (k + 1)))).toMatch(/larger than 20 MB/);
+  });
+
+  it("refuses a body above the door's limit without a call", async () => {
+    const { fetchImpl } = platform(() => ok({}));
+    const result = await postDoor("/api/llm/complete", { text: "x".repeat(200) }, fetchImpl, { maxBodyBytes: 100 });
+    expect(result).toMatchObject({ ok: false, status: 400, code: "VALIDATION" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the door's answer when no allowed model reads the file", async () => {
+    const { seen, fetchImpl } = platform(() => refused(422, "MODEL_NO_FILE_SUPPORT"));
+    const result = await ask([{ role: "user", content: [{ type: "document", mediaType: "application/pdf", data: pdf }] }], fetchImpl);
+    expect(result).toMatchObject({ ok: false, status: 422, code: "MODEL_NO_FILE_SUPPORT" });
+    expect(seen).toHaveLength(1);
   });
 });
 
