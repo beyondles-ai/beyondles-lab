@@ -1,8 +1,9 @@
 <!-- Title: <type>(#<card>): <short summary>
      e.g. fix(#464): the time page shows its message at once
      Types in use: fix, feat, docs, chore, ci, test, security, ux
-     <card> is the number at the start of the Trello card title. It has to be in the PR title
-     or in the branch name (e.g. fix/464-time-message): HR Lab links the PR to the card by it. -->
+     <card> is the number at the start of the Trello card title. Write it with the hash sign, `#464`,
+     in the PR title (a branch name counts only when it contains `#464` too): HR Lab links the PR
+     to the card by it. -->
 
 ## What
 
@@ -18,7 +19,7 @@
 
 ## Frame checklist
 
-- [ ] Card number is in the PR title or the branch name (e.g. `#464`), or noted above why there is none
+- [ ] Card number with the hash sign is in the PR title (e.g. `#464`), or noted above why there is none
 - [ ] `npm run check:frame` passes
 - [ ] No provider or mail key anywhere (AI and mail go through the platform door)
 - [ ] Every new UI action also exists under `/api/v1` and as an MCP tool
