@@ -127,7 +127,8 @@ export const PERSON_EXECUTORS: Record<string, PersonExecutor> = {
           ownerUserId: ci(userId),
           visibility: { not: "PRIVATE" },
         },
-        data: { ownerUserId: toUserId },
+        // Written lowercase (the token's spelling), as reassignOwner does: ownership is an exact compare.
+        data: { ownerUserId: toUserId.toLowerCase() },
       })
     ).count,
   api_keys_user: async (tx, { organisationId, userId }) =>

@@ -112,6 +112,13 @@ describe("reassignOwner", () => {
     expect(h.state.keys.filter((k) => k.revokedAt === null).map((k) => k.id)).toEqual(["k3", "k4"]);
   });
 
+  it("writes the successor's id lowercase (the token's spelling), so the successor's session owns the notes", async () => {
+    const out = await reassignOwner(ORG, FROM, TO.toUpperCase());
+    expect(out).toEqual({ reassigned: { note: 2 }, revokedApiKeys: 1 });
+    expect(h.state.notes.filter((n) => n.ownerUserId === TO).map((n) => n.id)).toEqual(["n1", "n2"]);
+    expect(h.state.notes.some((n) => n.ownerUserId === TO.toUpperCase())).toBe(false);
+  });
+
   it("touches one organisation only, keeps visibility and collection, leaves WORKER keys", async () => {
     const out = await reassignOwner(ORG, FROM, TO);
     expect(out).toEqual({ reassigned: { note: 2 }, revokedApiKeys: 1 });

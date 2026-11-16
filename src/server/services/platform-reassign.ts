@@ -17,7 +17,9 @@ import { db } from "@/lib/db";
  *
  * The platform compares ids case-insensitively; the stored id is the token's
  * spelling. So organisation and person are matched without case (`ci()`);
- * the new owner is written as given.
+ * the new owner is written lowercase, the token's spelling (the Suite's user
+ * ids are Postgres uuids): ownership is an exact compare, and an uppercase
+ * `toUserId` written as given would belong to no session.
  *
  * Idempotent: a second run, and an organisation this Lab never saw, count 0.
  * Every object table with an owner column belongs in here (match ids with
@@ -41,7 +43,7 @@ export async function reassignOwner(
   const [notes, keys] = await db.$transaction([
     db.note.updateMany({
       where: { organisationId: ci(organisationId), ownerUserId: ci(fromUserId) },
-      data: { ownerUserId: toUserId },
+      data: { ownerUserId: toUserId.toLowerCase() },
     }),
     db.apiKey.updateMany({
       where: { organisationId: ci(organisationId), createdByUserId: ci(fromUserId), revokedAt: null },
