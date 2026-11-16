@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!--
+    Lab app icon (TEMPLATE: replace the glyph below with the Lucide icon
+    the Suite toolbox shows for this lab, then run the render script; until
+    then the lab still ships the generic Beyondles icon), source of src/app/icon.png, apple-icon.png, favicon.ico
+    and public/icon-maskable.png (render with `node scripts/render-icons.mjs`).
+
+    Tile: Beyondles Deep Navy #0A0E1A, rounded like the Beyondles icon, the same
+    for every lab. Glyph: Lucide "FlaskConical" (lucide-react 0.323), the same glyph
+    the Suite toolbox shows for the lab, stroked in the brand gradient at 60 %
+    of the tile, stroke 2.25 so it stays readable at 16 px.
+  -->
+  <defs>
+    <linearGradient id="brand" gradientUnits="userSpaceOnUse" x1="-2.2" y1="3.8" x2="26.2" y2="20.2">
+      <stop offset="0" stop-color="#9652E8"/>
+      <stop offset="0.32" stop-color="#9652E8"/>
+      <stop offset="0.66" stop-color="#6E7FE0"/>
+      <stop offset="1" stop-color="#12B5E8"/>
+    </linearGradient>
+  </defs>
+  <rect data-tile="" width="512" height="512" rx="112" fill="#0A0E1A"/>
+  <g data-glyph-scale="0.6" transform="translate(102.4 102.4) scale(12.8)" fill="none" stroke="url(#brand)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/>
+    <path d="M8.5 2h7"/>
+    <path d="M7 16h10"/>
+  </g>
+</svg>

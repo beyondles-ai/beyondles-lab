@@ -1,6 +1,6 @@
 # The frame — what every Beyondles Lab guarantees
 
-Checked on: 2026-10-31
+Checked on: 2026-11-14
 
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
@@ -168,6 +168,20 @@ in `app-shell/HOST-CONTRACT.md` in the shared repo.
   goes as `{ model, fallback }`. The old `tier` (`fast`/`balanced`/`best`)
   still works for existing callers of `complete` and is sent as
   `useCase: "general"` with the matching level (`TIER_TO_LEVEL`).
+- Files go to the model inline: a message's `content` is a string or an
+  array of blocks, `{ type: "text", text }`, `{ type: "image", mediaType,
+  data, name? }` and `{ type: "document", mediaType, data, name? }` (`data` is
+  plain base64; files only in user messages). The door passes a PDF to the
+  model, turns Word, PowerPoint and Excel into text and stores nothing. The
+  client refuses before any call what the door would refuse (`checkContent`):
+  unknown types, more than `LLM_MAX_FILES_PER_REQUEST` (20) files, a file
+  above `LLM_MAX_FILE_BYTES` (20 MB decoded), a body above
+  `LLM_MAX_BODY_BYTES` (50 MB); these mirror platform-api
+  `src/llm/files/validate.js` and `src/server.js`. A call with an image or a
+  PDF goes only to a model that reads it; when none of the allowed models
+  does, the door answers `422 MODEL_NO_FILE_SUPPORT`, so a Lab that can do
+  without the file asks again without it. A string content behaves exactly
+  as before.
 - Embeddings go into a store named `<LAB_KEY>.<name>` (`storeFor`); the
   platform pins each store to one model. `needsReembedding: true` in an
   answer means the stored vectors must be rebuilt.
@@ -584,6 +598,10 @@ it true by construction; `npm run check:frame` and the unit tests keep it so.
   `job_runs.lastSuccessAt`; the `heartbeat` job alerts when a job in
   `SCHEDULED_JOBS` (`src/server/jobs/heartbeat.ts`) missed its window. Run
   the heartbeat from a different scheduler than the jobs where possible.
+  A job that has not run yet gets one window of its own from the heartbeat's
+  first look (`lastStatus = pending`), so a new Lab or a new job sends no false
+  alarm. One run sends at most one mail listing all missed jobs; the run stays
+  complete unless that mail could not go out.
 - **Deletion guards.** `src/server/jobs/deletion-guard.ts`: empty input
   stops, more than 10 % of a table in one run stops (`*_MAX_SHARE`), and a
   dry run is the default: only an explicit `false`/`0`/`no`/`off` is real,

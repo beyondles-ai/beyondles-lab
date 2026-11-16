@@ -13,6 +13,7 @@ const PUBLIC_PATHS = [
   "/favicon.ico",
   "/icon.png",
   "/apple-icon.png",
+  "/icon-maskable.png",
   "/api/health",
   /** Machine door: no cookie, security boundary is `x-api-key` in each route. */
   "/api/v1",
