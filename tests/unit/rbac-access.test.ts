@@ -16,8 +16,9 @@ const h = vi.hoisted(() => ({
     role: "member",
     organisationId: "11111111-1111-4111-8111-111111111111",
     organisationSlug: "acme",
-  },
+  } as Record<string, string> | null,
   upsert: vi.fn(),
+  requestHeaders: new Headers(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -26,6 +27,7 @@ vi.mock("@/lib/auth", () => ({
   organisationDisplayName: (s: { organisationName?: string; organisationSlug: string }) =>
     s.organisationName?.trim() || s.organisationSlug,
 }));
+vi.mock("next/headers", () => ({ headers: async () => h.requestHeaders }));
 vi.mock("@/lib/db", () => ({ db: { organisation: { upsert: h.upsert } } }));
 vi.mock("next/navigation", () => ({
   redirect: (to: string) => {
@@ -38,6 +40,7 @@ import { __clearGateCacheForTests } from "@/lib/platform-access";
 import { __clearAccessCacheForTests } from "@/lib/platform/access";
 import { requireAccessOrNull, requireFreshAccessOrNull, requireOrg } from "@/lib/rbac";
 
+const SESSION = h.session!;
 const ME = "https://platform.test/api/access/me";
 const GATE = "https://suite.test/api/labs/examplelab/access";
 
@@ -45,9 +48,9 @@ function meData(product: Record<string, unknown> = {}) {
   return {
     success: true,
     data: {
-      userId: h.session.userId,
-      organisationId: h.session.organisationId,
-      email: h.session.email,
+      userId: SESSION.userId,
+      organisationId: SESSION.organisationId,
+      email: SESSION.email,
       orgRole: "member",
       collections: [],
       settings: { membersMayShareOrg: true, membersMayCreateCollections: true },
@@ -89,6 +92,8 @@ beforeEach(() => {
   __clearAccessCacheForTests();
   __clearGateCacheForTests();
   h.upsert.mockReset();
+  h.session = SESSION;
+  h.requestHeaders = new Headers();
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -104,7 +109,7 @@ describe("rbac on the shared person decision", () => {
   it("gate open and a product role: access, with the organisation of the session", async () => {
     const ctx = await requireAccessOrNull();
     expect(ctx?.access.productRole).toBe("user");
-    expect(ctx?.organisationId).toBe(h.session.organisationId);
+    expect(ctx?.organisationId).toBe(SESSION.organisationId);
     expect(ctx?.isAdmin).toBe(false);
   });
 
@@ -146,5 +151,38 @@ describe("rbac on the shared person decision", () => {
     meBody = meData({ productRole: null });
     expect(await requireAccessOrNull()).not.toBeNull();
     expect(await requireFreshAccessOrNull()).toBeNull();
+  });
+});
+
+describe("redirect to the Suite login keeps the Lab page", () => {
+  beforeEach(() => {
+    // A cookie is present but the token expired or was revoked: no session.
+    h.session = null;
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://examplelab.test");
+  });
+
+  it("sends the Lab page along as callbackUrl", async () => {
+    h.requestHeaders = new Headers({ "x-lab-pathname": "/notes/abc" });
+    await expect(requireOrg()).rejects.toThrow(
+      "redirect:https://suite.test/login?callbackUrl=https%3A%2F%2Fexamplelab.test%2Fnotes%2Fabc",
+    );
+  });
+
+  it("keeps the query string of the Lab page", async () => {
+    h.requestHeaders = new Headers({ "x-lab-pathname": "/notes?tab=shared" });
+    await expect(requireOrg()).rejects.toThrow(
+      "redirect:https://suite.test/login?callbackUrl=https%3A%2F%2Fexamplelab.test%2Fnotes%3Ftab%3Dshared",
+    );
+  });
+
+  it("without the page header: plain Suite login", async () => {
+    await expect(requireOrg()).rejects.toThrow(/^redirect:https:\/\/suite\.test\/login$/);
+  });
+
+  it("a protocol-relative path is never passed on", async () => {
+    h.requestHeaders = new Headers({ "x-lab-pathname": "//evil.test/x" });
+    await expect(requireOrg()).rejects.toThrow(/^redirect:https:\/\/suite\.test\/login$/);
+    h.requestHeaders = new Headers({ "x-lab-pathname": "/\\evil.test/x" });
+    await expect(requireOrg()).rejects.toThrow(/^redirect:https:\/\/suite\.test\/login$/);
   });
 });

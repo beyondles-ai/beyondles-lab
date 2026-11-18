@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { Actor } from "@/lib/actor";
-import { canEdit, chooseContainer, visibleWhere } from "@/lib/access-rules";
+import { canEdit, canManage, chooseContainer, visibleWhere } from "@/lib/access-rules";
 import { recordAudit } from "@/lib/audit";
 import { LAB_KEY } from "@/lib/lab";
 import { forgetDeletedObjects, noteSourceRef } from "@/lib/platform/memory";
@@ -14,7 +14,7 @@ import { assertNotRedacted } from "@/server/retention/redaction";
 /**
  * The notes functions — each exists ONCE and does everything that must be
  * identical across the screen, `/api/v1` and MCP:
- *   permission (container rules), container choice (`chooseContainer`, one
+ *   permission (container rules; delete = owner only), container choice (`chooseContainer`, one
  *   default), the write, and the audit line (`recordAudit`).
  * Doors only parse input, build the `Actor`, call here and map errors
  * (`src/lib/service-errors.ts`). Scopes are the door's part
@@ -87,16 +87,24 @@ export async function createNote(actor: Actor, input: NoteInput) {
 
 export async function updateNote(actor: Actor, noteId: string, patch: NoteUpdate) {
   const current = await getNote(actor, noteId);
-  if (!canEdit(actor.access, "note", current)) throw new ServiceError("forbidden", "You may see this note but not change it.");
+  // Content and container are separate rights. Changing the content needs
+  // `canEdit`; moving needs only `canManage` (the owner), so the owner still
+  // moves a private note out after "only me" was switched off (`canEdit` is
+  // false for it until then). `chooseContainer` keeps refusing a move INTO
+  // "only me" while it is off.
+  const changesContent = patch.title !== undefined || patch.body !== undefined;
+  if ((changesContent || patch.visibility === undefined) && !canEdit(actor.access, "note", current)) {
+    throw new ServiceError("forbidden", "You may see this note but not change it.");
+  }
+  if (patch.visibility !== undefined && (!actor.personUserId || !canManage(actor.access, current))) {
+    throw new ServiceError("forbidden", "Only the owner of a note changes who sees it.");
+  }
   // Retention: a redacted note stays redacted (src/server/retention/redaction.ts).
   const lock = await db.note.findFirst({ where: { id: current.id, organisationId: actor.organisationId }, select: { redactedAt: true } });
   if (lock) assertNotRedacted(lock);
 
   let visibility = current.visibility;
   if (patch.visibility !== undefined) {
-    if (current.ownerUserId !== actor.access.userId || !actor.personUserId) {
-      throw new ServiceError("forbidden", "Only the owner of a note changes who sees it.");
-    }
     visibility = chooseContainer(actor.access, patch.visibility).visibility;
   }
 
@@ -125,7 +133,12 @@ export async function updateNote(actor: Actor, noteId: string, patch: NoteUpdate
 
 export async function deleteNote(actor: Actor, noteId: string): Promise<{ id: string; deleted: true }> {
   const current = await getNote(actor, noteId);
-  if (!canEdit(actor.access, "note", current)) throw new ServiceError("forbidden", "You may see this note but not delete it.");
+  // Delete is the owner's alone (shared rule `canManage`): an edit right is not
+  // enough, and a worker key owns nothing. Not gated by `canEdit`: the owner
+  // still deletes a private note after "only me" was switched off.
+  if (!actor.personUserId || !canManage(actor.access, current)) {
+    throw new ServiceError("forbidden", "Only the owner of a note deletes it.");
+  }
   await db.note.delete({ where: { id: current.id, organisationId: actor.organisationId } });
   await recordAudit(actor, { action: "object.deleted", objectId: current.id, objectTitle: current.title });
   // The memory door: whatever this Lab wrote into The Brain for the note goes

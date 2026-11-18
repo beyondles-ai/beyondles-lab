@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { LAB_KEY } from "@/lib/lab";
-import { checkExportKey } from "@/lib/platform-export-auth";
+import { checkReassignKey } from "@/lib/platform-reassign-auth";
 import { reassignOwner } from "@/server/services/platform-reassign";
 
 /**
@@ -13,8 +13,11 @@ import { reassignOwner } from "@/server/services/platform-reassign";
  * (`src/server/services/platform-reassign.ts`).
  *
  * Rules:
- *  - security boundary is `X-API-Key` against `PLATFORM_EXPORT_KEY`, constant
- *    time; unset key = `503 EXPORT_NOT_CONFIGURED`, wrong = `401 UNAUTHORIZED`;
+ *  - security boundary is `X-API-Key` against `PLATFORM_REASSIGN_KEY`, constant
+ *    time; its OWN key, never the export key (this route changes ownership and
+ *    revokes keys, a read key must not); unset key = `503
+ *    REASSIGN_NOT_CONFIGURED`, wrong = `401 UNAUTHORIZED`
+ *    (`src/lib/platform-reassign-auth.ts`);
  *  - body `{ organisationId, fromUserId, toUserId }`, all uuids, two different
  *    people, else `400 VALIDATION`;
  *  - an organisation this Lab never saw, and a second run, answer `200` with
@@ -39,7 +42,7 @@ function text(value: unknown): string {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const auth = checkExportKey(request);
+  const auth = checkReassignKey(request);
   if (!auth.ok) return fail(auth.status, auth.code, auth.message);
 
   let body: unknown;

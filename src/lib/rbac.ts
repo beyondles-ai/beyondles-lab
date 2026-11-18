@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { resolvePersonAccess } from "@/lib/platform-client/core/decide";
@@ -9,6 +10,7 @@ import { getAuthToken, getSession, organisationDisplayName, type PlatformSession
 import { db } from "@/lib/db";
 import { getLabGate, type LabGate } from "@/lib/platform-access";
 import { door, platformUrl } from "@/lib/platform/door";
+import { appStartUrl } from "@/lib/suite-url";
 import {
   PRODUCT,
   UNGOVERNED,
@@ -57,14 +59,45 @@ export interface AccessGrantedContext extends OrgContext {
 
 const NO_GATE: LabGate = { allowed: false, reason: "blocked", lab: null };
 
-function loginUrl(): string {
-  return `${platformUrl() ?? "https://beyondles.ai"}/login`;
+/**
+ * The Suite login. With `returnPath` (a path on this Lab, e.g. "/notes/abc")
+ * the Suite sends the person back there after signing in, the same
+ * `callbackUrl` the middleware builds for a missing cookie. A value that is
+ * not a plain local path ("//host", "/\host") is ignored.
+ */
+export function loginUrl(returnPath?: string | null, appBase?: string | null): string {
+  const login = `${platformUrl() ?? "https://beyondles.ai"}/login`;
+  const base = appBase?.trim().replace(/\/+$/, "");
+  if (!base || !returnPath || !/^\/(?![/\\])/.test(returnPath)) return login;
+  return `${login}?callbackUrl=${encodeURIComponent(`${base}${returnPath}`)}`;
 }
 
-/** The signed-in session, or a redirect to the Suite login. */
+/**
+ * The Lab page and base URL of the current request, for the login callback.
+ * The middleware sets `x-lab-pathname` (overwriting any client value);
+ * outside a request there are no headers and the login stays plain.
+ */
+async function requestReturnTarget(): Promise<{ path: string | null; base: string | null }> {
+  try {
+    const head = await headers();
+    const base = appStartUrl(
+      process.env.NEXT_PUBLIC_APP_URL,
+      head.get("x-forwarded-host") ?? head.get("host"),
+      head.get("x-forwarded-proto"),
+    );
+    return { path: head.get("x-lab-pathname"), base };
+  } catch {
+    return { path: null, base: null };
+  }
+}
+
+/** The signed-in session, or a redirect to the Suite login (back to this page). */
 export async function requireSession(): Promise<PlatformSession> {
   const session = await getSession();
-  if (!session) redirect(loginUrl());
+  if (!session) {
+    const target = await requestReturnTarget();
+    redirect(loginUrl(target.path, target.base));
+  }
   return session;
 }
 

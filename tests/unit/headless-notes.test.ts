@@ -35,6 +35,9 @@ const h = vi.hoisted(() => {
     jobRun,
     dbMock: { apiKey, note, organisation, jobRun },
     session: { current: null as unknown },
+    // Merged into a key's access context, as if the platform's person answer
+    // said so (e.g. `personalAllowed: false` = "only me" switched off).
+    keyContext: { current: {} as Record<string, unknown> },
   };
 });
 vi.mock("@/lib/db", () => ({ db: h.dbMock }));
@@ -47,6 +50,18 @@ vi.mock("next/navigation", () => ({
     throw new Error("NOT_FOUND");
   },
 }));
+vi.mock("@/lib/platform/access", async (original) => {
+  const actual = await original<typeof import("@/lib/platform/access")>();
+  return {
+    ...actual,
+    getApiKeyAccessContext: async (...args: Parameters<typeof actual.getApiKeyAccessContext>) => {
+      const verdict = await actual.getApiKeyAccessContext(...args);
+      return verdict.ok
+        ? { ...verdict, context: { ...verdict.context, ...h.keyContext.current } }
+        : verdict;
+    },
+  };
+});
 vi.mock("@/lib/rbac", async (original) => ({
   ...(await original<typeof import("@/lib/rbac")>()),
   requireAccessOrNull: async () => h.session.current,
@@ -228,6 +243,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.clearAllMocks();
   __resetRateLimitForTests();
+  h.keyContext.current = {};
 });
 
 function form(values: Record<string, string>): FormData {
@@ -475,6 +491,129 @@ describe("service errors map the same way at every door", () => {
       from: "private",
       to: "organisation",
     });
+  });
+});
+
+describe("delete is the owner's alone, at every door", () => {
+  const othersOrgNote = () =>
+    h.note.findFirst.mockResolvedValue(
+      stored({ visibility: "ORGANISATION", ownerUserId: "someone-else" }),
+    );
+
+  it("REST: an editor who is not the owner gets 403; nothing deleted, nothing audited", async () => {
+    othersOrgNote();
+    const res = await deleteNoteRoute(
+      req(`/api/v1/notes/${NOTE_ID}`, "user_delete", { method: "DELETE" }),
+      params,
+    );
+    expect(res.status).toBe(403);
+    expect(await errorCode(res)).toBe("forbidden");
+    expect(h.note.delete).not.toHaveBeenCalled();
+    expect(audit.map((a) => a.line.action)).not.toContain("object.deleted");
+  });
+
+  it("MCP: the same refusal through the tool", async () => {
+    othersOrgNote();
+    const tool = await callTool("user_delete", "examplelab_delete_note", {
+      noteId: NOTE_ID,
+    });
+    expect(tool.result.isError).toBe(true);
+    expect(tool.result.content[0].text).toMatch(/^forbidden \(HTTP 403\): /);
+    expect(h.note.delete).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+
+  it("screen: the same refusal, the code in the address", async () => {
+    othersOrgNote();
+    await expect(deleteNoteAction(form({ noteId: NOTE_ID }))).rejects.toThrow(
+      `REDIRECT /notes/${NOTE_ID}?error=forbidden`,
+    );
+    expect(h.note.delete).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+
+  it("a worker key owns nothing, so it deletes no single note, not even an organisation one", async () => {
+    h.note.findFirst.mockResolvedValue(
+      stored({ visibility: "ORGANISATION", ownerUserId: "" }),
+    );
+    const res = await deleteNoteRoute(
+      req(`/api/v1/notes/${NOTE_ID}`, "worker_job", { method: "DELETE" }),
+      params,
+    );
+    expect(res.status).toBe(403);
+    expect(h.note.delete).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+});
+
+describe("'only me' switched off: the owner still moves and deletes a private note", () => {
+  const patch = (key: string, body: Record<string, unknown>) =>
+    patchNoteRoute(
+      req(`/api/v1/notes/${NOTE_ID}`, key, { method: "PATCH", body }),
+      params,
+    );
+
+  beforeEach(() => {
+    h.keyContext.current = { personalAllowed: false };
+  });
+
+  it("the owner moves it to the organisation: 200, one visibility line", async () => {
+    const res = await patch("user_rw", { visibility: "organisation" });
+    expect(res.status).toBe(200);
+    expect(h.note.update).toHaveBeenCalledTimes(1);
+    expect(h.note.update.mock.calls[0][0].data).toEqual({ visibility: "ORGANISATION" });
+    expect(audit.map((a) => a.line)).toEqual([
+      {
+        organisationId: ORG,
+        action: "object.visibility_changed",
+        objectId: NOTE_ID,
+        objectTitle: "Plan",
+        details: { from: "private", to: "organisation" },
+      },
+    ]);
+  });
+
+  it("the content stays locked until it is moved", async () => {
+    const res = await patch("user_rw", { title: "x" });
+    expect(res.status).toBe(403);
+    expect(await errorCode(res)).toBe("forbidden");
+    expect(h.note.update).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+
+  it("moving it to 'only me' stays refused", async () => {
+    const res = await patch("user_rw", { visibility: "private" });
+    expect(res.status).toBe(403);
+    expect(h.note.update).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+
+  it("the owner deletes it", async () => {
+    const res = await deleteNoteRoute(
+      req(`/api/v1/notes/${NOTE_ID}`, "user_delete", { method: "DELETE" }),
+      params,
+    );
+    expect(res.status).toBe(200);
+    expect(h.note.delete).toHaveBeenCalledTimes(1);
+    expect(audit.map((a) => a.line.action)).toEqual(["object.deleted"]);
+  });
+
+  it("an edit grant is not enough to move somebody else's note", async () => {
+    h.note.findFirst.mockResolvedValue(stored({ ownerUserId: "someone-else" }));
+    for (const personalAllowed of [false, true]) {
+      h.keyContext.current = {
+        personalAllowed,
+        grantedIds: { note: { view: [], edit: [NOTE_ID] } },
+      };
+      const res = await patch("user_rw", { visibility: "organisation" });
+      expect(res.status).toBe(403);
+      expect(await errorCode(res)).toBe("forbidden");
+    }
+    // The grant still edits the content while "only me" is on.
+    expect((await patch("user_rw", { title: "x" })).status).toBe(200);
+    expect(h.note.update.mock.calls.map((c) => c[0].data)).toEqual([
+      { title: "x", visibility: "PRIVATE" },
+    ]);
   });
 });
 

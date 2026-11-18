@@ -65,7 +65,7 @@ server — see `src/lib/jwt-guard.ts`.
 | `src/app/api/v1/…`, `src/lib/api-auth.ts` | HTTP door (`x-api-key` or on-behalf token, release gate) |
 | `src/app/api/mcp/route.ts`, `src/app/api/mcp/describe/route.ts`, `src/lib/mcp/` | MCP door for agents and its description |
 | `src/lib/tool-door/`, `src/lib/platform/on-behalf.ts` | Shared tool-door files (copied verbatim into every Lab) |
-| `src/app/api/platform/reassign-owner/route.ts` | Hand-over when a person leaves |
+| `src/app/api/platform/reassign-owner/route.ts` | Hand-over when a person leaves (own key `PLATFORM_REASSIGN_KEY`, never the export key) |
 | `src/app/(app)/notes` + `src/server/…` | the worked example of a tenant object: list, read, create, change, delete, and a worker job |
 | `src/server/functions.manifest.ts` | every function and its three doors (or the reason one is left out) |
 | `src/server/machine-door.ts`, `src/lib/actor.ts` | the door for one function, and who acts through which door |

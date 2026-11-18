@@ -117,6 +117,11 @@ describe("deletePerson", () => {
     ]);
   });
 
+  it("hands shared notes to the successor's id written lowercase, whatever spelling the platform sent", async () => {
+    await deletePerson(ORG, USER, TO.toUpperCase(), RUN);
+    expect(note.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { ownerUserId: TO } }));
+  });
+
   it("never lets an undefined or empty value into a filter", async () => {
     await deletePerson(ORG, USER, TO, RUN);
     const wheres = [
