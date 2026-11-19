@@ -34,6 +34,15 @@ this file and that one disagree, that one wins and this template is updated.
   environment asks ITS OWN Suite. Sign-in and the gate have no production
   fallback (the middleware answers 503 and Compose refuses to start without
   the variable); only the "back to Suite" links fall back to beyondles.ai.
+- Paths without a Suite cookie: the middleware's own list (static files,
+  health, the machine doors, the platform routes) stays the frame's. A Lab
+  whose readers have no Suite account (guests, signers, subscribers, mail
+  webhooks) lists their prefixes in `src/lib/public-paths.ts`
+  (`LAB_PUBLIC_PATHS`), with the reason; every such route protects itself
+  (link token, webhook secret, rate limit, neutral 404) and answers 401/404,
+  never with a redirect. `tests/unit/public-paths.test.ts` and
+  `check:frame` block 6c refuse prefixes that open everything or cover the
+  signed-in area, `/api/platform` or `/kein-zugriff`.
 - `organisationId` comes from the confirmed token, never from the answer body,
   never from a request. Empty or non-uuid = reject. A platform answer for a
   different organisation than the token is refused (`src/lib/rbac.ts`).

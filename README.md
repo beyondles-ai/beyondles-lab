@@ -55,6 +55,7 @@ server — see `src/lib/jwt-guard.ts`.
 |---|---|
 | `src/lib/lab.ts` | the Lab's name — the single place |
 | `src/lib/auth.ts`, `src/middleware.ts` | sign-in through the Suite |
+| `src/lib/public-paths.ts` | the Lab's paths without a Suite cookie (reader pages, webhooks); the middleware itself stays the frame's |
 | `src/lib/platform-access.ts` | level 1: release switch (Suite) |
 | `src/lib/platform/access.ts` | level 2 + 3: product access, collections, grants (platform) |
 | `src/lib/access-rules.ts` | the container filter every query uses |
