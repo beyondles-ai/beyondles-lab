@@ -4,6 +4,8 @@ vi.mock("server-only", () => ({}));
 
 import { embed, storeFor } from "@/lib/platform/embeddings";
 import {
+  aiRefusalCode,
+  AI_REFUSAL_CODES,
   base64DecodedBytes,
   checkContent,
   complete,
@@ -346,5 +348,59 @@ describe("embeddings.ts", () => {
     expect(await embed({ organisationId: ORG, action: "i", store: "s1", input: [] }, fetchImpl)).toMatchObject({ code: "VALIDATION" });
     expect(await embed({ organisationId: ORG, action: "i", store: "s1", input: [" "] }, fetchImpl)).toMatchObject({ code: "VALIDATION" });
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("the door's two refusals (USAGE_LIMIT_REACHED, QUOTA_EXCEEDED)", () => {
+  const message = [{ role: "user" as const, content: "x" }];
+  const moneyRefusal = (status: number, code: string) =>
+    Response.json({ success: false, error: { code, message: "Ceiling of 25.00 EUR reached", details: { spent: 25.1 } } }, { status });
+
+  it.each([
+    ["QUOTA_EXCEEDED", 429],
+    ["USAGE_LIMIT_REACHED", 402],
+    ["USAGE_LIMIT_REACHED", 429],
+    ["QUOTA_EXCEEDED", 402],
+    ["QUOTA_EXCEEDED", 503],
+  ])("%s on HTTP %i is asked once and surfaced with its code", async (code, status) => {
+    const door = platform(() => moneyRefusal(status, code));
+    const result = await complete({ organisationId: ORG, action: "a", messages: message }, door.fetchImpl, { sleep: noSleep });
+    expect(result).toMatchObject({ ok: false, status, code });
+    expect(door.seen).toHaveLength(1);
+  });
+
+  it("is not retried on the embeddings and media paths either", async () => {
+    const door = platform(() => moneyRefusal(429, "QUOTA_EXCEEDED"));
+    const answer = await postDoor("/api/embeddings", {}, door.fetchImpl, { sleep: noSleep, retryOnNetworkError: true });
+    expect(answer).toMatchObject({ ok: false, code: "QUOTA_EXCEEDED" });
+    expect(door.seen).toHaveLength(1);
+  });
+
+  it("an unrelated 429 and 503 still retry up to three attempts", async () => {
+    const busy = platform(() => refused(429, "RATE_LIMITED"));
+    expect(await complete({ organisationId: ORG, action: "a", messages: message }, busy.fetchImpl, { sleep: noSleep })).toMatchObject({ code: "RATE_LIMITED" });
+    expect(busy.seen).toHaveLength(3);
+  });
+
+  it("aiRefusalCode matches the code only, on a failure object or a thrown error", () => {
+    expect(AI_REFUSAL_CODES).toEqual(["USAGE_LIMIT_REACHED", "QUOTA_EXCEEDED"]);
+    expect(aiRefusalCode({ ok: false, status: 429, code: "QUOTA_EXCEEDED", message: "x" })).toBe("QUOTA_EXCEEDED");
+    expect(aiRefusalCode(Object.assign(new Error("x"), { code: "USAGE_LIMIT_REACHED", status: 502 }))).toBe("USAGE_LIMIT_REACHED");
+    expect(aiRefusalCode({ code: "RATE_LIMITED", status: 429 })).toBeNull();
+    expect(aiRefusalCode({ status: 402 })).toBeNull();
+    expect(aiRefusalCode(null)).toBeNull();
+    expect(aiRefusalCode("QUOTA_EXCEEDED")).toBeNull();
+  });
+});
+
+describe("the calm sentence for a door refusal", () => {
+  it("exists in both languages and names no money, package or limit", async () => {
+    const en = (await import("../../messages/en.json")).default as { common: { aiUnavailable: string } };
+    const de = (await import("../../messages/de.json")).default as { common: { aiUnavailable: string } };
+    expect(en.common.aiUnavailable).toBe("AI features are not available at the moment. Please talk to your administrator.");
+    expect(de.common.aiUnavailable).toBe(
+      "Die KI-Funktionen stehen im Moment nicht zur Verfügung. Bitte wenden Sie sich an Ihre Administratorin oder Ihren Administrator.",
+    );
+    expect(`${en.common.aiUnavailable} ${de.common.aiUnavailable}`).not.toMatch(/limit|quota|package|paket|budget|€|eur|kosten|cost/i);
   });
 });
