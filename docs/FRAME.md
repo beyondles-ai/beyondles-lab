@@ -1,6 +1,6 @@
 # The frame — what every Beyondles Lab guarantees
 
-Checked on: 2026-11-14
+Checked on: 2026-11-21
 
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
@@ -188,11 +188,35 @@ in `app-shell/HOST-CONTRACT.md` in the shared repo.
 - Purposes are `<LAB_KEY>.<action>` (`purposeFor`), stable forever.
 - Retry only on 429/503 (`postDoor`), never after a timeout or a lost
   connection: a completion, an image or a transcription may already be
-  billed. Embeddings are the exception (free, no side effect) and retry a
+  billed. The door's two refusals (below) are never retried, whatever the
+  status. Embeddings are the exception (free, no side effect) and retry a
   network error too. Mail only with an `idempotencyKey`.
 - Fixed variable names: `PLATFORM_API_URL`, `PLATFORM_API_KEY`,
   `PLATFORM_EXPORT_KEY`, `PLATFORM_DELETE_KEY`, `PLATFORM_REASSIGN_KEY`,
   `NEXT_PUBLIC_PLATFORM_URL`, `ON_BEHALF_ISSUER`, `BRAIN_API_URL`. `PLATFORM_SSO_URL` is retired and refused by the frame check.
+
+### 4.1 When the door refuses an AI call
+
+The door refuses on purpose when the organisation's package is used up
+(HTTP 402, `USAGE_LIMIT_REACHED`) or a spending ceiling is reached (HTTP 429,
+`QUOTA_EXCEEDED`; the search route answers 402 for this). That is a stop, not
+a crash. The failure keeps the shape `{ ok: false, status, code, message }`.
+
+- Ask `aiRefusalCode(failure)` (`src/lib/platform/llm.ts`). It matches the
+  CODE only, never the status or the message, and returns `null` for every
+  other failure.
+- Never retry. `postDoor` already does not; do not add a retry loop of your
+  own around a refused call, and do not count it as an outage.
+- Show `common.aiUnavailable` (German: "Die KI-Funktionen stehen im Moment
+  nicht zur Verfügung. Bitte wenden Sie sich an Ihre Administratorin oder
+  Ihren Administrator."). Never show the door's `message`: it can contain
+  money amounts. Use no money, package or limit words in your own text.
+- Where the AI part is optional (a digest, a suggestion), leave it out and
+  carry on. Where it is the point of the action, stop the action and show the
+  sentence. Do not charge the person's own allowance (a draft budget, a
+  counter) for a refused call: count only after the door accepted the call.
+- Do not log the refusal as an error that pages somebody; it is an expected
+  state of the organisation.
 
 ## 4a. The memory door (The Brain)
 

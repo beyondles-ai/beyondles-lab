@@ -6,6 +6,7 @@
     "delete": "Löschen",
     "loading": "Lädt …",
     "error": "Etwas ist schiefgelaufen.",
+    "aiUnavailable": "Die KI-Funktionen stehen im Moment nicht zur Verfügung. Bitte wenden Sie sich an Ihre Administratorin oder Ihren Administrator.",
     "yes": "Ja",
     "no": "Nein"
   },

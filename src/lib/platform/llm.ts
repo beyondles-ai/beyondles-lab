@@ -34,8 +34,9 @@ import { readDoorConfig } from "@/lib/platform/door";
  * `complete` refuses what the door would refuse for size and shape before
  * any call (`checkContent`, the `LLM_*` limits below).
  *
- * Retry only on 429/503, never on other 4xx; the error code is surfaced to
- * the caller, never swallowed.
+ * Retry only on 429/503, never on other 4xx, and never on the door's two
+ * refusals (`AI_REFUSAL_CODES`); the error code is surfaced to the caller,
+ * never swallowed.
  */
 
 /** The quality levels of the platform's model choice. */
@@ -170,6 +171,30 @@ const RETRY_STATUSES = new Set([429, 503]);
 const MAX_ATTEMPTS = 3;
 
 /**
+ * The door refuses a call on purpose when the organisation's package is used
+ * up (`USAGE_LIMIT_REACHED`, HTTP 402) or a spending ceiling is reached
+ * (`QUOTA_EXCEEDED`, HTTP 429). Both are a stop, not a crash: repeating the
+ * call gets the same answer, so they are never retried, and the person gets
+ * the calm message `common.aiUnavailable` (no money, package or limit words;
+ * the door's own message can contain amounts and is never shown).
+ */
+export const AI_REFUSAL_CODES = ["USAGE_LIMIT_REACHED", "QUOTA_EXCEEDED"] as const;
+
+export type AiRefusalCode = (typeof AI_REFUSAL_CODES)[number];
+
+/**
+ * The refusal code of a failed door call (a `DoorFailure` / `LlmResult`) or of
+ * a thrown error that carries a `code`, or `null` for anything else. Matches
+ * the CODE only, never the status: a refusal that arrives inside a stream can
+ * carry another status.
+ */
+export function aiRefusalCode(error: unknown): AiRefusalCode | null {
+  if (!error || typeof error !== "object") return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && (AI_REFUSAL_CODES as readonly string[]).includes(code) ? (code as AiRefusalCode) : null;
+}
+
+/**
  * The model choice of one request as the door expects it: exactly one of
  * `{ model, fallback }` and `{ useCase, level }` (platform-api
  * `validateChoice`). An explicit `level` wins over an old `tier`.
@@ -265,7 +290,7 @@ export interface DoorCallOptions {
  * One JSON call to a door of the platform (`/api/llm/complete`,
  * `/api/media/*`, `/api/embeddings`): the Lab's service key, the platform
  * envelope, retry ONLY where the platform itself said it did nothing (429,
- * 503), at most three attempts. Never throws.
+ * 503, but not the refusal codes), at most three attempts. Never throws.
  */
 export async function postDoor(
   path: string,
@@ -324,7 +349,8 @@ export async function postDoor(
       code: envelope?.error?.code ?? (res.ok ? "BAD_RESPONSE" : `HTTP_${res.status}`),
       message: envelope?.error?.message ?? `The platform answered HTTP ${res.status}.`,
     };
-    if (!RETRY_STATUSES.has(res.status)) return last;
+    // A refusal is a decision (see AI_REFUSAL_CODES): the same answer again, never a retry.
+    if (!RETRY_STATUSES.has(res.status) || aiRefusalCode(last)) return last;
     if (attempt < MAX_ATTEMPTS) await sleep(500 * attempt);
   }
   return last;

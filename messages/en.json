@@ -6,6 +6,7 @@
     "delete": "Delete",
     "loading": "Loading …",
     "error": "Something went wrong.",
+    "aiUnavailable": "AI features are not available at the moment. Please talk to your administrator.",
     "yes": "Yes",
     "no": "No"
   },
