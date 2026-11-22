@@ -58,7 +58,10 @@ server — see `src/lib/jwt-guard.ts`.
 | `src/lib/platform-access.ts` | level 1: release switch (Suite) |
 | `src/lib/platform/access.ts` | level 2 + 3: product access, collections, grants (platform) |
 | `src/lib/access-rules.ts` | the container filter every query uses |
-| `src/lib/platform/llm.ts`, `mail.ts` | AI and mail through the platform door |
+| `src/lib/platform/llm.ts`, `mail.ts` | AI and mail through the platform door (`aiRefusalCode` for the package stop, docs/FRAME.md 4.1) |
+| `src/lib/suite-usage.ts`, `src/lib/package-usage-view.ts` | the start-page tile "Package usage": ONE percentage of the package from the Suite, never euro or tokens (docs/FRAME.md 9.1) |
+| `src/lib/platform/customer-mail.ts` | optional: mail to the customer's own customers from their own sender address, never `strictFrom` (docs/FRAME.md 9.3) |
+| `src/lib/subject-erasure.ts` | optional: who may erase a data subject's records, and the counts-only audit line (docs/FRAME.md 9.4) |
 | `src/app/api/platform/export/route.ts` | tenant export for the platform |
 | `src/app/api/platform/organisation/route.ts` | tenant deletion for the platform (own key `PLATFORM_DELETE_KEY`) |
 | `src/app/api/platform/member/route.ts` | person deletion for the platform (same key; plan in `platform-delete-member.ts`) |
@@ -101,6 +104,7 @@ server — see `src/lib/jwt-guard.ts`.
 - `JWT_SECRET` never on a server; a production process refuses to start with it (unless `ALLOW_LOCAL_JWT=true`, the E2E exception, which is logged loudly).
 - **Headless by construction:** every function exists once in a service and is reachable through the screen, `/api/v1` and an MCP tool, or carries a written exclusion. `src/server/functions.manifest.ts` lists them; `tests/unit/parity.test.ts` fails the build when a service export, route, tool or action is missing from it or it points at something that does not exist, and when `docs/EXCLUSIONS.md` (generated, `npm run docs:exclusions`) is stale. Audit and container choice happen in the service, never in a door (docs/FRAME.md section 5).
 - Every `/api/v1` handler opens its door with `openMachineDoor(request, "<functionId>")`: credential, rate limit, the function's scopes, the worker-only rule.
+- **What the customer sees (docs/FRAME.md section 9):** usage only as the package percentage on the start page, never cost, euro or tokens; only released products; mail in the customer's name without `strictFrom`; erasure of a data subject's records inside the Lab; read access to knowledge the Lab writes into The Brain; formal German, no dashes or arrows in texts, every page with loading, error, empty and no-access states. `npm run check:frame` block 15 warns about cost names, euro amounts, token counts, dashes and arrows; the checklist in `docs/BUILDING.md` covers the rest.
 
 ## Where it runs
 

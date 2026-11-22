@@ -49,6 +49,7 @@ function actor(door: Actor["door"]): Actor {
     scopes: [...ALL_SCOPES],
     credentialId: "test",
     callingProduct: null,
+    agentLevel: null,
   };
 }
 
