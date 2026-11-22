@@ -23,4 +23,8 @@ Short form:
   Suite" link, no language switch (`docs/FRAME.md`, section 3a).
 - Every function: one service, three doors (screen, REST, MCP), one manifest entry.
 - Every new tenant table: export, deletion plans, retention registry.
+- What the customer sees follows `docs/FRAME.md` section 9: usage only as the
+  package percentage on the start page (never cost, euro or tokens), only
+  released products, mail in the customer's name, erasure inside the Lab,
+  no dashes or arrows in texts, every page with all its states.
 - `npm run check:frame && npm test && npm run build` must be green before "done".

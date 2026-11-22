@@ -1,6 +1,6 @@
 # Handover
 
-Checked on: 2026-10-07
+Checked on: 2026-11-22
 
 Copy this file into the handover of a Lab (one per handover, dated) and fill
 in every section. The reviewer starts at **Not tested**. No passwords, keys
@@ -29,6 +29,15 @@ instead.
 
 - Periods signed off by the customer (or "not yet", then in docs/OFFEN.md).
 - Whether a first real run was done, with which `RETENTION_MAX_SHARE`.
+
+## What the customer sees
+
+- The screen checklist of `docs/BUILDING.md` (docs/FRAME.md, section 9),
+  item by item: done, or why not. Every warning of `check:frame` block 15
+  with your decision (fixed, or why the name or text is right).
+- Usage: the start-page tile only, and which roles saw it on staging.
+- Mail to the customer's customers, data-subject erasure, knowledge in The
+  Brain: built (with the function ids) or "the Lab has none".
 
 ## Checks that ran
 

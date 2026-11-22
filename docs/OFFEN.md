@@ -1,6 +1,6 @@
 # Open items
 
-Checked on: 2026-10-14
+Checked on: 2026-11-22
 
 What is deliberately not finished. Every entry says WHY, so the next person
 can decide instead of guessing. Remove entries when done.
@@ -82,6 +82,18 @@ can decide instead of guessing. Remove entries when done.
   and revokes the old one. Add an edit action when Labs ask for it.
 - **Screen through `/api/v1`.** The AdvisorLab style (docs/FRAME.md 5.7) needs
   a bridge that accepts the Suite cookie in `openMachineDoor`; not built.
+
+- **Customer mail and data-subject erasure are helpers only.** The template
+  sends no mail to the customer's own customers and stores no visitor data,
+  so `src/lib/platform/customer-mail.ts` and `src/lib/subject-erasure.ts`
+  have no caller, route, tool or screen here (docs/FRAME.md 9.3, 9.4). A Lab
+  that needs them builds the function on all three doors with them;
+  AdvisorLab is the worked example.
+- **Block 15 of `check:frame` only warns.** Cost names, euro amounts, token
+  counts, dashes and arrows are printed as warnings, never failures: Labs
+  whose product is about money (personnel cost, postage, funding) name it
+  legitimately (docs/FRAME.md 9.1, 9.6). Turn a rule into a failure once the
+  existing Labs are clean.
 
 Deliberately missing doors are NOT listed here: they live in the functions
 manifest and `docs/EXCLUSIONS.md`.

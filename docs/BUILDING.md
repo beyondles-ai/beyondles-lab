@@ -1,6 +1,6 @@
 # Building a Lab from this template — the guide for people
 
-Checked on: 2026-10-13
+Checked on: 2026-11-22
 
 This is the path from "I want a Lab" to "my Lab is live in the Beyondles
 Suite", for anyone outside Beyondles who builds one. Beyondles developers use
@@ -84,6 +84,37 @@ call it done.
 
 Keep these green at every step: `npm run check:frame`, `npm test`,
 `npm run build`. Every message names the rule and the file.
+
+### Checklist for every screen (docs/FRAME.md, section 9)
+
+Go through it for each page before you call it done. `check:frame` block 15
+warns about some of it; the rest is read by the reviewer.
+
+- [ ] German texts say "Sie", in short everyday sentences, without IT words.
+      English next to it, same keys.
+- [ ] No dash as punctuation and no arrow in any text. Two sentences or a
+      comma instead.
+- [ ] The page has a loading state, an error state with "Try again", an empty
+      state and a no-access state.
+- [ ] Every action that deletes or cannot be undone asks first and says what
+      will happen.
+- [ ] Success and error messages appear next to the button that caused them.
+- [ ] A group of permissions is offered as plain levels ("View", "Edit",
+      "Manage") with details on demand, not as a wall of tick boxes.
+- [ ] Lists, links and tiles show only what the organisation has. No other
+      product, not even greyed out. "Beyondles HorAIzon" is written in full
+      and never named while it is hidden for the organisation.
+- [ ] No cost, euro amount or token count on any screen, in `/api/v1` or in
+      an MCP result. Usage appears once, on the start page, as the package
+      percentage from the Suite (the template's tile).
+- [ ] Mail to your customer's customers: the optional sender address with
+      its hint, sent through `sendCustomerMail` (never `strictFrom`).
+- [ ] Personal data of your customer's visitors or contacts: an owner or
+      product admin can erase one record and one person inside the Lab, on
+      all three doors, with an audit line of counts only.
+- [ ] Knowledge your Lab writes into The Brain that The Brain does not show:
+      the customer can read it inside the Lab.
+- [ ] Looked at in a 1440 px and a 390 px wide window.
 
 ## 3. Before you submit
 

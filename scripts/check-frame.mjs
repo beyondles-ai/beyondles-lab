@@ -38,6 +38,7 @@ import {
   RETIRED_ENV,
   SWALLOW,
 } from "./support/frame-rules.mjs";
+import { DOOR_SURFACES, doorFieldWarnings, messageWarnings } from "./support/customer-surfaces.mjs";
 import { informalAddressFindings } from "./support/informal-address.mjs";
 import { memoryDoorFindings } from "./support/memory-door.mjs";
 import { loadMessages } from "./support/messages.mjs";
@@ -460,8 +461,6 @@ const warnings = [];
     }
   }
 }
-if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((w) => `  - ${w}`).join("\n"));
-
 // 13. Closed-pages design (card #350, design system "closed pages v1"). The
 //     signed-in area renders the shared frame (AppShell from
 //     src/components/app-shell, generated from beyondles-shared) and only
@@ -573,6 +572,25 @@ if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((
 //     every delete path forgets in The Brain. A Lab without the client
 //     fails. Rule and scanner in scripts/support/memory-door.mjs.
 for (const finding of memoryDoorFindings({ read, exists })) fail(finding);
+
+// 15. Customer surfaces (November 2026, docs/FRAME.md 9.1 and 9.6). WARNINGS
+//     only: customers see one usage percentage of the package, never cost,
+//     euro or token counts, so a field of the three doors' schemas, routes or
+//     MCP catalogue, or a message key or text, named like that is flagged; and
+//     message texts use no dash as punctuation and no arrow. Internal cost
+//     booking and customer-set caps are allowed, and a Lab about prices or API
+//     tokens names them legitimately, so a human decides each one. Rule in
+//     scripts/support/customer-surfaces.mjs, tested in
+//     tests/unit/customer-surfaces.test.ts.
+{
+  const doorFiles = DOOR_SURFACES.flatMap((dir) => walk(path.join(root, dir)))
+    .filter((f) => /\.(ts|tsx|mjs|js)$/.test(f))
+    .map((f) => ({ rel: path.relative(root, f), text: readFileSync(f, "utf8") }));
+  warnings.push(...doorFieldWarnings(doorFiles));
+  warnings.push(...messageWarnings("English messages", en), ...messageWarnings("German messages", de));
+}
+
+if (warnings.length > 0) console.warn("Frame check warnings:\n" + warnings.map((w) => `  - ${w}`).join("\n"));
 
 // Own app icon per lab (Niclas, 2026-11-07). A real lab (LAB_KEY is not the
 // template key "examplelab") must ship its own icon: the Beyondles tile with

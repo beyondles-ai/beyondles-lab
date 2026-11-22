@@ -28,7 +28,21 @@
     "doorValue": "{state, select, ok {Open} local {Local} unconfigured {Not set up} other {Closed}}",
     "doorHint": "{state, select, ok {Connected to the Beyondles platform} local {Local mode without the platform} other {The operator has to set it up}}",
     "statOrganisation": "Organisation",
-    "signedInAs": "Signed in as {email}"
+    "signedInAs": "Signed in as {email}",
+    "usageLabel": "Package usage",
+    "usagePercent": "{percent}%",
+    "usageHint": "Current billing period until {end}, all products of your organisation together.",
+    "usageHintNoPeriod": "Current billing period, all products of your organisation together.",
+    "usageWarn": "The package is almost used up.",
+    "usageFull": "The package is used up for this billing period.",
+    "usageStopped": "The package is used up. AI features are paused until the package is extended or the next billing period starts.",
+    "usageUnavailable": "Not available",
+    "usageUnavailableHint": "This figure comes from the Beyondles Suite, which cannot be reached right now."
+  },
+  "mail": {
+    "senderEmail": "Sender address (optional)",
+    "senderEmailHint": "Mails to your customers come from this address once its domain is confirmed in the Beyondles Suite (Organisation settings, AI and sending). Until then they come from Beyondles with your name, and replies go to this address.",
+    "senderEmailInvalid": "Please enter a valid e-mail address or leave the field empty."
   },
   "notes": {
     "kicker": "Workspace",

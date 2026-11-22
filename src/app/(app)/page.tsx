@@ -1,23 +1,34 @@
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 
-import { IconBolt, IconPen, IconUsers, PageHeader, StatCard, StatGrid } from "@/components/app-shell";
+import { IconBolt, IconGraph, IconPen, IconUsers, PageHeader, StatCard, StatGrid } from "@/components/app-shell";
 import { uiActor } from "@/lib/actor";
 import { organisationDisplayName } from "@/lib/auth";
+import { packageUsageTile } from "@/lib/package-usage-view";
 import { requireAccess } from "@/lib/rbac";
 import { accessDoorState } from "@/lib/platform/door";
+import { fetchSuiteUsage } from "@/lib/suite-usage";
 import { countVisibleNotes } from "@/server/services/notes";
 
 /**
  * The entry page at "/". The Suite tile points here. There is no landing
  * page in between: a signed-in person lands in the app.
+ *
+ * Package usage (docs/FRAME.md 9.1): the ONE usage figure a customer sees,
+ * the percentage of the package from the Suite, for owners and admins only.
+ * Never a euro amount, a token count or a cost, here or anywhere else. The
+ * tile is missing when the figure is not this person's to see or the package
+ * has no limit; when the Suite does not answer it says "Not available",
+ * never 0 %. Keep it on the start page of your Lab, and only there.
  */
 export default async function DashboardPage() {
   const ctx = await requireAccess();
   const { session } = ctx;
   const t = await getTranslations("dashboard");
-  const count = await countVisibleNotes(uiActor(ctx));
+  const locale = await getLocale();
+  const [count, usage] = await Promise.all([countVisibleNotes(uiActor(ctx)), fetchSuiteUsage({ token: ctx.token })]);
   const state = accessDoorState();
+  const usageTile = packageUsageTile(usage, t, locale);
 
   return (
     <>
@@ -52,6 +63,15 @@ export default async function DashboardPage() {
           value={organisationDisplayName(session)}
           hint={t("signedInAs", { email: session.email })}
         />
+        {usageTile ? (
+          <StatCard
+            icon={<IconGraph />}
+            label={usageTile.label}
+            value={usageTile.value}
+            hint={usageTile.hint}
+            hintTone={usageTile.hintTone}
+          />
+        ) : null}
       </StatGrid>
     </>
   );

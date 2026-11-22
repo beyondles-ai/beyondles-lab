@@ -28,7 +28,21 @@
     "doorValue": "{state, select, ok {Offen} local {Lokal} unconfigured {Nicht eingerichtet} other {Geschlossen}}",
     "doorHint": "{state, select, ok {Mit der Beyondles-Plattform verbunden} local {Lokaler Betrieb ohne Plattform} other {Der Betreiber muss sie einrichten}}",
     "statOrganisation": "Organisation",
-    "signedInAs": "Angemeldet als {email}"
+    "signedInAs": "Angemeldet als {email}",
+    "usageLabel": "Paket-Verbrauch",
+    "usagePercent": "{percent} %",
+    "usageHint": "Laufender Abrechnungszeitraum bis {end}, alle Produkte Ihrer Organisation zusammen.",
+    "usageHintNoPeriod": "Laufender Abrechnungszeitraum, alle Produkte Ihrer Organisation zusammen.",
+    "usageWarn": "Das Paket ist bald aufgebraucht.",
+    "usageFull": "Das Paket ist für diesen Abrechnungszeitraum aufgebraucht.",
+    "usageStopped": "Das Paket ist aufgebraucht. Die KI-Funktionen pausieren, bis das Paket erweitert wird oder der nächste Abrechnungszeitraum beginnt.",
+    "usageUnavailable": "Nicht abrufbar",
+    "usageUnavailableHint": "Die Zahl kommt aus der Beyondles Suite, die gerade nicht erreichbar ist."
+  },
+  "mail": {
+    "senderEmail": "Absender-Adresse (optional)",
+    "senderEmailHint": "Mails an Ihre Kundinnen und Kunden kommen von dieser Adresse, sobald ihre Domain in der Beyondles Suite bestätigt ist (Einstellungen der Organisation, KI und Versand). Bis dahin kommen sie von Beyondles mit Ihrem Namen, und Antworten gehen an diese Adresse.",
+    "senderEmailInvalid": "Bitte geben Sie eine gültige E-Mail-Adresse ein oder lassen Sie das Feld leer."
   },
   "notes": {
     "kicker": "Arbeitsbereich",

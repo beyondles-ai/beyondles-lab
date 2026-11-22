@@ -1,6 +1,6 @@
 # The frame — what every Beyondles Lab guarantees
 
-Checked on: 2026-11-21
+Checked on: 2026-11-22
 
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
@@ -679,3 +679,148 @@ three container columns, add each function to the functions manifest with
 its route and tool (or a written exclusion), add every new tenant table to
 the export. `npm run check:frame` and the unit
 tests tell you when you drifted.
+
+## 9. What the customer sees (learnings of November 2026)
+
+Each rule below comes from a real case in a running Lab (mostly AdvisorLab,
+the reference for every point). Sections 1 to 8 keep their numbers; these
+are new.
+
+### 9.1 Usage: one percentage of the package, never money or tokens
+
+Decision of the company (2026-11-20): Beyondles sells business software at
+one total price. AI cost is not passed through and never displayed.
+
+- A Lab shows usage ONLY on its start page, as the ONE percentage it gets
+  from the Suite: `GET <suite>/api/platform/usage-status` with the caller's
+  Suite cookie (`src/lib/suite-usage.ts`, `fetchSuiteUsage`; 4 s time limit,
+  answers cached one minute per token, failures never cached).
+- Three outcomes, kept apart: `ok` (show the percentage), `hidden` (401/403:
+  the Suite shows the figure to owners and admins only; an unlimited package
+  has no percentage), `unavailable` (no answer, an error, an unreadable body).
+  A failed call is shown as "not available", NEVER as 0 %.
+- The answer carries `periodStart` and `periodEnd` (the organisation's
+  BILLING period, ISO, end exclusive). They are carried through; the tile
+  names the billing period and its last day, never a "month"
+  (`src/lib/package-usage-view.ts`, texts `dashboard.usage*`).
+- The template's start page (`src/app/(app)/page.tsx`) has the tile as its
+  default element. Keep it there and nowhere else.
+- No cost, no token count and no euro amount on any screen, in any `/api/v1`
+  answer or in any MCP tool result. Internal cost booking and caps the
+  customer sets (a daily ceiling, a maximum answer length) may stay.
+- Refusals of the AI door because the package is used up: section 4.1.
+- **Checked by** `npm run check:frame`, block 15, as WARNINGS: a field of the
+  three doors (`src/server/schemas`, `src/app/api/v1`, `src/lib/mcp`) or a
+  message key named like cost, euro, cents or token counts, and a message
+  text with a euro amount or tokens (rule in
+  `scripts/support/customer-surfaces.mjs`). Names of caps (`max...`,
+  `...Limit`, `budget...`) are not flagged. A warning, not an error, because
+  a Lab whose product is about money (personnel cost, postage, funding)
+  names it legitimately; a human decides each one.
+
+### 9.2 Show only what is released
+
+- A Lab never renders a link, tile or name of a product the organisation
+  does not have or that is hidden for it, not even greyed out.
+- "Beyondles HorAIzon" is always written in full and can be hidden for an
+  organisation. While it is hidden, no text may name it or its agents. The
+  Suite says so in `GET /api/auth/me`, `organisation.horizonHidden`
+  (beyondles-suite `lib/organisation-view.ts`, wording rules in
+  `lib/horizon-wording.ts`). A Lab that names Beyondles HorAIzon anywhere a
+  customer reads reads that field and treats a missing field as "do not
+  name it".
+- Lists show only what the organisation has (9.6).
+- Where the template already does it: the shared frame shows only the Suite
+  (`src/components/app-shell`, no product switcher), the organisation
+  settings link only for organisation owners and admins
+  (`src/lib/frame.ts`, `isOrganisationAdmin`), the Lab's settings only for
+  its admins (`src/lib/lab-nav.tsx`). The template names no other product to
+  customers. Machine-facing texts (tool descriptions, the door contract) are
+  not customer surfaces.
+
+### 9.3 Mail in the customer's name
+
+- A Lab that sends mail to the customer's OWN customers (a confirmation, a
+  notice) offers an optional "Sender address" per sending unit (an advisor,
+  a campaign, a booking page), with the hint `mail.senderEmailHint` that says
+  where the domain is confirmed: Beyondles Suite, Organisation settings, AI
+  and sending.
+- It passes that address as `from` to the platform mail door WITHOUT
+  `strictFrom`. The door sends from it once the domain is verified for the
+  organisation and until then as "<name> via Beyondles" with Reply-To set to
+  that address (platform-api `src/mail/send.js`, `resolveSender`). The door
+  checks the domain; the Lab checks only the format and refuses an invalid
+  address instead of storing or dropping it. An invalid STORED value reads
+  as "none", so one typo never stops a mail.
+- Helper: `src/lib/platform/customer-mail.ts` (`senderEmailField` for the
+  zod schema, `parseSenderEmail`, `readStoredSenderEmail`,
+  `customerMailFrom`, `sendCustomerMail`), tests in
+  `tests/unit/customer-mail.test.ts`. The template sends no customer mail
+  itself, so nothing calls it yet.
+- Mail is deliberately NOT gated by the package stop: a booking confirmation
+  must arrive even while AI is paused.
+- For the Suite to show the mail-domain section for the Lab, its key must be
+  in `SENDING_LAB_KEYS` (beyondles-suite `lib/admin-settings-nav.ts`).
+- Reference: AdvisorLab `settings.sender.email` (PR #206).
+
+### 9.4 Erasure by the customer
+
+- A Lab that stores personal data of the customer's own visitors, contacts,
+  guests or leads lets an owner or product admin erase, from inside the
+  Lab and on all three doors: ONE record, and EVERYTHING of one person (the
+  identifier, for example the e-mail address, goes in the request body,
+  never in the URL or query string).
+- Who may: a person who sees the container AND owns it or is a product admin
+  of the Lab. An edit right is not enough. Refused: worker keys, credentials
+  without a person, and every agent (also a private agent acting in its
+  owner's view). The same function hides the button and refuses in the
+  service: `mayEraseSubjectData` / `erasureRefusal` in
+  `src/lib/subject-erasure.ts` (uses `Actor.agentLevel`). In the service,
+  `not_visible` answers `not_found`, the other refusals `forbidden`.
+- One audit line per erasure, after it, with counts only
+  (`erasureAuditDetails`, which throws on anything that is not a count):
+  never the address, a name or a text.
+- A second call erases nothing and counts 0. Ask before erasing and say what
+  happens (9.6); the action is `destructive` with its own scope.
+- This is the customer's own erasure. The profile deletion of a Suite user
+  (6b) and the tenant deletion (6a) stay separate.
+- Reference: AdvisorLab `mayEraseVisitorData` (`src/lib/permissions.ts`),
+  `src/lib/operator-erasure.ts`, `POST /api/v1/contacts/erase`,
+  `DELETE /api/v1/conversations/{id}` (PRs #196, #197).
+
+### 9.5 Looking at what an AI feature knows
+
+- If a Lab feeds a knowledge store in The Brain that The Brain's own
+  interface does not show (a brain of the Lab's own kind, such as an advisor
+  brain), the customer must be able to look at that knowledge from inside
+  the Lab, read-only: list, search, a topic filter, paging, and an honest
+  count (say "more than N" when the window is full).
+- Same access as managing that knowledge; one function on all three doors.
+- Reference: AdvisorLab PR #208, `src/lib/knowledge/browse.ts` and
+  `src/lib/platform/brain-browse.ts` (why The Brain's dashboard browse route
+  cannot be used and how the canonical `output` function is paged instead).
+
+### 9.6 Wording and states
+
+Wording (every customer text, German and English, in `messages/`):
+
+- German uses the formal "Sie" (3a). Short everyday sentences. No IT
+  jargon: say what is meant ("the address of the page", not "URL").
+- No dash as punctuation (" – ", " — ", " - " between words): two sentences
+  or a comma. No arrows ("→", "->") in prose: say it in words.
+- English alongside German, same keys, same meaning.
+
+States (every page):
+
+- Loading, error with a way to try again, empty, and no access. The frame
+  gives the patterns (`PageState`, `error.tsx`, `/kein-zugriff`, 3a).
+- Every destructive action asks for confirmation and says what will happen
+  ("Deletes the note for everybody who can see it").
+- Feedback appears next to the action that caused it, not only at the top
+  of the page.
+- A group of permissions is offered as plain levels (for example "View",
+  "Edit", "Manage") with the details on demand, not as a wall of tick boxes.
+- Lists show only what the organisation has (9.2).
+- **Checked by** `npm run check:frame`, block 15, as WARNINGS: a dash used as
+  punctuation or an arrow in a message text. The rest is the review
+  checklist in `docs/BUILDING.md`, section 2.

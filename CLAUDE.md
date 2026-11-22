@@ -47,7 +47,8 @@ Never change (this is the frame, reviewed centrally):
   `src/lib/platform-access.ts`, `src/lib/platform/**`, `src/lib/api-auth.ts`,
   `src/lib/api-keys.ts`, `src/lib/api-errors.ts`, `src/lib/service-errors.ts`,
   `src/lib/scopes.ts`, `src/lib/rate-limit.ts`, `src/lib/actor.ts`,
-  `src/lib/audit.ts`, `src/lib/tool-door/**`, `src/lib/platform-client/**`,
+  `src/lib/audit.ts`, `src/lib/suite-usage.ts`, `src/lib/package-usage-view.ts`,
+  `src/lib/subject-erasure.ts`, `src/lib/tool-door/**`, `src/lib/platform-client/**`,
   `src/lib/brain-client/**` and `src/lib/doors/**` (generated from `beyondles-ai/beyondles-shared`),
   `src/server/machine-door.ts`,
   `src/server/jobs/**` (add jobs, do not change the frame files),
@@ -102,6 +103,16 @@ Never change (this is the frame, reviewed centrally):
   Suite" link and no language switch: the frame and the Suite cover them.
   The sidebar lists only pages of this Lab. Block 13 of `check:frame` fails
   otherwise.
+- **What the customer sees** (`docs/FRAME.md`, section 9). Usage only as
+  the package percentage tile on the start page, never cost, euro or token
+  counts on a screen, in `/api/v1` or in an MCP result. Only products the
+  organisation has; "Beyondles HorAIzon" in full and never while hidden.
+  Mail to the customer's customers through `sendCustomerMail` (own sender
+  address, never `strictFrom`). Visitor or contact data: erasure inside the
+  Lab with `mayEraseSubjectData`, counts-only audit. No dashes or arrows in
+  texts; every page has loading, error, empty and no-access states; ask
+  before anything destructive. Block 15 of `check:frame` warns; the
+  checklist in `docs/BUILDING.md` covers the rest.
 - **Docs are dated.** Every file in `docs/` carries `Checked on: YYYY-MM-DD`
   (today's date when you touch it) or is generated.
 - **Secrets never in git.** `.env` is ignored; `.env.example` has names only.

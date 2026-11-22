@@ -33,6 +33,13 @@ export interface Actor {
   credentialId: string;
   /** The calling product of an on-behalf token, else `null`. */
   callingProduct: string | null;
+  /**
+   * The agent behind an on-behalf token (`private`, `collection`,
+   * `organisation`), else `null`. A private agent acts in its owner's view,
+   * but it is still an agent: decisions that need a human (erasing a data
+   * subject's records, docs/FRAME.md 9.4) refuse every agent.
+   */
+  agentLevel: "private" | "collection" | "organisation" | null;
 }
 
 export function uiActor(ctx: {
@@ -49,6 +56,7 @@ export function uiActor(ctx: {
     scopes: [...ALL_SCOPES],
     credentialId: "session",
     callingProduct: null,
+    agentLevel: null,
   };
 }
 
@@ -71,5 +79,6 @@ export function machineActor(key: ApiKeyContext): Actor {
     scopes: key.scopes,
     credentialId: key.keyId,
     callingProduct: key.onBehalf?.callingProduct ?? null,
+    agentLevel: key.onBehalf?.agent?.level ?? null,
   };
 }
