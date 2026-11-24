@@ -4,10 +4,14 @@ import { periodDays, RETENTION_REGISTRY, type RetentionEntry } from "@/server/re
 
 /**
  * The nightly retention job. For every registry entry:
- *   1. count the table and the rows past their period (not yet redacted),
+ *   1. count the live rows (not yet redacted) and, of those, the rows past
+ *      their period,
  *   2. ask the deletion guard (empty table is fine here; more than
- *      `RETENTION_MAX_SHARE` of the table in one night is NOT — then the job
- *      stops as `incomplete` and alerts, and a human decides),
+ *      `RETENTION_MAX_SHARE` of the live rows in one night is NOT — then the
+ *      job stops as `incomplete` and alerts, and a human decides). Rows
+ *      redacted on earlier nights never count: they pile up, and against the
+ *      whole table the share would shrink every night until a wrong period
+ *      could redact every live row and still pass,
  *   3. in a dry run (the default!) only count, otherwise redact.
  *
  * Settings: `RETENTION_DRY_RUN` (anything but an explicit false/0/no is a
@@ -18,7 +22,9 @@ import { periodDays, RETENTION_REGISTRY, type RetentionEntry } from "@/server/re
  */
 
 export interface RetentionStore {
-  countAll(table: string): Promise<number>;
+  /** Rows not yet redacted. Already redacted rows are NOT counted. */
+  countLive(table: string): Promise<number>;
+  /** Rows not yet redacted and created before the cutoff. */
   countExpired(table: string, cutoff: Date): Promise<number>;
   /** Redacts the expired rows in ONE statement and returns how many it changed. */
   redactExpired(entry: RetentionEntry, cutoff: Date, at: Date): Promise<number>;
@@ -36,12 +42,12 @@ export async function runRetention(
 
   for (const entry of registry) {
     const cutoff = new Date(now.getTime() - periodDays(entry, env) * 86_400_000);
-    const total = await store.countAll(entry.table);
+    const live = await store.countLive(entry.table);
     const expired = await store.countExpired(entry.table, cutoff);
-    counts[`${entry.table}_total`] = total;
+    counts[`${entry.table}_live`] = live;
     counts[`${entry.table}_expired`] = expired;
 
-    const verdict = checkDeletion({ toDelete: expired, total, maxShare, allowEmpty: true });
+    const verdict = checkDeletion({ toDelete: expired, total: live, maxShare, allowEmpty: true });
     if (!verdict.ok) return { counts, complete: false, reason: `${entry.table}_${verdict.reason}` };
     if (dryRun || expired === 0) continue;
 

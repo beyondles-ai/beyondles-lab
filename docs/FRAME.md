@@ -1,6 +1,6 @@
 # The frame — what every Beyondles Lab guarantees
 
-Checked on: 2026-11-22
+Checked on: 2026-11-24
 
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
@@ -627,7 +627,8 @@ it true by construction; `npm run check:frame` and the unit tests keep it so.
   alarm. One run sends at most one mail listing all missed jobs; the run stays
   complete unless that mail could not go out.
 - **Deletion guards.** `src/server/jobs/deletion-guard.ts`: empty input
-  stops, more than 10 % of a table in one run stops (`*_MAX_SHARE`), and a
+  stops, more than 10 % of a table in one run stops (`*_MAX_SHARE`; for
+  retention, 10 % of the rows not yet redacted), and a
   dry run is the default: only an explicit `false`/`0`/`no`/`off` is real,
   `true`/`1`/`yes`, a typo or an empty value are dry.
 - **Retention.** `src/server/retention/registry.ts` lists every tenant table
