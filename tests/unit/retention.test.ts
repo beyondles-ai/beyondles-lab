@@ -4,11 +4,14 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+const noteCount = vi.fn(async (_args?: unknown) => 0);
+vi.mock("@/lib/db", () => ({ db: { note: { count: (args?: unknown) => noteCount(args) } } }));
 
 import { TENANT_TABLES } from "@/server/services/platform-export";
 import { assertNotRedacted, REDACTED_TEXT, redactedValues } from "@/server/retention/redaction";
 import { NO_PERSONAL_DATA, privacyNoteLines, RETENTION_REGISTRY, type RetentionEntry } from "@/server/retention/registry";
 import { runRetention, type RetentionStore } from "@/server/retention/retention-job";
+import { prismaRetentionStore } from "@/server/jobs/jobs";
 
 const root = path.resolve(__dirname, "..", "..");
 const now = new Date("2026-10-07T02:00:00Z");
@@ -16,7 +19,7 @@ const now = new Date("2026-10-07T02:00:00Z");
 /** In-memory table that behaves like the database trigger of migration 0003. */
 function memoryStore(rows: { createdAt: Date; title: string; body: string; redactedAt: Date | null }[]) {
   const store: RetentionStore = {
-    countAll: async () => rows.length,
+    countLive: async () => rows.filter((r) => !r.redactedAt).length,
     countExpired: async (_t, cutoff) => rows.filter((r) => r.createdAt < cutoff && !r.redactedAt).length,
     redactExpired: async (entry, cutoff, at) => {
       let n = 0;
@@ -32,12 +35,13 @@ function memoryStore(rows: { createdAt: Date; title: string; body: string; redac
 
 const old = (i: number) => ({ createdAt: new Date("2024-01-01"), title: `Passport ${i}`, body: "born 1980-02-03", redactedAt: null });
 const fresh = () => ({ createdAt: new Date("2026-10-01"), title: "t", body: "b", redactedAt: null });
+const redacted = () => ({ createdAt: new Date("2024-01-01"), title: REDACTED_TEXT, body: "", redactedAt: new Date("2025-01-02") });
 
 describe("retention job", () => {
   it("is a dry run by default: counts, changes nothing", async () => {
     const { store, rows } = memoryStore([old(1), ...Array.from({ length: 19 }, fresh)]);
     const outcome = await runRetention(store, {}, now);
-    expect(outcome).toEqual({ counts: { dry_run: 1, notes_total: 20, notes_expired: 1 } });
+    expect(outcome).toEqual({ counts: { dry_run: 1, notes_live: 20, notes_expired: 1 } });
     expect(rows[0].title).toBe("Passport 1");
   });
 
@@ -57,6 +61,51 @@ describe("retention job", () => {
     const outcome = await runRetention(store, { RETENTION_DRY_RUN: "no" }, now);
     expect(outcome).toMatchObject({ complete: false, reason: "notes_share_exceeded" });
     expect(rows[0].title).toBe("Passport 1");
+  });
+
+  it("judges the share against the rows not yet redacted, so the limit does not erode over time", async () => {
+    // 95 rows redacted on earlier nights, 5 live rows all past their period:
+    // against the whole table that was 5 % and passed, but it is every live row.
+    const { store, rows } = memoryStore([...Array.from({ length: 95 }, redacted), old(1), old(2), old(3), old(4), old(5)]);
+    const outcome = await runRetention(store, { RETENTION_DRY_RUN: "false" }, now);
+    expect(outcome).toMatchObject({ complete: false, reason: "notes_share_exceeded", counts: { notes_live: 5, notes_expired: 5 } });
+    expect(rows[95].title).toBe("Passport 1");
+  });
+
+  it("a period typo on a small table with many redacted rows redacts nothing", async () => {
+    // RETENTION_NOTES_DAYS=1 instead of 365: every live note is suddenly "expired".
+    // 10 of 209 rows passed the old check (4.8 %) and every live note would be gone for good.
+    const { store, rows } = memoryStore([...Array.from({ length: 199 }, redacted), ...Array.from({ length: 10 }, fresh)]);
+    const outcome = await runRetention(store, { RETENTION_DRY_RUN: "false", RETENTION_NOTES_DAYS: "1" }, now);
+    expect(outcome).toMatchObject({ complete: false, reason: "notes_share_exceeded" });
+    expect(rows.filter((r) => !r.redactedAt)).toHaveLength(10);
+  });
+
+  it("a period typo on a small table with nothing redacted yet redacts nothing", async () => {
+    const { store, rows } = memoryStore(Array.from({ length: 30 }, fresh));
+    const outcome = await runRetention(store, { RETENTION_DRY_RUN: "false", RETENTION_NOTES_DAYS: "1" }, now);
+    expect(outcome).toMatchObject({ complete: false, reason: "notes_share_exceeded" });
+    expect(rows.every((r) => r.redactedAt === null)).toBe(true);
+  });
+
+  it("an ordinary night after years of redaction still passes", async () => {
+    const { store, rows } = memoryStore([...Array.from({ length: 900 }, redacted), old(1), ...Array.from({ length: 19 }, fresh)]);
+    const outcome = await runRetention(store, { RETENTION_DRY_RUN: "false" }, now);
+    expect(outcome.complete).toBeUndefined();
+    expect(outcome.counts).toMatchObject({ notes_live: 20, notes_expired: 1, notes_redacted: 1 });
+    expect(rows[900].redactedAt).toEqual(now);
+  });
+
+  it("a table whose rows are all redacted is fine", async () => {
+    const { store } = memoryStore(Array.from({ length: 50 }, redacted));
+    const outcome = await runRetention(store, { RETENTION_DRY_RUN: "false" }, now);
+    expect(outcome).toEqual({ counts: { dry_run: 0, notes_live: 0, notes_expired: 0 } });
+  });
+
+  it("the database store counts only rows not yet redacted", async () => {
+    noteCount.mockClear();
+    await prismaRetentionStore.countLive("notes");
+    expect(noteCount).toHaveBeenCalledWith({ where: { redactedAt: null } });
   });
 
   it("an empty table is fine for retention", async () => {

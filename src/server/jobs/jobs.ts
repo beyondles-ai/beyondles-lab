@@ -13,8 +13,8 @@ import { runRetention, type RetentionStore } from "@/server/retention/retention-
 
 /** Prisma store for the retention job. One `case` per registry table. */
 export const prismaRetentionStore: RetentionStore = {
-  async countAll(table) {
-    if (table === "notes") return db.note.count();
+  async countLive(table) {
+    if (table === "notes") return db.note.count({ where: { redactedAt: null } });
     throw new Error(`no retention store for table ${table}`);
   },
   async countExpired(table, cutoff) {
