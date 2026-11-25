@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { platformCookieName } from "@/lib/session-cookies";
 
 /**
  * Upstream sign-in check. It only checks WHETHER a Suite cookie is present
@@ -31,7 +32,10 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) return NextResponse.next();
 
-  if (request.cookies.get("platform-auth-token")?.value) {
+  // The Suite cookie of THIS environment (card #466, `src/lib/session-cookies.ts`):
+  // with a suffix set, the production cookie arrives under its own name and is
+  // no sign-in here.
+  if (request.cookies.get(platformCookieName())?.value) {
     // The cookie may still hold an expired or revoked token. Pass the page on
     // so `rbac.requireSession` can send the person back here after signing
     // in. Always overwritten: a value sent by the client is never trusted.

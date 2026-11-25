@@ -59,6 +59,7 @@ export default async function NoAccessPage() {
         signedInAs={session.email}
         links={{ suite: frame.links.suite, switchAccount: frame.links.switchAccount }}
         sessionHint={frame.sessionHint}
+        sessionHintCookie={frame.sessionHintCookie}
       />
     );
   }
@@ -100,6 +101,7 @@ export default async function NoAccessPage() {
       organisation={organisation}
       links={frame.links}
       sessionHint={frame.sessionHint}
+      sessionHintCookie={frame.sessionHintCookie}
     >
       {content}
     </AppShell>

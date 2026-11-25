@@ -6,6 +6,7 @@ import jwt, { type JwtPayload } from "jsonwebtoken";
 
 import { localJwtSecret } from "@/lib/jwt-guard";
 import { platformUrl } from "@/lib/platform/door";
+import { platformCookieName } from "@/lib/session-cookies";
 
 /**
  * Sign-in through the Beyondles Suite (single sign-on).
@@ -33,9 +34,15 @@ import { platformUrl } from "@/lib/platform/door";
  *   (`{ id, name }`, Suite #350) only supplies the display NAME, and only
  *   when its id equals the token's organisation.
  * - Results are cached 60 s per token hash. Network errors are NOT cached.
+ *
+ * The cookie's name depends on the environment (card #466): `platform-auth-token`,
+ * against the staging Suite `platform-auth-token-staging`. Staging lives under
+ * the same domain `.beyondles.ai` as production; with one name for both it was
+ * ONE cookie, and a sign-in on staging replaced the production login. The
+ * cookie is therefore always read, and sent on to the Suite, under
+ * `platformCookieName()` (`src/lib/session-cookies.ts`, setting
+ * `AUTH_COOKIE_SUFFIX`, the same value as in the Suite of this environment).
  */
-
-const AUTH_COOKIE_NAME = "platform-auth-token";
 
 /** Must be identical to Suite/Brain/Agent. */
 const JWT_ISSUER = "company-brain";
@@ -68,7 +75,7 @@ export function organisationDisplayName(session: PlatformSession): string {
 
 export async function getAuthToken(): Promise<string | undefined> {
   const cookieStore = await cookies();
-  return cookieStore.get(AUTH_COOKIE_NAME)?.value;
+  return cookieStore.get(platformCookieName())?.value;
 }
 
 /**
@@ -158,7 +165,7 @@ export async function introspect(
   let res: Response;
   try {
     res = await fetchImpl(`${suite}/api/auth/me`, {
-      headers: { cookie: `${AUTH_COOKIE_NAME}=${token}` },
+      headers: { cookie: `${platformCookieName()}=${token}` },
       cache: "no-store",
       signal: AbortSignal.timeout(INTROSPECTION_TIMEOUT_MS),
     });

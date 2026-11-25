@@ -4,6 +4,7 @@ import { createSuiteClient } from "@/lib/platform-client/core/suite";
 import type { LabGate } from "@/lib/platform-client/core/types";
 import { LAB_KEY } from "@/lib/lab";
 import { localJwtActive, platformUrl } from "@/lib/platform/door";
+import { platformCookieName } from "@/lib/session-cookies";
 
 /**
  * Access model, LEVEL 1 — the release switch, which lives in the Suite.
@@ -32,6 +33,10 @@ const suite = createSuiteClient({
   labKey: LAB_KEY,
   suiteUrl: () => platformUrl() ?? "",
   local: () => localJwtActive(),
+  // The Suite cookie's name in THIS environment (card #466): under it the client
+  // sends the token on to the Suite of the same environment. Read once at
+  // start, because the client is created once per process.
+  cookieName: platformCookieName(),
 });
 
 const UNREACHABLE: LabGate = { allowed: false, reason: "unreachable", lab: null };

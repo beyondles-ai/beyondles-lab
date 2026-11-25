@@ -56,7 +56,7 @@ describe("frame context (src/lib/frame.ts)", () => {
   });
 
   it("reads the session hint and the language from the request cookies", () => {
-    expect(frame).toMatch(/SESSION_HINT_COOKIE/);
+    expect(frame).toMatch(/sessionCookies\(\)\.hint/);
     expect(frame).toMatch(/resolveLocale\(\)/);
   });
 });

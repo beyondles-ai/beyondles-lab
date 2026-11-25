@@ -2,12 +2,12 @@ import "server-only";
 
 import { cookies, headers } from "next/headers";
 
-import { SESSION_HINT_COOKIE } from "@/components/app-shell/session-hint";
 import type { ShellLinks, ShellLocale, ShellProduct } from "@/components/app-shell/types";
 import { resolveLocale } from "@/i18n/locale";
 import { LAB_NAME } from "@/lib/lab";
 import { platformUrl } from "@/lib/platform/door";
 import { appStartUrl, isOrganisationAdmin, shellLinks } from "@/lib/suite-url";
+import { sessionCookies } from "@/lib/session-cookies";
 
 /**
  * What the frame (src/components/app-shell) needs from the server, read on
@@ -23,8 +23,15 @@ export const LAB_PRODUCT: ShellProduct = { kind: "lab", name: LAB_NAME, homeHref
 
 export interface FrameContext {
   locale: ShellLocale;
-  /** Value of the cookie `platform-session-hint` as this request saw it. */
+  /** Value of the session hint cookie as this request saw it. */
   sessionHint: string | null;
+  /**
+   * The name of that cookie in this environment (card #466, `lib/session-cookies.ts`).
+   * Passed to the shell next to `sessionHint`: the account-change guard runs in the
+   * browser and is told which cookie to watch, so a staging tab never reacts to the
+   * hint of production.
+   */
+  sessionHintCookie: string;
   links: ShellLinks;
 }
 
@@ -37,9 +44,11 @@ export async function frameContext(orgRole: string | null | undefined): Promise<
     head.get("x-forwarded-host") ?? head.get("host"),
     head.get("x-forwarded-proto"),
   );
+  const hintCookie = sessionCookies().hint;
   return {
     locale,
-    sessionHint: jar.get(SESSION_HINT_COOKIE)?.value ?? null,
+    sessionHint: jar.get(hintCookie)?.value ?? null,
+    sessionHintCookie: hintCookie,
     links: shellLinks({ platformUrl: platformUrl(), isOrgAdmin: isOrganisationAdmin(orgRole), startUrl }),
   };
 }
