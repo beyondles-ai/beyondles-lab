@@ -197,15 +197,34 @@ export function createProtocolClient(options: ProtocolClientOptions): ProtocolCl
     });
   }
 
+  /**
+   * One caller-supplied path segment, percent-encoded. `encodeURIComponent` leaves `.` as it
+   * is, and the URL parser of `fetch` collapses a `.` or `..` segment: a user id `..` would
+   * turn `/grants/..` into the object route, which deletes EVERY grant of the object with no
+   * per-user check and no audit line. Such a segment (and an empty one) is refused before
+   * anything is sent.
+   */
+  function segment(value: string, name: string): string {
+    const trimmed = String(value ?? "").trim();
+    if (trimmed === "" || /^(\.|%2e){1,2}$/i.test(trimmed)) {
+      throw new PlatformError(
+        "INVALID_PATH_SEGMENT",
+        `The ${name} is not a valid path segment: it is empty or a dot segment.`,
+        0,
+      );
+    }
+    return encodeURIComponent(value);
+  }
+
   function organisationPath(organisationId: string): string {
-    return `/api/access/orgs/${encodeURIComponent(organisationId)}`;
+    return `/api/access/orgs/${segment(organisationId, "organisation id")}`;
   }
 
   function objectPath(organisationId: string, objectType: string, objectId: string): string {
     // `productKey` is the host's own constant and is used as given.
     return (
       `${organisationPath(organisationId)}/objects/${options.productKey}/` +
-      `${encodeURIComponent(objectType)}/${encodeURIComponent(objectId)}`
+      `${segment(objectType, "object type")}/${segment(objectId, "object id")}`
     );
   }
 
@@ -277,7 +296,7 @@ export function createProtocolClient(options: ProtocolClientOptions): ProtocolCl
     // later shows an id where a name should be.
     await request(
       "PUT",
-      `${objectPath(organisationId, objectType, objectId)}/grants/${encodeURIComponent(userId)}`,
+      `${objectPath(organisationId, objectType, objectId)}/grants/${segment(userId, "user id")}`,
       token,
       { level, title: trimTitle(String(title ?? "")) },
     );
@@ -292,7 +311,7 @@ export function createProtocolClient(options: ProtocolClientOptions): ProtocolCl
   ): Promise<void> {
     await request(
       "DELETE",
-      `${objectPath(organisationId, objectType, objectId)}/grants/${encodeURIComponent(userId)}`,
+      `${objectPath(organisationId, objectType, objectId)}/grants/${segment(userId, "user id")}`,
       token,
     );
   }
@@ -362,7 +381,7 @@ export function createProtocolClient(options: ProtocolClientOptions): ProtocolCl
   ): Promise<string[]> {
     const data = await request(
       "GET",
-      `${organisationPath(organisationId)}/collections/${encodeURIComponent(collectionId)}/members`,
+      `${organisationPath(organisationId)}/collections/${segment(collectionId, "collection id")}/members`,
       token,
     );
     const raw = data.members;

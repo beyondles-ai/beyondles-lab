@@ -5,7 +5,8 @@
  * acting for the previous person.
  *
  * The page was rendered for the session hint the server saw (`sessionHint`). The guard
- * compares the cookie `platform-session-hint` with that value:
+ * compares the cookie `platform-session-hint` (or the name of this environment,
+ * `sessionHintCookie`) with that value:
  * - when the tab becomes visible, gets focus or is shown from the back/forward cache,
  * - every 15 s while the tab is visible,
  * - right before every same-origin `fetch` (Next's page loads and server actions included):
@@ -23,13 +24,24 @@ import type { JSX, RefObject } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { IconSignOut, IconSwitch } from './icons';
 import { shellMessages } from './messages';
-import { AccountChangedError, SESSION_HINT_POLL_MS, compareSessionHints, readSessionHintCookie } from './session-hint';
+import {
+  AccountChangedError,
+  SESSION_HINT_COOKIE,
+  SESSION_HINT_POLL_MS,
+  compareSessionHints,
+  readSessionHintCookie,
+} from './session-hint';
 import type { ShellLocale } from './types';
 import { domId } from './util';
 
 export interface AccountChangeGuardProps {
   /** The hint the page was rendered with. */
   sessionHint: string | null | undefined;
+  /**
+   * The name of the hint cookie in this environment, the one `sessionHint` was read from.
+   * Missing or empty: `platform-session-hint`.
+   */
+  sessionHintCookie?: string | null;
   /** "Reload" and "Sign in" go here (a full page load). */
   homeHref: string;
   /** Shown as "Switch account" when the account changed. */
@@ -90,6 +102,7 @@ function installFetchGuard(): FetchGuard | null {
 
 export function AccountChangeGuard({
   sessionHint,
+  sessionHintCookie,
   homeHref,
   switchAccountHref,
   locale,
@@ -99,6 +112,8 @@ export function AccountChangeGuard({
   const dialogRef = useRef<HTMLDivElement>(null);
   const baseId = domId(useId(), 'guard');
   const baseline = typeof sessionHint === 'string' && sessionHint.trim() !== '' ? sessionHint : null;
+  const cookieName =
+    typeof sessionHintCookie === 'string' && sessionHintCookie.trim() !== '' ? sessionHintCookie.trim() : SESSION_HINT_COOKIE;
 
   // Watch the cookie.
   useEffect(() => {
@@ -106,7 +121,7 @@ export function AccountChangeGuard({
     let current: GuardState = 'ok';
     const check = (): GuardState => {
       if (current !== 'ok') return current;
-      const result = compareSessionHints(baseline, readSessionHintCookie(document.cookie));
+      const result = compareSessionHints(baseline, readSessionHintCookie(document.cookie, cookieName));
       if (result !== 'same') {
         current = result;
         setState(result);
@@ -139,7 +154,7 @@ export function AccountChangeGuard({
       window.clearInterval(timer);
       fetchGuard?.watchers.delete(watcher);
     };
-  }, [baseline]);
+  }, [baseline, cookieName]);
 
   // Block the page while the overlay shows.
   useEffect(() => {

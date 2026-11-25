@@ -35,7 +35,7 @@
  *       not counted: the AI review gate of beyondles-ci reads its own secret
  *       there, and the row names those lines as exempt.
  *   5c  the machine door builds its door with createOboDoor from the shared copy
- *   5d  the shared copy is byte for byte doors 1.5.1 and declared as such
+ *   5d  the shared copy is byte for byte doors 1.13.0 and declared as such
  *   6   no hard-coded Suite address for /api/auth/me
  *   7   every messages/ folder has the same keys in de.json and en.json
  *   8   the manifest is not empty and the exclusions doc is current

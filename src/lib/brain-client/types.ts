@@ -116,7 +116,7 @@ export interface RememberResult {
 }
 
 /** The brains a recall may be narrowed to, by kind. */
-export type RecallBrainKind = BrainLevel | "agent";
+export type RecallBrainKind = BrainLevel | "agent" | "other";
 
 export interface RecallInput {
   /** At least three characters after trimming; longer text is cut to `RECALL_MAX_QUERY_CHARS`. */
@@ -124,6 +124,14 @@ export interface RecallInput {
   /** 1 to 50, default 10. */
   limit?: number;
   brains?: RecallBrainKind[];
+  /**
+   * Kinds of brain left out whatever else the call asks for, also brains named in `brainIds`
+   * (the Suite search: `["agent", "advisor"]`). Every value must be a `BrainKind`: one unknown
+   * value refuses the recall (`unusable_filter`), because a dropped exclusion would widen it.
+   * The client also drops items of these kinds from the answer (a Brain older than 1.7.0 ignores
+   * the field).
+   */
+  excludeKinds?: BrainKind[];
   brainIds?: string[];
   sources?: string[];
   kinds?: MemoryKind[];
@@ -132,6 +140,13 @@ export interface RecallInput {
   includeOwnProposals?: boolean;
   /** Also `proposed` entries of brains the reading person may confirm. */
   includeProposed?: boolean;
+  /**
+   * Only entries that carry EVERY one of these tags (compared without case): at most
+   * `RECALL_MAX_TAGS` tags of at most `MAX_TAG_CHARS` characters each. A gate, not a ranking
+   * hint. A product that may show an entry only when it carries a tag (AdvisorLab: `public-ok`)
+   * also checks `MemoryItem.tags` itself: a Brain that does not know this filter ignores it.
+   */
+  tags?: string[];
 }
 
 /** One entry as recall and inbox return it. */
@@ -153,6 +168,13 @@ export interface MemoryItem {
   originEntryId: EntryId | null;
   originBrainId: string | null;
   score: number | null;
+  /** The entry's tags as The Brain stores them; `[]` when it sent none (an older Brain sends none). */
+  tags: string[];
+  /**
+   * A confirmed entry an agent or a Lab changed after a person confirmed it: it is in the inbox
+   * again until a person confirms, edits or rejects it. `false` when The Brain did not say.
+   */
+  changed: boolean;
 }
 
 /** Why a recall came back empty, for a visible notice. Absent when The Brain answered. */
@@ -242,7 +264,19 @@ export interface ServiceKeyCredentials {
   internalKey: string;
 }
 
-export type BrainCredentials = OnBehalfCredentials | ServiceKeyCredentials;
+/**
+ * A customer access key of The Brain (`brain_access_keys`), bound to exactly ONE brain. The key
+ * is the whole context: The Brain takes the organisation and the brain from the key, so the
+ * client sends `X-API-Key` and nothing else (no context headers, no token), and every call
+ * reaches that one brain only. For a product that already holds such a key for one of its own
+ * objects (AdvisorLab: one brain per advisor). New integrations use on-behalf tokens.
+ */
+export interface CustomerKeyCredentials {
+  mode: "customer-key";
+  apiKey: string;
+}
+
+export type BrainCredentials = OnBehalfCredentials | ServiceKeyCredentials | CustomerKeyCredentials;
 
 // --- transport -------------------------------------------------------------------------------
 

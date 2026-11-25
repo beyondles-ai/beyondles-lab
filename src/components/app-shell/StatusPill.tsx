@@ -1,6 +1,7 @@
 /**
  * Status with a dot: `ok` (done, active), `run` (running, syncing), `wait` (waiting, scheduled,
- * not enabled), `err` (failed). Green and red exist only for status, never as decoration.
+ * not enabled), `err` (failed), `neutral` (grey: no state
+ * to judge, for example draft or not applicable). Green and red exist only for status, never as decoration.
  *
  * No hooks and no directive.
  */

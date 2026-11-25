@@ -6,13 +6,15 @@
  *
  * This barrel is safe in a Next server component (the client blocks arrive as references).
  * Plain Node code (a route test, a script) imports the pure modules directly instead:
- * `./session-hint`, `./nav`, `./messages`.
+ * `./session-hint`, `./session-cookies`, `./nav`, `./messages`.
  */
 export { AppShell } from './AppShell';
 export { NoAccess } from './NoAccess';
 export { PageHeader } from './PageHeader';
 export { PageState } from './PageState';
 export { StatusPill } from './StatusPill';
+export { PublicFooter, poweredByName } from './PublicFooter';
+export type { PublicFooterProps } from './PublicFooter';
 export { StatCard, StatGrid } from './StatCard';
 export { Panel } from './Panel';
 export { AccountChangeGuard } from './AccountChangeGuard';
@@ -56,6 +58,8 @@ export {
   readSessionHintCookie,
 } from './session-hint';
 export type { SessionHint, SessionHintComparison } from './session-hint';
+export { environmentCookieName, sessionCookieNames } from './session-cookies';
+export type { SessionCookieNames } from './session-cookies';
 export { SHELL_MESSAGES, fillMessage, shellMessages } from './messages';
 export type { ShellMessages } from './messages';
 export type {

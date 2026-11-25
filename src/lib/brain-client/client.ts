@@ -24,6 +24,7 @@
 import { BrainClientError, isBrainClientError } from "./errors";
 import { brainRequest } from "./http";
 import {
+  BRAIN_KINDS,
   checkContext,
   checkForget,
   checkRemember,
@@ -73,7 +74,6 @@ const DASHBOARD_HOST = /^brain(-staging|-admin)?\.beyondles\.(ai|com)$/;
 /** Our public domains. Never reached over plain http. */
 const PUBLIC_DOMAIN = /(^|\.)beyondles\.(ai|com)$/;
 
-const BRAIN_KINDS: readonly string[] = ["company", "team", "personal", "agent", "advisor", "other"];
 const REVIEW_STATES: readonly string[] = ["proposed", "confirmed", "rejected"];
 const STATUSES: readonly string[] = ["created", "updated", "unchanged"];
 const KINDS: readonly string[] = ["fact", "decision", "event", "task", "text"];
@@ -166,6 +166,8 @@ function readItem(value: unknown): MemoryItem | null {
     originEntryId: isEntryId(value.originEntryId) ? value.originEntryId : null,
     originBrainId: stringOr(value.originBrainId, null),
     score: typeof value.score === "number" && Number.isFinite(value.score) ? value.score : null,
+    tags: Array.isArray(value.tags) ? value.tags.filter((tag): tag is string => typeof tag === "string") : [],
+    changed: value.changed === true,
   };
 }
 
@@ -207,8 +209,10 @@ export function createBrainClient(options: BrainClientOptions): BrainClient {
     }
   } else if (credentials.mode === "on-behalf") {
     if (typeof credentials.getToken !== "function") throw invalid("credentials.getToken must be a function.");
+  } else if (credentials.mode === "customer-key") {
+    if (typeof credentials.apiKey !== "string" || credentials.apiKey.trim() === "") throw invalid("credentials.apiKey is empty.");
   } else {
-    throw invalid('credentials.mode must be "on-behalf" or "service-key".');
+    throw invalid('credentials.mode must be "on-behalf", "service-key" or "customer-key".');
   }
 
   const baseUrl = address.baseUrl;
@@ -273,6 +277,9 @@ export function createBrainClient(options: BrainClientOptions): BrainClient {
         const data = await call(ctx, "POST", "/api/memory/recall", body, recallTimeoutMs);
         const items = readItems(data, Math.min(Number(body.limit), RECALL_MAX_ITEMS));
         if (!items) return { items: [], failure: { code: "BAD_RESPONSE", status: 200 } };
+        // A Brain that does not know excludeKinds ignores it: the exclusion holds here too.
+        const excluded = Array.isArray(body.excludeKinds) ? (body.excludeKinds as string[]) : [];
+        if (excluded.length) return { items: items.filter((item) => !(item.brainKind && excluded.includes(item.brainKind))) };
         return { items };
       } catch (error) {
         if (isBrainClientError(error)) return { items: [], failure: { code: error.code, status: error.status } };

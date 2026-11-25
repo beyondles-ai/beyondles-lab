@@ -7,11 +7,14 @@
  * - value `1.<s>.<fp>`: `1` is the format version, `s` is `1` when "Switch account" is visible
  *   for this person and `0` otherwise, `fp` is an opaque fingerprint of 22 base64url characters
  * - a UI signal only, never an authorisation input; it holds no readable identity
+ * - in an environment with its own cookie names (staging, card #466) the name carries that
+ *   environment's suffix: `sessionCookieNames(suffix).hint` in `./session-cookies`
  *
- * Pure module: no React, no Next, nothing runs at import time. A server layout imports
- * `SESSION_HINT_COOKIE` from here to read the cookie and passes the value to the shell.
+ * Pure module: no React, no Next, nothing runs at import time. A server layout reads the cookie
+ * under the name of its environment and passes the value, and that name, to the shell.
  */
 
+/** The name in production, and in every environment without a suffix. */
 export const SESSION_HINT_COOKIE = 'platform-session-hint';
 
 /** How often a visible tab compares the cookie with the value its page was rendered with, in ms. */
@@ -39,13 +42,20 @@ export function parseSessionHint(value: string | null | undefined): SessionHint 
 /**
  * The value of the hint cookie in a `document.cookie` string (or a `Cookie` header), or `null`.
  * When a browser sends the name twice, the first one counts, as it does for the server.
+ *
+ * `cookieName` is the name in this environment (`sessionCookieNames(suffix).hint`). The name is
+ * compared as a whole, so the hint of another environment under the same parent domain
+ * (`platform-session-hint` next to `platform-session-hint-staging`) is never taken for this one.
  */
-export function readSessionHintCookie(cookieString: string | null | undefined): string | null {
+export function readSessionHintCookie(
+  cookieString: string | null | undefined,
+  cookieName: string = SESSION_HINT_COOKIE
+): string | null {
   if (typeof cookieString !== 'string' || cookieString === '') return null;
   for (const part of cookieString.split(';')) {
     const index = part.indexOf('=');
     if (index === -1) continue;
-    if (part.slice(0, index).trim() !== SESSION_HINT_COOKIE) continue;
+    if (part.slice(0, index).trim() !== cookieName) continue;
     const raw = part.slice(index + 1).trim();
     try {
       return decodeURIComponent(raw);

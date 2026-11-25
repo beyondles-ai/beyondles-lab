@@ -16,6 +16,7 @@ import { BrainClientError } from "./errors";
 import type {
   BrainAgent,
   BrainCallContext,
+  BrainKind,
   BrainLevel,
   EntryId,
   InboxQuery,
@@ -36,7 +37,9 @@ const EVENT = /^[a-z][a-z0-9_]{0,39}$/;
 
 export const BRAIN_LEVELS: readonly BrainLevel[] = ["personal", "team", "company"];
 export const MEMORY_KINDS: readonly MemoryKind[] = ["fact", "decision", "event", "task", "text"];
-const RECALL_BRAIN_KINDS: readonly string[] = ["personal", "team", "company", "agent"];
+const RECALL_BRAIN_KINDS: readonly string[] = ["personal", "team", "company", "agent", "other"];
+/** Every kind of brain The Brain reports (public.brains.kind). */
+export const BRAIN_KINDS: readonly BrainKind[] = ["company", "team", "personal", "agent", "advisor", "other"];
 const VISIBILITIES: readonly string[] = ["private", "collection", "organisation"];
 const REVIEW_ACTIONS: readonly string[] = ["confirm", "reject", "edit"];
 
@@ -270,6 +273,26 @@ export const RECALL_MAX_QUERY_CHARS = 1000;
 export const RECALL_DEFAULT_LIMIT = 10;
 /** The Brain's own maximum per recall (spec section 4). */
 export const RECALL_MAX_ITEMS = 50;
+/** At most this many tags in a recall's `tags` filter (The Brain refuses more). */
+export const RECALL_MAX_TAGS = 10;
+
+/**
+ * The `tags` filter: every tag trimmed and lower-cased, duplicates dropped. `null` when the filter
+ * is unusable. Unlike the other filters, ONE bad value refuses the whole filter: the tags are an
+ * AND (an entry must carry all of them), so dropping one would widen the recall, and a product
+ * that gates on a tag must never see entries without it because of a typo.
+ */
+function recallTags(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const tags: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string") return null;
+    const tag = entry.trim().toLowerCase();
+    if (tag === "" || tag.length > MAX_TAG_CHARS) return null;
+    if (!tags.includes(tag)) tags.push(tag);
+  }
+  return tags.length <= RECALL_MAX_TAGS ? tags : null;
+}
 
 /** Why `recallBody` sends nothing. */
 export type RecallRefusal = "too_short" | "unusable_filter";
@@ -305,6 +328,16 @@ export function recallBody(input: RecallInput): { body: Record<string, unknown> 
   };
   const brains = strings(input.brains, (entry) => RECALL_BRAIN_KINDS.includes(entry));
   if (brains) body.brains = brains;
+  // An exclusion is the opposite of a narrowing filter: dropping one bad value would WIDEN the
+  // recall. So every value must be a known kind, or nothing is sent.
+  if (input.excludeKinds !== undefined && input.excludeKinds !== null) {
+    const list: unknown = input.excludeKinds;
+    if (!Array.isArray(list) || list.length === 0 || !list.every((k) => typeof k === "string" && (BRAIN_KINDS as readonly string[]).includes(k))) {
+      unusable = true;
+    } else {
+      body.excludeKinds = Array.from(new Set(list as string[]));
+    }
+  }
   const brainIds = strings(input.brainIds, (entry) => UUID.test(entry.toLowerCase()));
   if (brainIds) body.brainIds = brainIds.map((entry) => entry.toLowerCase());
   const sources = strings(input.sources, (entry) => PRODUCT_KEY.test(entry));
@@ -314,6 +347,11 @@ export function recallBody(input: RecallInput): { body: Record<string, unknown> 
   if (input.since !== undefined && input.since !== null) {
     const ms = input.since instanceof Date ? input.since.getTime() : Date.parse(String(input.since));
     if (Number.isFinite(ms)) body.since = new Date(ms).toISOString();
+    else unusable = true;
+  }
+  if (input.tags !== undefined && input.tags !== null) {
+    const tags = recallTags(input.tags);
+    if (tags) body.tags = tags;
     else unusable = true;
   }
   if (unusable) return { refused: "unusable_filter" };

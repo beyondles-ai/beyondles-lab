@@ -33,6 +33,7 @@ export function NoAccess({
   organisation = null,
   links,
   sessionHint,
+  sessionHintCookie,
   legalBaseUrl,
   forceMobile = false,
 }: NoAccessProps): JSX.Element {
@@ -135,6 +136,7 @@ export function NoAccess({
         </div>
         <AccountChangeGuard
           sessionHint={sessionHint}
+          sessionHintCookie={sessionHintCookie}
           homeHref={product.homeHref}
           switchAccountHref={switchAccount}
           locale={locale}

@@ -119,6 +119,11 @@ async function credentialHeaders(request: BrainRequest, deadline: number): Promi
     // (api/src/server.js, apiKeyAuth). The context headers follow from the ctx.
     return { "X-API-Key": credentials.apiKey, "x-internal-api-key": credentials.internalKey, ...request.contextHeaders };
   }
+  if (credentials.mode === "customer-key") {
+    // The key is bound to one brain and names its organisation itself; The Brain reads no
+    // context header from a customer key, so none is sent.
+    return { "X-API-Key": credentials.apiKey };
+  }
   let token: unknown;
   try {
     // The token request counts against the same time limit as the call: a hanging platform

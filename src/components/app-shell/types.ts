@@ -104,6 +104,12 @@ export interface AppShellProps {
    * guard and decides whether "Switch account" is shown.
    */
   sessionHint?: string | null;
+  /**
+   * The name of the cookie `sessionHint` was read from: `sessionCookieNames(suffix).hint` of
+   * `./session-cookies`. The guard watches the cookie of this name in the browser. Missing or
+   * empty: `platform-session-hint`, the name without an environment suffix.
+   */
+  sessionHintCookie?: string | null;
   /** Product slot in the topbar, left of "Back to Suite" (a bell, a help button). */
   headerActions?: ReactNode;
   /** Shown above the topbar, for example the staging banner. */
@@ -148,6 +154,8 @@ export interface NoAccessProps {
   links: NoAccessLinks;
   /** Same as on AppShell: turns on the account-change guard. */
   sessionHint?: string | null;
+  /** Same as on AppShell: the name of the cookie `sessionHint` was read from. */
+  sessionHintCookie?: string | null;
   legalBaseUrl?: string;
   forceMobile?: boolean;
 }
@@ -189,7 +197,7 @@ export interface PageStateProps {
   rows?: number;
 }
 
-export type StatusTone = 'ok' | 'run' | 'wait' | 'err';
+export type StatusTone = 'ok' | 'run' | 'wait' | 'err' | 'neutral';
 
 export interface StatusPillProps {
   tone: StatusTone;
