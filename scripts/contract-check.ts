@@ -9,7 +9,8 @@
  * any edge failed or its settings are missing. Settings (staging values):
  * PLATFORM_API_URL, PLATFORM_API_KEY, NEXT_PUBLIC_PLATFORM_URL,
  * PLATFORM_EXPORT_KEY, CONTRACT_LAB_URL, CONTRACT_ORGANISATION_ID,
- * BRAIN_API_URL, OPS_ALERT_EMAIL, OPS_ALERT_ORGANISATION_ID.
+ * OPS_ALERT_EMAIL, OPS_ALERT_ORGANISATION_ID. No BRAIN_API_URL: the Lab's
+ * staging server checks its own Brain (`/api/platform/brain-status`).
  */
 import "dotenv/config";
 

@@ -1,6 +1,4 @@
 import { LAB_KEY } from "@/lib/lab";
-import { brainAddressProblem, labEnvironment } from "@/lib/platform/memory";
-import { createOnBehalfClient } from "@/lib/platform/on-behalf";
 
 /**
  * Contract test per platform edge (lab learnings, rule 15).
@@ -30,6 +28,11 @@ export interface Edge {
   request: (env: Record<string, string>) => { url: string; init: RequestInit };
   /** Is this answer the contract? Gets status and parsed JSON (or null). */
   accept: (status: number, body: unknown) => boolean;
+  /**
+   * Optional: why an answer that is not the contract failed, as a short word
+   * for the job log (a state, a code; never a secret, never a setting's value).
+   */
+  explain?: (status: number, body: unknown) => string | undefined;
 }
 
 const json = (body: unknown): RequestInit["body"] => JSON.stringify(body);
@@ -97,40 +100,27 @@ export function buildEdges(): Edge[] {
       accept: (status) => status === 200,
     },
     {
-      // The memory door (docs/FRAME.md 4a): one recall against the Lab's
-      // staging Brain with an on-behalf token (audience `brain`), the way
-      // every real call goes. An empty list is the contract too. Before any
-      // call, the address must be the Brain API host of THIS environment:
-      // never the dashboard, never the platform, and this check runs
-      // against staging, so never the production Brain (unless
-      // ON_BEHALF_ISSUER explicitly names production).
+      // The memory door (docs/FRAME.md 4a). The staging Brain API is
+      // reachable over the private network only, never from the GitHub
+      // runner, so the Lab makes the call from where it runs: `GET
+      // /api/platform/brain-status` with the export key. The Lab checks the
+      // address first (never the dashboard, never the platform, a staging
+      // Lab never the production Brain) and reports `wrong-host` without a
+      // call; otherwise it recalls once with an on-behalf token (audience
+      // `brain`), the way every real call goes. Only `ok` is the contract.
       name: "brain-memory-recall",
-      needs: ["BRAIN_API_URL", "PLATFORM_API_URL", "PLATFORM_API_KEY", "CONTRACT_ORGANISATION_ID"],
-      prepare: async (env, fetchImpl) => {
-        const environment = labEnvironment(env) === "production" ? "production" : "staging";
-        const problem = brainAddressProblem(env.BRAIN_API_URL, environment, env.PLATFORM_API_URL);
-        if (problem) throw new Error(`BRAIN_API_URL: ${problem}`);
-        const tokens = createOnBehalfClient({ platformApiUrl: trim(env.PLATFORM_API_URL), apiKey: env.PLATFORM_API_KEY, fetchImpl });
-        try {
-          return {
-            BRAIN_TOKEN: await tokens.getToken({ audience: "brain", organisationId: env.CONTRACT_ORGANISATION_ID }),
-          };
-        } catch (error) {
-          const code = isObject(error) && typeof error.code === "string" ? error.code : "unknown";
-          throw new Error(`the platform issued no on-behalf token for the Brain (${code})`);
-        }
-      },
+      needs: ["CONTRACT_LAB_URL", "PLATFORM_EXPORT_KEY", "CONTRACT_ORGANISATION_ID"],
       request: (env) => ({
-        url: `${trim(env.BRAIN_API_URL)}/api/memory/recall`,
-        init: {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.BRAIN_TOKEN}` },
-          redirect: "manual",
-          body: json({ query: `${LAB_KEY} contract check`, limit: 1 }),
-        },
+        url: `${trim(env.CONTRACT_LAB_URL)}/api/platform/brain-status?organisationId=${encodeURIComponent(env.CONTRACT_ORGANISATION_ID)}`,
+        init: { method: "GET", headers: { "x-api-key": env.PLATFORM_EXPORT_KEY } },
       }),
       accept: (status, body) =>
-        status === 200 && isObject(body) && body.success === true && isObject(body.data) && Array.isArray(body.data.items),
+        status === 200 && isObject(body) && body.success === true && isObject(body.data) && body.data.state === "ok",
+      explain: (_status, body) => {
+        if (!isObject(body) || !isObject(body.data) || typeof body.data.state !== "string") return undefined;
+        const failure = isObject(body.data.failure) && typeof body.data.failure.code === "string" ? ` code=${body.data.failure.code}` : "";
+        return `state=${body.data.state}${failure}`;
+      },
     },
   ];
 }
@@ -139,7 +129,7 @@ export type EdgeResult = {
   name: string;
   status: "ok" | "failed" | "missing";
   http?: number;
-  /** Why `prepare` failed the edge before any request. */
+  /** Why `prepare` failed the edge before any request, or what `explain` read from the answer. */
   reason?: string;
 };
 
@@ -170,7 +160,12 @@ export async function checkEdges(
     try {
       const res = await fetchImpl(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(30_000) });
       const body: unknown = await res.json().catch((error: unknown) => ({ unparsable: String(error) }));
-      results.push({ name: edge.name, status: edge.accept(res.status, body) ? "ok" : "failed", http: res.status });
+      if (edge.accept(res.status, body)) {
+        results.push({ name: edge.name, status: "ok", http: res.status });
+      } else {
+        const reason = edge.explain?.(res.status, body);
+        results.push({ name: edge.name, status: "failed", http: res.status, ...(reason ? { reason } : {}) });
+      }
     } catch (error) {
       results.push({ name: edge.name, status: "failed", http: 0 });
       console.error(`edge=${edge.name} network_error=${error instanceof Error ? error.name : "unknown"}`);

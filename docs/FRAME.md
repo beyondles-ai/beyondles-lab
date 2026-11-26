@@ -1,6 +1,6 @@
 # The frame — what every Beyondles Lab guarantees
 
-Checked on: 2026-11-24
+Checked on: 2026-11-26
 
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
@@ -271,8 +271,15 @@ contact lists, drafts or e-mail addresses.
   removes rows without a forget. Retention redaction does not forget: the
   results in The Brain outlive the raw material on purpose.
 - **The edge is checked daily.** `brain-memory-recall` in
-  `src/server/jobs/contract-edges.ts`: the host check above, then one
-  `POST /api/memory/recall` with a real token against the staging Brain.
+  `src/server/jobs/contract-edges.ts` asks the Lab's own staging server,
+  `GET /api/platform/brain-status?organisationId=<uuid>` with the export key
+  (section 6), because the staging Brain API is reachable over the private
+  network only, never from the GitHub runner. The Lab
+  (`src/lib/platform/brain-status.ts`) runs the host check above, then one
+  `POST /api/memory/recall` with a real on-behalf token, and answers `200`
+  with a state only: `ok`, `unconfigured`, `wrong-host` (no call) or `failed`
+  (client code and HTTP status). Never a setting's value, never the items. A
+  Lab that is not explicitly production never calls the production Brain.
 - **Block 14 of `npm run check:frame`** (rule in
   `scripts/support/memory-door.mjs`, tested in
   `tests/unit/memory-door.test.ts`) fails a Lab without the module or the
@@ -540,6 +547,9 @@ unknown organisation = `200` with `entities: {}`; echoes the requested id;
 `Cache-Control: no-store` everywhere; every tenant table included
 (`tests/unit/platform-export-coverage.test.ts` enforces it against the schema).
 
+`GET /api/platform/brain-status?organisationId=<uuid>` uses the same key and
+rules. It is read-only and serves the contract check (section 4a).
+
 ## 6a. Tenant deletion
 
 `DELETE /api/platform/organisation?organisationId=<uuid>&runId=<uuid>` — the
@@ -648,7 +658,7 @@ it true by construction; `npm run check:frame` and the unit tests keep it so.
   (`src/server/jobs/contract-edges.ts`) makes one real, cheap call per edge
   against staging: door `/api/llm/complete` and `/api/media`, Suite
   `auth/me`, the export key and the memory door (`brain-memory-recall`,
-  section 4a). Daily via
+  section 4a, asked through the Lab's own `/api/platform/brain-status`). Daily via
   `.github/workflows/contract-check.yml`; a missing setting fails, it is
   never skipped. The repo secrets it needs are listed in that file and are
   set by a human.
