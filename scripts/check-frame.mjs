@@ -81,6 +81,8 @@ for (const rel of [
   "src/lib/platform/register.ts",
   "src/app/api/health/route.ts",
   "src/app/api/platform/export/route.ts",
+  // The Lab side of the contract edge `brain-memory-recall`.
+  "src/app/api/platform/brain-status/route.ts",
   "src/app/api/platform/organisation/route.ts",
   "src/server/services/platform-delete.ts",
   "tests/unit/platform-delete-coverage.test.ts",
