@@ -35,6 +35,14 @@ export interface AlertMessage {
   source: string;
   /** One line, counts and codes only. */
   summary: string;
+  /**
+   * `STATUS`: information, nothing is broken (e.g. items waiting for a person). Sent to the platform as
+   * `metadata.kind`, which prefixes the subject `[STATUS][env]` instead of `[ALERT][env]`. Left out, the
+   * platform decides (ALERT in production). Only a STATUS mail may carry its own `subject`.
+   */
+  kind?: "ALERT" | "STATUS";
+  /** Subject after the Lab prefix instead of `<source> failed`; used only with `kind: "STATUS"`. */
+  subject?: string;
 }
 
 type Send = (request: Parameters<typeof sendMail>[0]) => Promise<MailResult>;
@@ -54,9 +62,10 @@ export async function sendOpsAlert(
     organisationId: config.organisationId,
     action: "ops-alert",
     to: [{ email: config.email }],
-    subject: `[${LAB_KEY}] ${message.source} failed`,
+    subject: `[${LAB_KEY}] ${message.kind === "STATUS" && message.subject ? message.subject : `${message.source} failed`}`,
     text: `${message.summary}\n\nLab: ${LAB_KEY}\nTime: ${hour}:00 UTC\n`,
     idempotencyKey: `alert:${message.source}:${hour}`.slice(0, 128),
+    ...(message.kind ? { metadata: { kind: message.kind } } : {}),
   });
   if (!result.ok) {
     warn(`alert=failed source=${message.source} code=${result.code}`);
