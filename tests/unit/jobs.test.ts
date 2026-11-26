@@ -151,6 +151,23 @@ describe("ops alert", () => {
       idempotencyKey: "alert:job:retention:2026-10-07T02",
     });
   });
+  it("leaves the kind to the platform and says \"failed\" when no kind is given", async () => {
+    const send = vi.fn().mockResolvedValue({ ok: true, messageId: "m", mode: "live" });
+    await sendOpsAlert({ source: "job:retention", summary: "x", subject: "ignored without STATUS" }, { send, config: { email: "a", organisationId: "o" } });
+    expect(send.mock.calls[0][0].subject).toMatch(/\] job:retention failed$/);
+    expect(send.mock.calls[0][0]).not.toHaveProperty("metadata");
+  });
+  it("passes the kind to the platform as metadata.kind, and a STATUS mail carries its own subject", async () => {
+    const send = vi.fn().mockResolvedValue({ ok: true, messageId: "m", mode: "live" });
+    const config = { email: "a", organisationId: "o" };
+    await sendOpsAlert({ source: "job:retention", summary: "x", kind: "ALERT" }, { send, config });
+    await sendOpsAlert({ source: "review-queue", summary: "x", kind: "STATUS", subject: "review queue: 3 items wait for approval (oldest 20 days)" }, { send, config });
+    expect(send.mock.calls[0][0]).toMatchObject({ metadata: { kind: "ALERT" } });
+    expect(send.mock.calls[0][0].subject).toMatch(/\] job:retention failed$/);
+    expect(send.mock.calls[1][0]).toMatchObject({ metadata: { kind: "STATUS" } });
+    expect(send.mock.calls[1][0].subject).toMatch(/\] review queue: 3 items wait for approval \(oldest 20 days\)$/);
+    expect(send.mock.calls[1][0].subject).not.toContain("failed");
+  });
   it("is loud, not silent, when unconfigured or when the door fails", async () => {
     const warn = vi.fn();
     expect(await sendOpsAlert({ source: "s", summary: "x" }, { config: null, warn })).toBe(false);
