@@ -44,7 +44,7 @@ export async function heartbeatJob(now: Date): Promise<JobOutcome> {
         skipDuplicates: true,
       });
     },
-    reportNeverRan: (job, summary) => reportOps({ ...jobCheck(job.name), state: "failing", summary }),
+    reportMissed: (job, summary) => reportOps({ ...jobCheck(job.name), state: "failing", summary }),
   });
 }
 

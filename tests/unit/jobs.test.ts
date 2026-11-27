@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { opsCheckKey, opsEnvironment, reportOps, type OpsReport } from "@/lib/platform/ops";
-import { GRACE_RUNS, intervalLabel, jobCheck, reportJobRun } from "@/server/jobs/alert";
+import { opsCheckKey, opsEnvironment, opsFallbackConfig, reportOps, type FallbackSend, type OpsReport } from "@/lib/platform/ops";
+import { GRACE_RUNS, graceFor, intervalLabel, jobCheck, reportJobRun } from "@/server/jobs/alert";
 import { checkDeletion, parseDryRun, parseMaxShare } from "@/server/jobs/deletion-guard";
 import { findMissedJobs, HEARTBEAT_JOB, PENDING_STATUS, runHeartbeat, SCHEDULED_JOBS, type ScheduledJob } from "@/server/jobs/heartbeat";
 import { completionLine, runJob, type JobDeps, type JobResult } from "@/server/jobs/run-job";
@@ -195,6 +195,8 @@ describe("reporting desk", () => {
     expect(warn.mock.calls.map((c) => c[0])).toEqual([
       "ops_report=failed check=examplelab.job.x state=failing code=DOOR_NOT_CONFIGURED",
       "ops_report=failed check=examplelab.job.x state=failing code=NETWORK_TypeError",
+      // no booking organisation in this env: the emergency mail is off and says so
+      "ops_fallback=failed check=examplelab.job.x code=ALERT_NOT_CONFIGURED",
       "ops_report=failed check=examplelab.job.x state=failing code=OPS_CHECK_NOT_ALLOWED_FOR_KEY",
     ]);
   });
@@ -313,7 +315,7 @@ describe("heartbeat: first runs and jobs that never ran", () => {
       jobs,
       readStates: async () => [],
       markPending: async (names) => void marked.push(names),
-      reportNeverRan: async () => (reports++, true),
+      reportMissed: async () => (reports++, true),
     });
     expect(marked).toEqual([["nightly", "often"]]);
     expect(reports).toBe(0);
@@ -321,7 +323,7 @@ describe("heartbeat: first runs and jobs that never ran", () => {
     expect(outcome.counts).toEqual({ watched: 2, pending: 2, missed: 0, never_ran: 0 });
   });
 
-  it("reports only jobs that never ran; a job that ran before is the desk's dead-man", async () => {
+  it("reports every job that missed its window under its own check: never ran, and last success too old", async () => {
     const sent: { name: string; summary: string }[] = [];
     const outcome = await runHeartbeat(now, {
       jobs,
@@ -330,9 +332,12 @@ describe("heartbeat: first runs and jobs that never ran", () => {
         { name: "often", lastRunAt: hoursAgo(5), lastStatus: "complete", lastSuccessAt: hoursAgo(5) },
       ],
       markPending: async () => {},
-      reportNeverRan: async (job, summary) => (sent.push({ name: job.name, summary }), true),
+      reportMissed: async (job, summary) => (sent.push({ name: job.name, summary }), true),
     });
-    expect(sent).toEqual([{ name: "nightly", summary: "job=nightly did not run: no run since the heartbeat first looked 30 h ago (window 26 h)" }]);
+    expect(sent).toEqual([
+      { name: "nightly", summary: "job=nightly did not run: no run since the heartbeat first looked 30 h ago (window 26 h)" },
+      { name: "often", summary: "job=often missed its window: last success 5 h ago (window 1 h)" },
+    ]);
     expect(outcome.complete).toBe(true);
     expect(outcome.counts).toMatchObject({ missed: 2, never_ran: 1 });
   });
@@ -342,9 +347,65 @@ describe("heartbeat: first runs and jobs that never ran", () => {
       jobs: [jobs[0]],
       readStates: async () => [pending("nightly", 30)],
       markPending: async () => {},
-      reportNeverRan: async () => false,
+      reportMissed: async () => false,
     });
     expect(outcome.complete).toBe(false);
     expect(outcome.reason).toBe("report_failed");
+  });
+});
+
+describe("desk missing: emergency mail through the mail door", () => {
+  const env = { PLATFORM_API_URL: "https://platform.beyondles.ai", PLATFORM_API_KEY: "pk_test_key_1234567890", ON_BEHALF_ISSUER: "beyondles-platform:production", OPS_ALERT_ORGANISATION_ID: "org-ops" };
+  const failing: OpsReport = { check: "examplelab.job.retention", level: 1, state: "failing", summary: "job=retention status=incomplete counts=none error=TypeError" };
+  const answer = (status: number, code?: string) => vi.fn().mockResolvedValue(new Response(JSON.stringify(code ? { success: false, error: { code } } : {}), { status }));
+
+  it.each([
+    ["404 (desk not released)", answer(404)],
+    ["503 OPS_NOT_MIGRATED", answer(503, "OPS_NOT_MIGRATED")],
+    ["no answer", vi.fn().mockRejectedValue(new TypeError("fetch failed"))],
+  ])("a level 1/2 failure falls back to the old ops mail on %s", async (_label, fetchImpl) => {
+    const send = vi.fn<FallbackSend>().mockResolvedValue({ ok: true });
+    const ok = await reportOps(failing, { env, fetchImpl, sendFallback: send, warn: vi.fn(), now: new Date("2026-11-27T10:30:00Z") });
+    expect(ok).toBe(true);
+    expect(send.mock.calls[0][0]).toMatchObject({
+      organisationId: "org-ops",
+      action: "retention-alert",
+      to: [{ email: "alerts@beyondles.ai" }],
+      subject: "[examplelab] job:retention failed",
+      idempotencyKey: "alert:examplelab.job.retention:2026-11-27T10",
+    });
+  });
+
+  it("level 2 uses the ops-alert purpose; ok, info, level 3 and other refusals never mail", async () => {
+    const send = vi.fn<FallbackSend>().mockResolvedValue({ ok: true });
+    const deps = { env, sendFallback: send, warn: vi.fn() };
+    await reportOps({ ...failing, level: 2, graceMinutes: 1440 }, { ...deps, fetchImpl: answer(404) });
+    expect(send.mock.calls[0][0].action).toBe("ops-alert");
+    send.mockClear();
+    await reportOps({ ...failing, state: "ok" }, { ...deps, fetchImpl: answer(404) });
+    await reportOps({ ...failing, level: 3 }, { ...deps, fetchImpl: answer(503) });
+    await reportOps({ ...failing, level: 3, state: "info" }, { ...deps, fetchImpl: answer(404) });
+    await reportOps(failing, { ...deps, fetchImpl: answer(403, "OPS_CHECK_NOT_ALLOWED_FOR_KEY") });
+    await reportOps(failing, { ...deps, fetchImpl: answer(400, "VALIDATION") });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("without the booking organisation the emergency path is off, and says so", async () => {
+    const warn = vi.fn();
+    const ok = await reportOps(failing, { env: { ...env, OPS_ALERT_ORGANISATION_ID: "" }, fetchImpl: answer(404), sendFallback: vi.fn(), warn });
+    expect(ok).toBe(false);
+    expect(warn.mock.calls.map((c) => c[0])).toContain("ops_fallback=failed check=examplelab.job.retention code=ALERT_NOT_CONFIGURED");
+    expect(opsFallbackConfig({ OPS_ALERT_EMAIL: "ops@beyondles.ai", OPS_ALERT_ORGANISATION_ID: "o" })).toEqual({ email: "ops@beyondles.ai", organisationId: "o" });
+  });
+});
+
+describe("grace and dead-man of level 2 jobs", () => {
+  it("grace is three runs, at most one day", () => {
+    expect([1, 5, 15, 60, 360, 480, 720, 1440, 10080].map(graceFor)).toEqual([3, 15, 45, 180, 1080, 1440, 1440, 1440, 1440]);
+    expect(GRACE_RUNS).toBe(3);
+  });
+  it("a job's own expectEveryMinutes wins over its window", () => {
+    const jobs: ScheduledJob[] = [{ name: "fast", windowHours: 1, intervalMinutes: 5, expectEveryMinutes: 20 }];
+    expect(jobCheck("fast", jobs)).toMatchObject({ level: 2, graceMinutes: 15, expectEveryMinutes: 20, interval: "5m" });
   });
 });

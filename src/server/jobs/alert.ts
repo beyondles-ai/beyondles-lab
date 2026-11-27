@@ -19,8 +19,10 @@ import { completionLine, type JobResult } from "@/server/jobs/run-job";
  *   check               `<lab>.job.<name>`
  *   level               1 for jobs that protect data (`protectsData`:
  *                       retention, erasure, export, backup), else 2
- *   graceMinutes        level 2: three runs (3 × `intervalMinutes`)
- *   expectEveryMinutes  the heartbeat window (`windowHours` × 60)
+ *   graceMinutes        level 2: three runs (3 × `intervalMinutes`), at most
+ *                       one day (daily and weekly jobs: 1440)
+ *   expectEveryMinutes  the job's `expectEveryMinutes`, else its heartbeat
+ *                       window (`windowHours` × 60)
  * A job that is not scheduled (run by hand) reports level 3: whoever started
  * it sees the exit code.
  *
@@ -29,6 +31,14 @@ import { completionLine, type JobResult } from "@/server/jobs/run-job";
 
 /** Failed runs a level 2 job may have before the desk turns it into an ALERT. */
 export const GRACE_RUNS = 3;
+
+/** The grace of a level 2 job never exceeds one day (alerting.md: daily jobs 1 day). */
+export const MAX_GRACE_MINUTES = 1440;
+
+/** Grace of a level 2 job: three runs, at most one day. */
+export function graceFor(intervalMinutes: number): number {
+  return intervalMinutes >= MAX_GRACE_MINUTES ? MAX_GRACE_MINUTES : Math.min(MAX_GRACE_MINUTES, GRACE_RUNS * intervalMinutes);
+}
 
 export interface JobCheck {
   check: string;
@@ -54,11 +64,11 @@ export function jobCheck(name: string, jobs: readonly ScheduledJob[] = [...SCHED
   if (!job) return { check, level: 3 };
   const base = {
     check,
-    expectEveryMinutes: Math.round(job.windowHours * 60),
+    expectEveryMinutes: Math.round(job.expectEveryMinutes ?? job.windowHours * 60),
     interval: intervalLabel(job.intervalMinutes),
   };
   if (job.protectsData) return { ...base, level: 1 };
-  return { ...base, level: 2, graceMinutes: GRACE_RUNS * job.intervalMinutes };
+  return { ...base, level: 2, graceMinutes: graceFor(job.intervalMinutes) };
 }
 
 type Report = (report: OpsReport) => Promise<boolean>;

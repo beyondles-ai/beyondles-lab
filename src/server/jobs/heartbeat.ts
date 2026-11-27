@@ -1,5 +1,5 @@
 /**
- * Heartbeat (lab learnings, rule 3): a report when a job NEVER ran.
+ * Heartbeat (lab learnings, rule 3): a report when a job did NOT run.
  *
  * Every run of a job reports to the platform's reporting desk (`runJob`,
  * `alert.ts`) with `expectEveryMinutes` = its window below. A job that ran
@@ -7,11 +7,11 @@
  * therefore caught by the desk's dead-man, which raises "did not run". This
  * job no longer mails missed windows (since 2026-11-27).
  *
- * What the desk cannot see is a job that has NEVER reported: a new job whose
- * cron line was never installed has no check at the desk yet. That is the one
- * duty left here: the heartbeat compares `job_runs` with `SCHEDULED_JOBS` and
- * reports such a job as `failing` under the job's own check once its first
- * window has passed. The heartbeat's own runs report like every job
+ * The heartbeat still compares `job_runs` with `SCHEDULED_JOBS` and reports
+ * every job that missed its window as `failing` under the job's own check
+ * (never mailed by the Lab itself): the desk cannot know a job that never
+ * reported, and while the desk is not there the report takes the emergency
+ * mail (`src/lib/platform/ops.ts`). The heartbeat's own runs report like every job
  * (`HEARTBEAT_JOB`), so a dead heartbeat is a dead-man ALERT as well.
  */
 
@@ -26,6 +26,12 @@ export interface ScheduledJob {
   intervalMinutes: number;
   /** Retention, erasure, export, backup: a failure is level 1 (ALERT at once), not level 2. */
   protectsData?: boolean;
+  /**
+   * The desk's dead-man window in minutes when it must be tighter than the
+   * heartbeat window (jobs that run every few minutes: 2 × interval + 10).
+   * Default `windowHours` × 60.
+   */
+  expectEveryMinutes?: number;
 }
 
 /**
@@ -97,17 +103,21 @@ export interface HeartbeatDeps {
   /** Writes a pending row for jobs without one. Must not touch existing rows. */
   markPending: (names: string[], at: Date) => Promise<void>;
   /**
-   * Reports a job that never ran as `failing` under its own check
-   * (`reportNeverRan` in jobs.ts). `false` when the desk did not take it.
+   * Reports a job that missed its window as `failing` under the job's own
+   * check and level (`reportMissed` in jobs.ts). `false` when neither the desk
+   * nor the emergency mail took it.
    */
-  reportNeverRan: (job: ScheduledJob, summary: string) => Promise<boolean>;
+  reportMissed: (job: ScheduledJob, summary: string) => Promise<boolean>;
 }
 
 /**
- * One look over all jobs. Only jobs that have NEVER run (still `pending` after
- * their first window) are reported: every other miss is the desk's dead-man.
- * The run is complete unless a report could not be delivered, so the exit
- * code carries that to the cron log.
+ * One look over all jobs. EVERY job that missed its window is reported as
+ * `failing` under its own check: one that never ran (still `pending` after its
+ * first window), and one whose last success is too old. The desk's dead-man
+ * covers the same silence; this second path also works while the desk is not
+ * there (the report then takes the emergency mail) and for a job that never
+ * reported at all. The run is complete unless a report could not be
+ * delivered, so the exit code carries that to the cron log.
  */
 export async function runHeartbeat(
   now: Date,
@@ -125,18 +135,23 @@ export async function runHeartbeat(
   const byName = new Map(all.map((s) => [s.name, s]));
   const missed = findMissedJobs(jobs, all, now);
   const missedNames = new Set(missed.map((m) => m.name));
-  const neverRan = jobs.filter((j) => missedNames.has(j.name) && byName.get(j.name)?.lastStatus === PENDING_STATUS);
   const pending = all.filter((s) => s.lastStatus === PENDING_STATUS && !missedNames.has(s.name)).length;
   let failedReports = 0;
-  for (const job of neverRan) {
-    const since = byName.get(job.name)?.lastRunAt;
-    const hours = since ? Math.floor(hoursBetween(since, now)) : null;
-    const ok = await deps.reportNeverRan(
-      job,
-      `job=${job.name} did not run: no run since the heartbeat first looked${hours === null ? "" : ` ${hours} h ago`} (window ${job.windowHours} h)`,
-    );
-    if (!ok) failedReports += 1;
+  let neverRan = 0;
+  for (const miss of missed) {
+    const job = jobs.find((j) => j.name === miss.name);
+    if (!job) continue;
+    const state = byName.get(job.name);
+    let summary: string;
+    if (state?.lastStatus === PENDING_STATUS) {
+      neverRan += 1;
+      const hours = state.lastRunAt ? Math.floor(hoursBetween(state.lastRunAt, now)) : null;
+      summary = `job=${job.name} did not run: no run since the heartbeat first looked${hours === null ? "" : ` ${hours} h ago`} (window ${job.windowHours} h)`;
+    } else {
+      summary = `job=${job.name} missed its window: last success ${miss.hoursSince === null ? "never" : `${miss.hoursSince} h ago`} (window ${job.windowHours} h)`;
+    }
+    if (!(await deps.reportMissed(job, summary))) failedReports += 1;
   }
-  const counts = { watched: jobs.length, pending, missed: missed.length, never_ran: neverRan.length };
+  const counts = { watched: jobs.length, pending, missed: missed.length, never_ran: neverRan };
   return failedReports === 0 ? { counts, complete: true } : { counts, complete: false, reason: "report_failed" };
 }

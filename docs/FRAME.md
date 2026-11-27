@@ -632,10 +632,10 @@ it true by construction; `npm run check:frame` and the unit tests keep it so.
   `job_runs.lastSuccessAt`; each job in `SCHEDULED_JOBS`
   (`src/server/jobs/heartbeat.ts`) declares its window, its interval and
   whether it protects data, and that is what its check tells the desk. The
-  `heartbeat` job no longer mails missed windows (the desk's dead-man does);
-  it only reports a job that has NEVER run once its first window has passed
-  (`lastStatus = pending`), because the desk cannot know a check that never
-  reported.
+  `heartbeat` job no longer mails; it reports every job that missed its
+  window (or has never run once its first window has passed,
+  `lastStatus = pending`) as `failing` under the job's own check, next to the
+  desk's own dead-man.
 - **Deletion guards.** `src/server/jobs/deletion-guard.ts`: empty input
   stops, more than 10 % of a table in one run stops (`*_MAX_SHARE`; for
   retention, 10 % of the rows not yet redacted), and a
@@ -695,13 +695,24 @@ periods, dead-man, who gets a mail); this section is how a Lab follows them.
   environment comes from `ON_BEHALF_ISSUER` (else the platform address);
   unknown counts as staging, and staging never mails. The helper never
   throws: a desk that is down is logged as `ops_report=failed` and the
-  caller goes on. A Lab never mails staff about operations itself
+  caller goes on.
+- **Emergency path.** When the desk is not there (404 before the platform
+  release that brings it, 503 `OPS_DESK_UNAVAILABLE` / `OPS_NOT_MIGRATED`, or
+  no answer) a level 1 or 2 FAILURE goes out through the platform mail door
+  as before: purpose `<lab>.ops-alert` (level 1 `<lab>.retention-alert`), to
+  `OPS_ALERT_EMAIL` (default alerts@beyondles.ai), booked to
+  `OPS_ALERT_ORGANISATION_ID`, one idempotency key per check and hour. Once
+  the desk exists, the mail door turns such a mail into a desk report. Keep
+  both settings in the server `.env`; without the organisation the path is
+  off and logs `ops_fallback=failed`. A Lab never mails staff about operations itself
   (business mails such as a new submission are not alerts and keep their
   own recipients).
 - **Jobs.** `runJob` reports every run as `<lab>.job.<name>`: level 1 for a
   job with `protectsData` (retention, erasure, export, backup), else level 2
-  with a grace of three runs (3 × `intervalMinutes`); `expectEveryMinutes`
-  is the job's `windowHours` × 60. A job that is not in `SCHEDULED_JOBS`
+  with a grace of three runs (3 × `intervalMinutes`), at most one day (daily
+  and weekly jobs: 1440 min); `expectEveryMinutes` is the job's own
+  `expectEveryMinutes` (set it to 2 × interval + 10 for jobs that run every
+  few minutes) or else its `windowHours` × 60. A job that is not in `SCHEDULED_JOBS`
   (run by hand) reports level 3. Notices that are information, not a fault
   (items waiting for a person), are level 3 with `state: "info"`.
 - **Contract check.** `<lab>.contract.check`, level 3: it runs against
@@ -718,6 +729,12 @@ The mandatory checks of every Lab (one row per Lab in beyondles-ops
 | Worker alive, if the Lab has a worker | L2, 15 min | `reportOps` from the worker loop (`<lab>.worker.alive`) |
 | Database backup ran | L1, dead-man 26 h | the labs server's backup script via `alert-mail.sh` |
 | Contract check | L3 (staging) | `scripts/contract-check.ts` |
+
+**Release step.** After every production deploy,
+`GET /api/v1/ops/checks?environment=production` (read key) must list the
+Lab's `<lab>.job.*` checks after their first runs. A 400, 403 or 409 from the
+desk in the job log (`ops_report=failed ... code=...`) is a bug in the Lab's
+reports and is fixed before the release.
 
 **A Lab is not ready for release while a mandatory check is missing.** A new
 job goes into `SCHEDULED_JOBS` before its first cron line; `npm run
