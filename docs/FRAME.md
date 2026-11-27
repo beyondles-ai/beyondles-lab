@@ -1,6 +1,6 @@
 # The frame — what every Beyondles Lab guarantees
 
-Checked on: 2026-11-26
+Checked on: 2026-11-27
 
 This template is the executable form of the Lab frame. A Lab built from it
 passes `/lab-pipeline check` for everything that lives in the repo. The
@@ -626,20 +626,16 @@ it true by construction; `npm run check:frame` and the unit tests keep it so.
   `docker compose ... run --rm --no-deps toolchain npm run job -- retention`.
   check-frame fails on an empty `catch {}`, `.catch(() => {})` and `|| true`
   in `src/`, `scripts/`, `ops/`, `mcp/`, `docker/`.
-- **Alert before the first nightly job.** `src/server/jobs/alert.ts` mails
-  ops through the platform mail door (`OPS_ALERT_EMAIL`,
-  `OPS_ALERT_ORGANISATION_ID`; no mail key). Every run writes
-  `job_runs.lastSuccessAt`; the `heartbeat` job alerts when a job in
-  `SCHEDULED_JOBS` (`src/server/jobs/heartbeat.ts`) missed its window. Run
-  the heartbeat from a different scheduler than the jobs where possible.
-  A job that has not run yet gets one window of its own from the heartbeat's
-  first look (`lastStatus = pending`), so a new Lab or a new job sends no false
-  alarm. One run sends at most one mail listing all missed jobs; the run stays
-  complete unless that mail could not go out.
-  A notice that is information, not a fault (items waiting for a person),
-  passes `kind: "STATUS"` and its own `subject` to `sendOpsAlert`; it goes to
-  the platform as `metadata.kind`, which prefixes `[STATUS][env]` instead of
-  `[ALERT][env]`. Without a kind the platform decides (ALERT in production).
+- **Report before the first nightly job.** Every run of every job reports to
+  the platform's reporting desk through `runJob` (section 7b): `ok` or
+  `failing`, never a mail from the Lab. Every run writes
+  `job_runs.lastSuccessAt`; each job in `SCHEDULED_JOBS`
+  (`src/server/jobs/heartbeat.ts`) declares its window, its interval and
+  whether it protects data, and that is what its check tells the desk. The
+  `heartbeat` job no longer mails; it reports every job that missed its
+  window (or has never run once its first window has passed,
+  `lastStatus = pending`) as `failing` under the job's own check, next to the
+  desk's own dead-man.
 - **Deletion guards.** `src/server/jobs/deletion-guard.ts`: empty input
   stops, more than 10 % of a table in one run stops (`*_MAX_SHARE`; for
   retention, 10 % of the rows not yet redacted), and a
@@ -686,6 +682,65 @@ it true by construction; `npm run check:frame` and the unit tests keep it so.
   keys (schedulers). Third-party images in
   Compose, CI and the Dockerfile are pinned by digest; check-frame warns on
   an unpinned one.
+
+## 7b. Alerting
+
+The binding rules are in beyondles-ops `docs/alerting.md` (levels, grace
+periods, dead-man, who gets a mail); this section is how a Lab follows them.
+
+- **One helper.** `reportOps()` in `src/lib/platform/ops.ts` calls
+  `POST /api/v1/ops/report` of the platform with the Lab's own service key
+  (`PLATFORM_API_KEY`). Every check is `<LAB_KEY>.<area>.<name>`
+  (`opsCheckKey`), because a Lab key may only report its own checks. The
+  environment comes from `ON_BEHALF_ISSUER` (else the platform address);
+  unknown counts as staging, and staging never mails. The helper never
+  throws: a desk that is down is logged as `ops_report=failed` and the
+  caller goes on.
+- **Emergency path.** When the desk is not there (404 before the platform
+  release that brings it, 503 `OPS_DESK_UNAVAILABLE` / `OPS_NOT_MIGRATED`, or
+  no answer) a level 1 or 2 FAILURE goes out through the platform mail door
+  as before: purpose `<lab>.ops-alert` (level 1 `<lab>.retention-alert`), to
+  `OPS_ALERT_EMAIL` (default alerts@beyondles.ai), booked to
+  `OPS_ALERT_ORGANISATION_ID`, one idempotency key per check and hour. Once
+  the desk exists, the mail door turns such a mail into a desk report. Keep
+  both settings in the server `.env`; without the organisation the path is
+  off and logs `ops_fallback=failed`. A Lab never mails staff about operations itself
+  (business mails such as a new submission are not alerts and keep their
+  own recipients).
+- **Jobs.** `runJob` reports every run as `<lab>.job.<name>`: level 1 for a
+  job with `protectsData` (retention, erasure, export, backup), else level 2
+  with a grace of three runs (3 × `intervalMinutes`), at most one day (daily
+  and weekly jobs: 1440 min); `expectEveryMinutes` is the job's own
+  `expectEveryMinutes` (set it to 2 × interval + 10 for jobs that run every
+  few minutes) or else its `windowHours` × 60. A job that is not in `SCHEDULED_JOBS`
+  (run by hand) reports level 3. Notices that are information, not a fault
+  (items waiting for a person), are level 3 with `state: "info"`.
+- **Contract check.** `<lab>.contract.check`, level 3: it runs against
+  staging, so it is status for the Monday report.
+
+The mandatory checks of every Lab (one row per Lab in beyondles-ops
+`docs/alerting-coverage.md`):
+
+| Check | Level and grace | Where it comes from |
+|---|---|---|
+| Public reachability in production | L2, 10 min | outside the Lab (server probe, beyondles-ops) |
+| Production deploy | L2, 16 min | the labs server's deploy cron via `alert-mail.sh` |
+| Every scheduled job | L2, 3 runs (L1 for data-protection jobs); dead-man from its window | `runJob` and `SCHEDULED_JOBS` |
+| Worker alive, if the Lab has a worker | L2, 15 min | `reportOps` from the worker loop (`<lab>.worker.alive`) |
+| Database backup ran | L1, dead-man 26 h | the labs server's backup script via `alert-mail.sh` |
+| Contract check | L3 (staging) | `scripts/contract-check.ts` |
+
+**Release step.** After every production deploy,
+`GET /api/v1/ops/checks?environment=production` (read key) must list the
+Lab's `<lab>.job.*` checks after their first runs. A 400, 403 or 409 from the
+desk in the job log (`ops_report=failed ... code=...`) is a bug in the Lab's
+reports and is fixed before the release.
+
+**A Lab is not ready for release while a mandatory check is missing.** A new
+job goes into `SCHEDULED_JOBS` before its first cron line; `npm run
+check:frame` (block 16) fails when a scheduled job does not run through the
+job frame, and `tests/unit/jobs.test.ts` fails when a runnable job is not
+scheduled.
 
 ## 8. What the frame does NOT do
 

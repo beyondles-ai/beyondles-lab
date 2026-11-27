@@ -85,8 +85,10 @@ services:
       API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-}
       MCP_RATE_LIMIT_PER_MINUTE: ${MCP_RATE_LIMIT_PER_MINUTE:-}
       ON_BEHALF_RATE_LIMIT_PER_MINUTE: ${ON_BEHALF_RATE_LIMIT_PER_MINUTE:-}
-      # Scheduled jobs (src/server/jobs): ops alerts through the mail door,
-      # retention settings. Dry run unless RETENTION_DRY_RUN says false/0/no.
+      # Scheduled jobs (src/server/jobs): every run reports to the platform's
+      # reporting desk with PLATFORM_API_KEY. OPS_ALERT_*: the emergency mail
+      # when the desk is not there (src/lib/platform/ops.ts). Retention
+      # settings: dry run unless RETENTION_DRY_RUN says false/0/no.
       OPS_ALERT_EMAIL: ${OPS_ALERT_EMAIL:-}
       OPS_ALERT_ORGANISATION_ID: ${OPS_ALERT_ORGANISATION_ID:-}
       RETENTION_DRY_RUN: ${RETENTION_DRY_RUN:-true}
@@ -126,8 +128,10 @@ services:
       # Jobs that write to or forget in The Brain run here too.
       BRAIN_API_URL: ${BRAIN_API_URL:-}
       ON_BEHALF_ISSUER: ${ON_BEHALF_ISSUER:-}
-      # Scheduled jobs (src/server/jobs): ops alerts through the mail door,
-      # retention settings. Dry run unless RETENTION_DRY_RUN says false/0/no.
+      # Scheduled jobs (src/server/jobs): every run reports to the platform's
+      # reporting desk with PLATFORM_API_KEY. OPS_ALERT_*: the emergency mail
+      # when the desk is not there (src/lib/platform/ops.ts). Retention
+      # settings: dry run unless RETENTION_DRY_RUN says false/0/no.
       OPS_ALERT_EMAIL: ${OPS_ALERT_EMAIL:-}
       OPS_ALERT_ORGANISATION_ID: ${OPS_ALERT_ORGANISATION_ID:-}
       RETENTION_DRY_RUN: ${RETENTION_DRY_RUN:-true}

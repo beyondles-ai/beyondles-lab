@@ -40,6 +40,7 @@ import {
 } from "./support/frame-rules.mjs";
 import { DOOR_SURFACES, doorFieldWarnings, messageWarnings } from "./support/customer-surfaces.mjs";
 import { informalAddressFindings } from "./support/informal-address.mjs";
+import { jobReportingFindings } from "./support/job-reporting.mjs";
 import { memoryDoorFindings } from "./support/memory-door.mjs";
 import { loadMessages } from "./support/messages.mjs";
 
@@ -150,6 +151,7 @@ for (const rel of [
   // deletion guards, retention, handover with "Not tested".
   "src/server/jobs/run-job.ts",
   "src/server/jobs/alert.ts",
+  "src/lib/platform/ops.ts",
   "src/server/jobs/heartbeat.ts",
   "src/server/jobs/deletion-guard.ts",
   "src/server/retention/registry.ts",
@@ -574,6 +576,18 @@ const warnings = [];
 //     every delete path forgets in The Brain. A Lab without the client
 //     fails. Rule and scanner in scripts/support/memory-door.mjs.
 for (const finding of memoryDoorFindings({ read, exists })) fail(finding);
+
+// 16. Every scheduled job reports to the platform's reporting desk
+//     (docs/FRAME.md 7b, beyondles-ops docs/alerting.md): it is in JOBS or
+//     runs through runJob with realJobDeps(), and the frame reports every
+//     run. Rule in scripts/support/job-reporting.mjs.
+{
+  const files = ["src", "scripts"]
+    .flatMap((dir) => walk(path.join(root, dir)))
+    .filter((f) => /\.(ts|tsx|mjs)$/.test(f))
+    .map((f) => ({ rel: path.relative(root, f), text: readFileSync(f, "utf8") }));
+  for (const finding of jobReportingFindings({ read, files })) fail(finding);
+}
 
 // 15. Customer surfaces (November 2026, docs/FRAME.md 9.1 and 9.6). WARNINGS
 //     only: customers see one usage percentage of the package, never cost,

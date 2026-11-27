@@ -20,12 +20,12 @@ import { expireNotes } from "@/server/services/notes";
  * All worker routes live under `/api/v1/worker/`.
  *
  * The pattern every Lab copies: the work runs through the job frame
- * (`runJob`: one completion line, `job_runs` heartbeat state, ops alert when
- * incomplete) and the service asks the deletion guard before it deletes.
+ * (`runJob`: one completion line, `job_runs` state, one report to the
+ * reporting desk on every run) and the service asks the deletion guard before it deletes.
  * Dry run unless the body says `"dryRun": false`, so every SCHEDULED caller
  * sends it explicitly (the template's caller: ops/cron/expire-notes.sh).
- * The `runJob` name is listed in SCHEDULED_JOBS (heartbeat.ts), so a deleted
- * cron line alerts; tests/unit/jobs.test.ts fails for a worker route that is
+ * The `runJob` name is listed in SCHEDULED_JOBS (heartbeat.ts), so its check
+ * carries a dead-man and a deleted cron line alerts; tests/unit/jobs.test.ts fails for a worker route that is
  * not listed.
  */
 export const dynamic = "force-dynamic";
@@ -50,7 +50,7 @@ export async function POST(request: Request): Promise<Response> {
       },
       realJobDeps(),
     );
-    // The frame logged and alerted; the caller still gets the real error.
+    // The frame logged and reported; the caller still gets the real error.
     if (failure !== undefined || !output) throw failure ?? new Error("expire-notes produced no result");
     return apiJson({ data: output });
   });

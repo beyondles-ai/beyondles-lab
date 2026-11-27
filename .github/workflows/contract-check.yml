@@ -1,7 +1,8 @@
 name: Contract check
 
 # Lab learnings (Masoud, 30.09.2026, rule 15): one real, cheap call per
-# platform edge against STAGING, once a day, with an alert. Lab tests use a
+# platform edge against STAGING, once a day. Every run reports to the staging
+# reporting desk as `<lab>.contract.check`, level 3 (status, never a mail). Lab tests use a
 # fake door; this is the only check that the real edges still answer.
 #
 # Repo secrets a HUMAN must set (Settings > Secrets and variables > Actions),
@@ -12,8 +13,6 @@ name: Contract check
 #   PLATFORM_EXPORT_KEY         the Lab's STAGING export key
 #   CONTRACT_LAB_URL            the Lab's staging address
 #   CONTRACT_ORGANISATION_ID    the staging test organisation (uuid)
-#   OPS_ALERT_EMAIL             alerts@beyondles.ai
-#   OPS_ALERT_ORGANISATION_ID   platform organisation the alert mail is booked to
 # A missing secret makes the edge "missing" and the run red, on purpose.
 # No BRAIN_API_URL here: the staging Brain API is reachable over the private
 # network only, never from this runner. The edge `brain-memory-recall` asks
@@ -42,8 +41,6 @@ jobs:
       PLATFORM_EXPORT_KEY: ${{ secrets.PLATFORM_EXPORT_KEY }}
       CONTRACT_LAB_URL: ${{ secrets.CONTRACT_LAB_URL }}
       CONTRACT_ORGANISATION_ID: ${{ secrets.CONTRACT_ORGANISATION_ID }}
-      OPS_ALERT_EMAIL: ${{ secrets.OPS_ALERT_EMAIL }}
-      OPS_ALERT_ORGANISATION_ID: ${{ secrets.OPS_ALERT_ORGANISATION_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

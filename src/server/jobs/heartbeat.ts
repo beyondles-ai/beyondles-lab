@@ -1,19 +1,37 @@
 /**
- * Heartbeat (lab learnings, rule 3): an alert when a job did NOT run.
+ * Heartbeat (lab learnings, rule 3): a report when a job did NOT run.
  *
- * A job that crashes alerts through `runJob`. A job whose cron line was
- * deleted, whose container never started or whose host is off alerts
- * nowhere — it simply stops writing `job_runs.lastSuccessAt`. The heartbeat
- * job compares that timestamp with the window of every scheduled job and
- * reports the ones that missed it. Run the heartbeat itself from a
- * DIFFERENT scheduler than the jobs it watches where you can (the platform
- * or a second host), otherwise one dead cron hides both.
+ * Every run of a job reports to the platform's reporting desk (`runJob`,
+ * `alert.ts`) with `expectEveryMinutes` = its window below. A job that ran
+ * once and then stops (cron line deleted, container gone, host off) is
+ * therefore caught by the desk's dead-man, which raises "did not run". This
+ * job no longer mails missed windows (since 2026-11-27).
+ *
+ * The heartbeat still compares `job_runs` with `SCHEDULED_JOBS` and reports
+ * every job that missed its window as `failing` under the job's own check
+ * (never mailed by the Lab itself): the desk cannot know a job that never
+ * reported, and while the desk is not there the report takes the emergency
+ * mail (`src/lib/platform/ops.ts`). The heartbeat's own runs report like every job
+ * (`HEARTBEAT_JOB`), so a dead heartbeat is a dead-man ALERT as well.
  */
 
 export interface ScheduledJob {
   name: string;
-  /** How old the last success may be before it counts as missed. */
+  /** How old the last success may be before it counts as missed. Also the desk's dead-man window (× 60). */
   windowHours: number;
+  /**
+   * How often the scheduler starts it, in minutes (nightly 1440, weekly 10080,
+   * every 15 minutes 15). Grace of a level 2 job = three runs.
+   */
+  intervalMinutes: number;
+  /** Retention, erasure, export, backup: a failure is level 1 (ALERT at once), not level 2. */
+  protectsData?: boolean;
+  /**
+   * The desk's dead-man window in minutes when it must be tighter than the
+   * heartbeat window (jobs that run every few minutes: 2 × interval + 10).
+   * Default `windowHours` × 60.
+   */
+  expectEveryMinutes?: number;
 }
 
 /**
@@ -23,11 +41,17 @@ export interface ScheduledJob {
  * name (`src/app/api/v1/worker/`, called by a scheduler) as well.
  */
 export const SCHEDULED_JOBS: readonly ScheduledJob[] = [
-  // Nightly, plus a few hours of slack for a slow run.
-  { name: "retention", windowHours: 26 },
-  // Worker route, nightly through ops/cron/expire-notes.sh.
-  { name: "expire-notes", windowHours: 26 },
+  // Nightly, plus a few hours of slack for a slow run. Protects data: level 1.
+  { name: "retention", windowHours: 26, intervalMinutes: 1440, protectsData: true },
+  // Worker route, nightly through ops/cron/expire-notes.sh. Deletes old notes: level 1.
+  { name: "expire-notes", windowHours: 26, intervalMinutes: 1440, protectsData: true },
 ];
+
+/**
+ * The heartbeat's own schedule (it is not in `SCHEDULED_JOBS`, it watches
+ * them). Match the cron line that starts it.
+ */
+export const HEARTBEAT_JOB: ScheduledJob = { name: "heartbeat", windowHours: 26, intervalMinutes: 1440 };
 
 /**
  * `job_runs.lastStatus` of a job the heartbeat has seen but that has not run
@@ -78,14 +102,22 @@ export interface HeartbeatDeps {
   readStates: () => Promise<JobState[]>;
   /** Writes a pending row for jobs without one. Must not touch existing rows. */
   markPending: (names: string[], at: Date) => Promise<void>;
-  sendAlert: (message: { source: string; summary: string }) => Promise<boolean>;
+  /**
+   * Reports a job that missed its window as `failing` under the job's own
+   * check and level (`reportMissed` in jobs.ts). `false` when neither the desk
+   * nor the emergency mail took it.
+   */
+  reportMissed: (job: ScheduledJob, summary: string) => Promise<boolean>;
 }
 
 /**
- * One look over all jobs, at most ONE mail per run. A run that reported its
- * findings is complete: otherwise `runJob` and the host's cron would each send
- * a further mail about the same thing. Only when the mail could not go out is
- * the run incomplete, so the exit code carries the alarm to the cron's own path.
+ * One look over all jobs. EVERY job that missed its window is reported as
+ * `failing` under its own check: one that never ran (still `pending` after its
+ * first window), and one whose last success is too old. The desk's dead-man
+ * covers the same silence; this second path also works while the desk is not
+ * there (the report then takes the emergency mail) and for a job that never
+ * reported at all. The run is complete unless a report could not be
+ * delivered, so the exit code carries that to the cron log.
  */
 export async function runHeartbeat(
   now: Date,
@@ -100,17 +132,26 @@ export async function runHeartbeat(
     ...states,
     ...unseen.map((name) => ({ name, lastSuccessAt: null, lastRunAt: now, lastStatus: PENDING_STATUS })),
   ];
+  const byName = new Map(all.map((s) => [s.name, s]));
   const missed = findMissedJobs(jobs, all, now);
   const missedNames = new Set(missed.map((m) => m.name));
   const pending = all.filter((s) => s.lastStatus === PENDING_STATUS && !missedNames.has(s.name)).length;
-  const counts = { watched: jobs.length, pending, missed: missed.length };
-  if (missed.length === 0) return { counts, complete: true };
-  const list = missed
-    .map((m) => `${m.name} (last success: ${m.hoursSince === null ? "never" : `${m.hoursSince} h ago`})`)
-    .join(", ");
-  const sent = await deps.sendAlert({
-    source: "heartbeat",
-    summary: `${missed.length} of ${jobs.length} jobs missed their window: ${list}`,
-  });
-  return sent ? { counts, complete: true } : { counts, complete: false, reason: "alert_failed" };
+  let failedReports = 0;
+  let neverRan = 0;
+  for (const miss of missed) {
+    const job = jobs.find((j) => j.name === miss.name);
+    if (!job) continue;
+    const state = byName.get(job.name);
+    let summary: string;
+    if (state?.lastStatus === PENDING_STATUS) {
+      neverRan += 1;
+      const hours = state.lastRunAt ? Math.floor(hoursBetween(state.lastRunAt, now)) : null;
+      summary = `job=${job.name} did not run: no run since the heartbeat first looked${hours === null ? "" : ` ${hours} h ago`} (window ${job.windowHours} h)`;
+    } else {
+      summary = `job=${job.name} missed its window: last success ${miss.hoursSince === null ? "never" : `${miss.hoursSince} h ago`} (window ${job.windowHours} h)`;
+    }
+    if (!(await deps.reportMissed(job, summary))) failedReports += 1;
+  }
+  const counts = { watched: jobs.length, pending, missed: missed.length, never_ran: neverRan };
+  return failedReports === 0 ? { counts, complete: true } : { counts, complete: false, reason: "report_failed" };
 }

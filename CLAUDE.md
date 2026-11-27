@@ -91,6 +91,10 @@ Never change (this is the frame, reviewed centrally):
 - **Jobs end with one line and an exit code** (`src/server/jobs/run-job.ts`).
   No empty `catch`, no `|| true`. Anything that deletes stops on empty input
   and on more than 10 % of a table, and is a dry run unless told otherwise.
+  Every run reports to the platform's reporting desk through the frame; a
+  scheduled job is in `SCHEDULED_JOBS` with its `intervalMinutes` (block 16
+  of `check:frame`). Never mail staff about operations from the Lab
+  (`docs/FRAME.md` 7b).
 - **Closed-pages design.** Every page behind the login sits inside the shared
   frame (`AppShell`); you only fill the content. Start every page with
   `PageHeader` (kicker, two-tone title, one sentence, at most one primary
