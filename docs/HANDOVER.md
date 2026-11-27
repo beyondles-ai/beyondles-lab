@@ -1,6 +1,6 @@
 # Handover
 
-Checked on: 2026-11-22
+Checked on: 2026-11-27
 
 Copy this file into the handover of a Lab (one per handover, dated) and fill
 in every section. The reviewer starts at **Not tested**. No passwords, keys
@@ -22,8 +22,10 @@ instead.
 
 ## Scheduled jobs and alerts
 
-- Every job from `src/server/jobs/heartbeat.ts` with its cron line and window.
-- Where the alert mail goes (`OPS_ALERT_EMAIL`) and when it was last tried.
+- Every job from `src/server/jobs/heartbeat.ts` with its cron line, window, interval and level.
+- That each job's check (`<lab>.job.<name>`) shows up at the reporting desk
+  (`GET /api/v1/ops/checks`) after its first run, and every other mandatory
+  check of docs/FRAME.md 7b.
 
 ## Retention
 

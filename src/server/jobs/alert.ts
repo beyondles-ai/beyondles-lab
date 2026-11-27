@@ -1,80 +1,74 @@
-import { sendMail, type MailResult } from "@/lib/platform/mail";
-import { LAB_KEY } from "@/lib/lab";
+import { opsCheckKey, reportOps, type OpsLevel, type OpsReport } from "@/lib/platform/ops";
+import { HEARTBEAT_JOB, SCHEDULED_JOBS, type ScheduledJob } from "@/server/jobs/heartbeat";
 import { completionLine, type JobResult } from "@/server/jobs/run-job";
 
 /**
- * Ops alert through the platform mail door (lab learnings, rule 3).
+ * Ops reporting of the job frame (lab learnings, rule 3; alerting template
+ * beyondles-ops `docs/alerting.md`, 2026-11-27).
  *
- * WHY: the nightly retention job of a Lab could stop and nobody would know;
- * the alarm was built four weeks after handover. Every Lab has this path
- * BEFORE its first nightly job.
+ * WHY: the nightly retention job of a Lab could stop and nobody would know.
+ * Every run of every job therefore reports to the platform's reporting desk
+ * (`src/lib/platform/ops.ts`): `ok` when it completed, `failing` when not.
+ * The desk decides who gets a mail and when; a Lab never mails staff about
+ * operations itself. The `ok` reports matter as much as the failures: they
+ * clear a fault and feed the desk's dead-man, which raises "did not run" when
+ * a job stops reporting (cron line deleted, container never started).
  *
- * The mail goes through `POST /api/mail/send` like every other mail of a Lab
- * (no mail key here). It is booked to `OPS_ALERT_ORGANISATION_ID` (the
- * Beyondles organisation on the platform) and goes to `OPS_ALERT_EMAIL`
- * (alerts@beyondles.ai). The idempotency key holds the hour, so a job that
- * fails every minute sends one mail per hour, not sixty.
+ * What a job's check declares comes from its entry in `SCHEDULED_JOBS`
+ * (`heartbeat.ts`), so there is ONE place per job:
+ *   check               `<lab>.job.<name>`
+ *   level               1 for jobs that protect data (`protectsData`:
+ *                       retention, erasure, export, backup), else 2
+ *   graceMinutes        level 2: three runs (3 × `intervalMinutes`)
+ *   expectEveryMinutes  the heartbeat window (`windowHours` × 60)
+ * A job that is not scheduled (run by hand) reports level 3: whoever started
+ * it sees the exit code.
  *
- * NEVER THROWS, NEVER SILENT: when the alert itself cannot go out, that is
- * written to stderr as `alert=failed` so the log still shows it.
+ * NEVER THROWS: `reportOps` logs `ops_report=failed` when the desk is down.
  */
 
-export interface AlertConfig {
-  email: string;
-  organisationId: string;
+/** Failed runs a level 2 job may have before the desk turns it into an ALERT. */
+export const GRACE_RUNS = 3;
+
+export interface JobCheck {
+  check: string;
+  level: OpsLevel;
+  graceMinutes?: number;
+  expectEveryMinutes?: number;
+  interval?: string;
 }
 
-export function readAlertConfig(): AlertConfig | null {
-  const email = process.env.OPS_ALERT_EMAIL?.trim();
-  const organisationId = process.env.OPS_ALERT_ORGANISATION_ID?.trim();
-  return email && organisationId ? { email, organisationId } : null;
+/** `5m`, `2h`, `daily`, `weekly`, or plain minutes: the label the desk shows. */
+export function intervalLabel(minutes: number): string {
+  if (minutes === 1440) return "daily";
+  if (minutes === 10080) return "weekly";
+  if (minutes % 1440 === 0) return `${minutes / 1440}d`;
+  if (minutes % 60 === 0) return minutes === 60 ? "hourly" : `${minutes / 60}h`;
+  return `${minutes}m`;
 }
 
-export interface AlertMessage {
-  /** Stable identifier of what failed: a job name or a contract edge. */
-  source: string;
-  /** One line, counts and codes only. */
-  summary: string;
-  /**
-   * `STATUS`: information, nothing is broken (e.g. items waiting for a person). Sent to the platform as
-   * `metadata.kind`, which prefixes the subject `[STATUS][env]` instead of `[ALERT][env]`. Left out, the
-   * platform decides (ALERT in production). Only a STATUS mail may carry its own `subject`.
-   */
-  kind?: "ALERT" | "STATUS";
-  /** Subject after the Lab prefix instead of `<source> failed`; used only with `kind: "STATUS"`. */
-  subject?: string;
+/** What the check of the job `name` declares (see above). */
+export function jobCheck(name: string, jobs: readonly ScheduledJob[] = [...SCHEDULED_JOBS, HEARTBEAT_JOB]): JobCheck {
+  const check = opsCheckKey("job", name);
+  const job = jobs.find((j) => j.name === name);
+  if (!job) return { check, level: 3 };
+  const base = {
+    check,
+    expectEveryMinutes: Math.round(job.windowHours * 60),
+    interval: intervalLabel(job.intervalMinutes),
+  };
+  if (job.protectsData) return { ...base, level: 1 };
+  return { ...base, level: 2, graceMinutes: GRACE_RUNS * job.intervalMinutes };
 }
 
-type Send = (request: Parameters<typeof sendMail>[0]) => Promise<MailResult>;
+type Report = (report: OpsReport) => Promise<boolean>;
 
-export async function sendOpsAlert(
-  message: AlertMessage,
-  deps: { send?: Send; config?: AlertConfig | null; now?: Date; warn?: (line: string) => void } = {},
-): Promise<boolean> {
-  const warn = deps.warn ?? ((line: string) => console.error(line));
-  const config = deps.config === undefined ? readAlertConfig() : deps.config;
-  if (!config) {
-    warn(`alert=failed source=${message.source} code=ALERT_NOT_CONFIGURED`);
-    return false;
-  }
-  const hour = (deps.now ?? new Date()).toISOString().slice(0, 13);
-  const result = await (deps.send ?? sendMail)({
-    organisationId: config.organisationId,
-    action: "ops-alert",
-    to: [{ email: config.email }],
-    subject: `[${LAB_KEY}] ${message.kind === "STATUS" && message.subject ? message.subject : `${message.source} failed`}`,
-    text: `${message.summary}\n\nLab: ${LAB_KEY}\nTime: ${hour}:00 UTC\n`,
-    idempotencyKey: `alert:${message.source}:${hour}`.slice(0, 128),
-    ...(message.kind ? { metadata: { kind: message.kind } } : {}),
+/** The `report` dependency of `runJob`: one desk report for every run. */
+export async function reportJobRun(result: JobResult, deps: { report?: Report; jobs?: readonly ScheduledJob[] } = {}): Promise<void> {
+  const declared = deps.jobs ? jobCheck(result.name, deps.jobs) : jobCheck(result.name);
+  await (deps.report ?? reportOps)({
+    ...declared,
+    state: result.status === "complete" ? "ok" : "failing",
+    summary: completionLine(result),
   });
-  if (!result.ok) {
-    warn(`alert=failed source=${message.source} code=${result.code}`);
-    return false;
-  }
-  return true;
-}
-
-/** The `alert` dependency of `runJob`. */
-export async function alertJobFailure(result: JobResult): Promise<void> {
-  await sendOpsAlert({ source: `job:${result.name}`, summary: completionLine(result) });
 }

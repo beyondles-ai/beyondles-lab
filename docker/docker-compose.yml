@@ -85,10 +85,9 @@ services:
       API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-}
       MCP_RATE_LIMIT_PER_MINUTE: ${MCP_RATE_LIMIT_PER_MINUTE:-}
       ON_BEHALF_RATE_LIMIT_PER_MINUTE: ${ON_BEHALF_RATE_LIMIT_PER_MINUTE:-}
-      # Scheduled jobs (src/server/jobs): ops alerts through the mail door,
-      # retention settings. Dry run unless RETENTION_DRY_RUN says false/0/no.
-      OPS_ALERT_EMAIL: ${OPS_ALERT_EMAIL:-}
-      OPS_ALERT_ORGANISATION_ID: ${OPS_ALERT_ORGANISATION_ID:-}
+      # Scheduled jobs (src/server/jobs): every run reports to the platform's
+      # reporting desk with PLATFORM_API_KEY (no own setting); retention
+      # settings. Dry run unless RETENTION_DRY_RUN says false/0/no.
       RETENTION_DRY_RUN: ${RETENTION_DRY_RUN:-true}
       RETENTION_MAX_SHARE: ${RETENTION_MAX_SHARE:-}
       RETENTION_NOTES_DAYS: ${RETENTION_NOTES_DAYS:-}
@@ -126,10 +125,9 @@ services:
       # Jobs that write to or forget in The Brain run here too.
       BRAIN_API_URL: ${BRAIN_API_URL:-}
       ON_BEHALF_ISSUER: ${ON_BEHALF_ISSUER:-}
-      # Scheduled jobs (src/server/jobs): ops alerts through the mail door,
-      # retention settings. Dry run unless RETENTION_DRY_RUN says false/0/no.
-      OPS_ALERT_EMAIL: ${OPS_ALERT_EMAIL:-}
-      OPS_ALERT_ORGANISATION_ID: ${OPS_ALERT_ORGANISATION_ID:-}
+      # Scheduled jobs (src/server/jobs): every run reports to the platform's
+      # reporting desk with PLATFORM_API_KEY (no own setting); retention
+      # settings. Dry run unless RETENTION_DRY_RUN says false/0/no.
       RETENTION_DRY_RUN: ${RETENTION_DRY_RUN:-true}
       RETENTION_MAX_SHARE: ${RETENTION_MAX_SHARE:-}
       RETENTION_NOTES_DAYS: ${RETENTION_NOTES_DAYS:-}

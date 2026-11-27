@@ -25,7 +25,7 @@
 - [ ] Every new UI action also exists under `/api/v1` and as an MCP tool
 - [ ] Every new tenant table appears in `GET /api/platform/export` (the coverage test enforces this)
 - [ ] `messages/de.json` and `messages/en.json` have the same keys
-- [ ] Every new job runs through `runJob`; a new scheduled job is in `SCHEDULED_JOBS`
+- [ ] Every new job runs through `runJob` (it reports to the desk); a new scheduled job is in `SCHEDULED_JOBS` with its `intervalMinutes`
 - [ ] Every new table with personal data is in the retention registry
 - [ ] Every changed doc has a fresh "Checked on:" date
 

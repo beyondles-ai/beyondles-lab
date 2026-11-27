@@ -5,18 +5,20 @@
  *
  *   npm run contract:check
  *
- * Through the job frame: one completion line, exit 1 and an ops alert when
- * any edge failed or its settings are missing. Settings (staging values):
+ * Through the job frame: one completion line, exit 1 when any edge failed or
+ * its settings are missing, and one report to the reporting desk on every run
+ * (`<lab>.contract.check`, level 3: it runs against staging, so it is status
+ * for the Monday report, never a mail; production edges are covered by the
+ * reachability check and the job frame). Settings (staging values):
  * PLATFORM_API_URL, PLATFORM_API_KEY, NEXT_PUBLIC_PLATFORM_URL,
- * PLATFORM_EXPORT_KEY, CONTRACT_LAB_URL, CONTRACT_ORGANISATION_ID,
- * OPS_ALERT_EMAIL, OPS_ALERT_ORGANISATION_ID. No BRAIN_API_URL: the Lab's
+ * PLATFORM_EXPORT_KEY, CONTRACT_LAB_URL, CONTRACT_ORGANISATION_ID. No BRAIN_API_URL: the Lab's
  * staging server checks its own Brain (`/api/platform/brain-status`).
  */
 import "dotenv/config";
 
-import { sendOpsAlert } from "@/server/jobs/alert";
+import { opsCheckKey, reportOps } from "@/lib/platform/ops";
 import { buildEdges, checkEdges } from "@/server/jobs/contract-edges";
-import { runJobCli } from "@/server/jobs/run-job";
+import { completionLine, runJobCli } from "@/server/jobs/run-job";
 
 async function main(): Promise<void> {
   await runJobCli(
@@ -38,11 +40,18 @@ async function main(): Promise<void> {
     },
     {
       log: (line) => console.log(line),
-      alert: async (result) => {
-        await sendOpsAlert({ source: "contract-check", summary: `${result.name}: ${JSON.stringify(result.counts)}` });
+      report: async (result) => {
+        await reportOps({
+          check: opsCheckKey("contract", "check"),
+          level: 3,
+          state: result.status === "complete" ? "ok" : "failing",
+          interval: "daily",
+          expectEveryMinutes: 26 * 60,
+          summary: completionLine(result),
+        });
       },
-      // The contract check has no database: its heartbeat is the scheduled
-      // workflow itself, whose failure GitHub reports.
+      // The contract check has no database: the desk's dead-man (26 h) and
+      // the scheduled workflow's own failure in GitHub watch that it runs.
       record: async () => undefined,
       now: () => new Date(),
     },

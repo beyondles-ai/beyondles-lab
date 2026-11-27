@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { alertJobFailure, sendOpsAlert } from "@/server/jobs/alert";
+import { reportOps } from "@/lib/platform/ops";
+import { jobCheck, reportJobRun } from "@/server/jobs/alert";
 import { PENDING_STATUS, runHeartbeat } from "@/server/jobs/heartbeat";
 import type { JobDeps, JobOutcome, JobResult } from "@/server/jobs/run-job";
 import { redactedValues } from "@/server/retention/redaction";
@@ -43,7 +44,7 @@ export async function heartbeatJob(now: Date): Promise<JobOutcome> {
         skipDuplicates: true,
       });
     },
-    sendAlert: (message) => sendOpsAlert(message),
+    reportNeverRan: (job, summary) => reportOps({ ...jobCheck(job.name), state: "failing", summary }),
   });
 }
 
@@ -55,7 +56,7 @@ export const JOBS: Record<string, (now: Date) => Promise<JobOutcome>> = {
 export function realJobDeps(): JobDeps {
   return {
     log: (line) => console.log(line),
-    alert: alertJobFailure,
+    report: (result) => reportJobRun(result),
     now: () => new Date(),
     async record(result: JobResult, at: Date) {
       const success = result.status === "complete" ? { lastSuccessAt: at } : {};

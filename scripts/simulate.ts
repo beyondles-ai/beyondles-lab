@@ -77,8 +77,8 @@ async function simulate(): Promise<JobOutcome> {
 
 runJobCli("simulation", simulate, {
   log: (line) => console.log(line),
-  // Run by a person before handover and read on screen: no ops alert.
-  alert: async () => undefined,
+  // Run by a person before handover and read on screen: no desk report.
+  report: async () => undefined,
   record: async () => undefined,
   now: () => new Date(),
 }).catch((error: unknown) => {

@@ -8,10 +8,13 @@
  *  - exactly ONE completion line per run:
  *      job=<name> status=complete|incomplete counts=<k>=<n>,... [error=<code>]
  *    COUNTS ONLY, never ids or names: logs must not carry personal data.
- *  - a failure is never swallowed: the run is `incomplete`, an ops alert goes
- *    out (`alert.ts`) and the process exit code becomes 1 (`runJobCli`).
- *  - the heartbeat state (`job_runs.lastSuccessAt`) is written, so a job that
- *    silently stops running is noticed by the heartbeat job.
+ *  - EVERY run is reported to the platform's reporting desk (`alert.ts`):
+ *    `ok` when complete, `failing` when not. The desk decides about mails and
+ *    raises "did not run" when a job stops reporting (dead-man).
+ *  - a failure is never swallowed: the run is `incomplete`, reported as
+ *    `failing`, and the process exit code becomes 1 (`runJobCli`).
+ *  - the job state (`job_runs.lastSuccessAt`) is written, so the heartbeat
+ *    job can tell a job that never ran at all.
  *
  * A job that knows it did only part of its work returns `{ complete: false }`
  * instead of throwing; that is `incomplete` as well, with its counts.
@@ -38,8 +41,8 @@ export interface JobResult {
 
 export interface JobDeps {
   log: (line: string) => void;
-  /** Called once for every incomplete run. Must not throw (see alert.ts). */
-  alert: (result: JobResult) => Promise<void>;
+  /** Called once for EVERY run, complete or not (`reportJobRun` in alert.ts). Must not throw. */
+  report: (result: JobResult) => Promise<void>;
   /** Heartbeat state. Errors here make the run incomplete, they are not hidden. */
   record: (result: JobResult, at: Date) => Promise<void>;
   now: () => Date;
@@ -88,7 +91,12 @@ export async function runJob(name: string, job: () => Promise<JobOutcome>, deps:
   }
 
   deps.log(completionLine(result));
-  if (result.status === "incomplete") await deps.alert(result);
+  try {
+    await deps.report(result);
+  } catch (error) {
+    // The desk being down never changes the job's own result or exit code.
+    deps.log(`ops_report=failed job=${result.name} code=${errorCode(error)}`);
+  }
   return result;
 }
 
