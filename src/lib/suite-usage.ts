@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 
 import { getAuthToken } from "@/lib/auth";
 import { platformUrl } from "@/lib/platform/door";
+import { platformCookieName } from "@/lib/session-cookies";
 
 /**
  * How much of the organisation's package is used in the current billing
@@ -36,7 +37,6 @@ import { platformUrl } from "@/lib/platform/door";
 const USAGE_TIMEOUT_MS = 4000;
 const USAGE_CACHE_TTL_MS = 60_000;
 const USAGE_CACHE_MAX = 200;
-const AUTH_COOKIE_NAME = "platform-auth-token";
 
 export type SuiteUsageState = "normal" | "warn" | "stopped";
 
@@ -128,7 +128,7 @@ export async function fetchSuiteUsage(options: FetchSuiteUsageOptions = {}): Pro
 
   try {
     const res = await (options.fetchImpl ?? fetch)(`${suite.replace(/\/+$/, "")}/api/platform/usage-status`, {
-      headers: { cookie: `${AUTH_COOKIE_NAME}=${token}` },
+      headers: { cookie: `${platformCookieName()}=${token}` },
       cache: "no-store",
       signal: AbortSignal.timeout(USAGE_TIMEOUT_MS),
     });

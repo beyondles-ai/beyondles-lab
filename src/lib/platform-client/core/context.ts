@@ -47,6 +47,7 @@ import {
   type ProductRole,
   type TtlCache,
   type TtlCacheOptions,
+  type UserContextOptions,
 } from "./types";
 
 /* -------------------------------------------------------------------------------- cache */
@@ -454,7 +455,11 @@ export function createAccessClient<T extends string>(
     return { status: "unavailable", reason: "http", httpStatus: reply.status };
   }
 
-  async function userContext(organisationId: string, userId: string): Promise<MachineAnswer<T>> {
+  async function userContext(
+    organisationId: string,
+    userId: string,
+    contextOptions?: UserContextOptions,
+  ): Promise<MachineAnswer<T>> {
     // Order: ids, door, cache, request.
     const org = typeof organisationId === "string" ? organisationId.trim() : "";
     const user = typeof userId === "string" ? userId.trim() : "";
@@ -466,8 +471,11 @@ export function createAccessClient<T extends string>(
     // One entry per person, not per key: the answer does not depend on the key. Both parts
     // are encoded, so no pair of ids can be mistaken for another pair.
     const key = `${encodeURIComponent(org.toLowerCase())}:${encodeURIComponent(user.toLowerCase())}`;
-    const cached = machineCache.get(key);
-    if (cached !== undefined) return copyMachineAnswer(cached);
+    // `fresh` skips the READ only, as for `me`: the new answer is stored as usual.
+    if (contextOptions?.fresh !== true) {
+      const cached = machineCache.get(key);
+      if (cached !== undefined) return copyMachineAnswer(cached);
+    }
 
     const sentAt = now();
     // No token: a product that keeps a session token to send it again later has built a

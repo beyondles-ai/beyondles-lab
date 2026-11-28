@@ -20,12 +20,12 @@
  */
 import { createHash } from "node:crypto";
 
-export const DOORS_PIN_VERSION = "1.5.1";
+export const DOORS_PIN_VERSION = "1.13.0";
 
 export const DOORS_PINS = {
   ts: {
     "door-contract.md":
-      "28c4424eb4f2dd18eb581b95550afaeec5de8915983e616f0c0e2c935fbe5e1c",
+      "0c101aa9caddedf93f690eb6f28a87444854a8964c2568131855784029082dde",
     "door-host.ts":
       "be91d0975478660f2ec0e6f47853be0c409392e3c8e73a2995f9c6bc3f33438e",
     "exclusions.ts":
@@ -65,7 +65,7 @@ export const DOORS_PINS = {
   },
   "ts+.js": {
     "door-contract.md":
-      "28c4424eb4f2dd18eb581b95550afaeec5de8915983e616f0c0e2c935fbe5e1c",
+      "0c101aa9caddedf93f690eb6f28a87444854a8964c2568131855784029082dde",
     "door-host.ts":
       "be91d0975478660f2ec0e6f47853be0c409392e3c8e73a2995f9c6bc3f33438e",
     "exclusions.ts":
@@ -105,7 +105,7 @@ export const DOORS_PINS = {
   },
   cjs: {
     "door-contract.md":
-      "28c4424eb4f2dd18eb581b95550afaeec5de8915983e616f0c0e2c935fbe5e1c",
+      "0c101aa9caddedf93f690eb6f28a87444854a8964c2568131855784029082dde",
     "door-host.d.ts":
       "749d62875dfd7fc64c1db503f5c50aef26e1b429bc45f86aa12031c6449b9edf",
     "door-host.js":

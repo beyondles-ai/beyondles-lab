@@ -78,10 +78,14 @@ function readLevel(value: unknown): GrantLevel | null {
   return value === "view" || value === "edit" ? value : null;
 }
 
-/** A user id: not empty and at most {@link USER_ID_MAX} characters after trimming; else `null`. */
+/**
+ * A user id: not empty and at most {@link USER_ID_MAX} characters after trimming, and not
+ * `.` or `..` (a dot segment would climb out of the grant address); else `null`.
+ */
 function readUserId(value: unknown): string | null {
   const userId = nonEmptyText(value);
-  return userId !== null && userId.length <= USER_ID_MAX ? userId : null;
+  if (userId === null || userId === "." || userId === "..") return null;
+  return userId.length <= USER_ID_MAX ? userId : null;
 }
 
 /** At most {@link LIST_MAX} entries `{ userId, level }`, or `null` when the value is not exactly that. */

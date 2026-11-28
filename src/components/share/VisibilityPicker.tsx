@@ -49,6 +49,13 @@ export interface VisibilityPickerProps {
   /** false → the "Die ganze Organisation" row is disabled and says why, unless isOrgAdmin. */
   membersMayShareOrg: boolean;
   isOrgAdmin: boolean;
+  /**
+   * For a product whose object can live in several collections at once. With
+   * this callback the chosen row shows one checkbox per collection instead of
+   * the dropdown; `collectionIds` is what is ticked. Without it nothing changes.
+   */
+  collectionIds?: readonly string[];
+  onCollectionIdsChange?(ids: string[]): void;
   /** default true → the one fixed sentence under the picker. */
   showAdminNote?: boolean;
   disabled?: boolean;
@@ -76,6 +83,8 @@ export function VisibilityPicker({
   isOrgAdmin,
   showAdminNote = true,
   disabled = false,
+  collectionIds = [],
+  onCollectionIdsChange,
 }: VisibilityPickerProps): JSX.Element {
   const t = useTranslations('share');
   const groupName = useId();
@@ -204,7 +213,37 @@ export function VisibilityPicker({
                 </span>
               </label>
 
-              {visibility === 'collection' && checked && !noCollections && (
+              {visibility === 'collection' && checked && !noCollections && onCollectionIdsChange && (
+                <fieldset className="m-0 min-w-0 border-0 p-0 pl-10">
+                  <legend className="mb-1 block text-xs font-medium text-content-secondary">
+                    {t('picker.collectionSelectLabel')}
+                  </legend>
+                  {collections.map((collection) => (
+                    <label
+                      key={collection.id}
+                      className="flex min-h-[44px] items-center gap-2 text-sm text-content-primary"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={collectionIds.includes(collection.id)}
+                        disabled={disabled}
+                        onChange={(event) => {
+                          if (disabled) return;
+                          onCollectionIdsChange(
+                            event.target.checked
+                              ? [...collectionIds, collection.id]
+                              : collectionIds.filter((id) => id !== collection.id),
+                          );
+                        }}
+                        className="h-4 w-4 flex-shrink-0 accent-primary"
+                      />
+                      {collection.name}
+                    </label>
+                  ))}
+                </fieldset>
+              )}
+
+              {visibility === 'collection' && checked && !noCollections && !onCollectionIdsChange && (
                 <div className="pl-10">
                   <label
                     htmlFor={selectId}

@@ -85,6 +85,11 @@ export function ShareDialog({
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const backdropArmed = useRef(false);
+  // Bumped on every open and close. A save captures it, so a save that answers
+  // after its dialog session ended can never write into a later one. No close
+  // path is reachable while a save runs, so this only guards against a stale
+  // continuation, it never hides an error the person should see.
+  const saveGeneration = useRef(0);
 
   /**
    * `loading` is raised here and not only in the load effect. The render caused
@@ -93,6 +98,7 @@ export function ShareDialog({
    * appears.
    */
   const openDialog = useCallback(() => {
+    saveGeneration.current += 1;
     setLoading(true);
     setOpen(true);
   }, []);
@@ -104,7 +110,9 @@ export function ShareDialog({
    * the dialog back into its loading branch.
    */
   const closeDialog = useCallback(() => {
+    saveGeneration.current += 1;
     setOpen(false);
+    setSaving(false);
     setDiscardPrompt(false);
     setState(null);
     setInitial(null);
@@ -162,16 +170,19 @@ export function ShareDialog({
   const hasChanges = Object.keys(patch).length > 0;
 
   /**
-   * The two easy exits — Esc and the backdrop — must not silently bin work. With
-   * nothing changed they close at once; with unsaved edits they ask first. The
-   * explicit "Abbrechen" button says what it does and closes without asking.
+   * The easy exits — Esc, the X and the backdrop — must not silently bin work.
+   * With nothing changed they close at once; with unsaved edits they ask first.
+   * While a save runs they do nothing, like the locked "Abbrechen": its outcome
+   * is not known yet, and a failing save must stay on screen with its error.
+   * The explicit "Abbrechen" button says what it does and closes without asking.
    */
   function requestClose(): void {
+    if (saving) return;
     if (discardPrompt) {
       setDiscardPrompt(false);
       return;
     }
-    if (canManage && hasChanges && !saving) {
+    if (canManage && hasChanges) {
       setDiscardPrompt(true);
       return;
     }
@@ -230,13 +241,20 @@ export function ShareDialog({
 
   async function handleSave(): Promise<void> {
     if (!hasChanges || saving) return;
+    const generation = saveGeneration.current;
     setSaving(true);
     setSaveError(null);
+    // Saving answers an open "discard?" question. Leaving it up would offer
+    // "Verwerfen" while the changes are already on their way, and that click
+    // would close the dialog and drop a failing save's error.
+    setDiscardPrompt(false);
     try {
       await saveRef.current(patch);
+      if (generation !== saveGeneration.current) return;
       setSaving(false);
       closeDialog();
     } catch (error) {
+      if (generation !== saveGeneration.current) return;
       setSaving(false);
       setSaveError(error instanceof Error && error.message ? error.message : '');
     }
@@ -352,6 +370,7 @@ export function ShareDialog({
                   type="button"
                   aria-label={t('dialog.close')}
                   onClick={requestClose}
+                  disabled={saving}
                   className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-content-tertiary transition-colors hover:bg-surface-secondary hover:text-content-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
                   <X className="h-4 w-4" aria-hidden="true" />
@@ -475,10 +494,11 @@ export function ShareDialog({
                       variant="secondary"
                       size="sm"
                       onClick={() => setDiscardPrompt(false)}
+                      disabled={saving}
                     >
                       {t('dialog.discardKeep')}
                     </Button>
-                    <Button type="button" variant="danger" size="sm" onClick={closeDialog}>
+                    <Button type="button" variant="danger" size="sm" onClick={closeDialog} disabled={saving}>
                       {t('dialog.discardConfirm')}
                     </Button>
                   </div>

@@ -30,6 +30,7 @@ export function AppShell({
   organisation,
   links,
   sessionHint,
+  sessionHintCookie,
   headerActions,
   banner,
   legalBaseUrl,
@@ -118,6 +119,7 @@ export function AppShell({
         </div>
         <AccountChangeGuard
           sessionHint={sessionHint}
+          sessionHintCookie={sessionHintCookie}
           homeHref={product.homeHref}
           switchAccountHref={switching ? links.switchAccount : null}
           locale={locale}

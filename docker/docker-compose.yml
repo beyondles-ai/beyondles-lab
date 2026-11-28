@@ -63,6 +63,13 @@ services:
       # Staging https://suite-staging.beyondles.ai, production https://beyondles.ai.
       NEXT_PUBLIC_PLATFORM_URL: ${NEXT_PUBLIC_PLATFORM_URL:?NEXT_PUBLIC_PLATFORM_URL missing in .env}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
+      # Card #466: suffix of the Suite's session cookies (src/lib/session-cookies.ts).
+      # Staging lives under the same domain `.beyondles.ai` as production; with
+      # `staging` the Lab reads `platform-auth-token-staging` instead of the
+      # production cookie. ALWAYS the same value as in the Suite this environment
+      # signs in against (NEXT_PUBLIC_PLATFORM_URL). Never set it in production.
+      # Empty = the names as they always were.
+      AUTH_COOKIE_SUFFIX: ${AUTH_COOKIE_SUFFIX:-}
       # The platform door (levels 2 + 3, AI, mail, protocol). Without these two
       # the Lab cannot ask the platform about anybody and lets NOBODY in.
       PLATFORM_API_URL: ${PLATFORM_API_URL:-}

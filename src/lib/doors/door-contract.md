@@ -162,7 +162,35 @@ A refusal before the tools run is a JSON-RPC error with the HTTP status of the R
 | 503 | -32003 | credential cannot be checked right now, `not_configured` |
 | other | -32603 | internal error |
 
-## 6. What stays in the product
+## 6. OAuth access tokens (since 1.8.0)
+
+A product that carries the `oauth-door` module (claude.ai and Claude Desktop as custom connectors)
+accepts a third form of `Authorization: Bearer`: an OAuth ACCESS token its own OAuth door issued
+after a person consented.
+
+- **Telling it apart.** A Bearer that is NOT an on-behalf token (not a compact JWS) and has the
+  product's access prefix (`<access>_<64 hex>`, e.g. `lla_` in LeadLab) is checked by
+  `verifyBearer` of `oauth-door/bearer.ts`: found by its sha256, kind ACCESS (a REFRESH token is
+  refused), not revoked, not expired; `lastUsedAt` is touched. A Bearer with neither form is `401`.
+  `x-api-key` and a Bearer together stay `400 ambiguous_credential`.
+- **Who it acts as.** The person of the grant (`userId`) in the organisation of the grant
+  (`organisationId`), with the product's FULL scopes, exactly like a USER key of that person: the
+  person's own rights are applied by the access context, the platform is asked about the person per
+  request with the product's cache, and a person without access is `401`/`403` as for a key. Release
+  gate and rate limit count it as a key (`key:<token id>`).
+- **Discovery.** Every `401` of `/api/mcp` (and of `/api/v1` when the product offers the door there)
+  carries `WWW-Authenticate: Bearer resource_metadata="<issuer>/.well-known/oauth-protected-resource"`
+  (`unauthorizedResponse` / `wwwAuthenticate`), with `error="invalid_token"` when a token was
+  presented. The issuer is the product's public URL, never the Host header.
+- **Lifetimes.** ACCESS 1 hour, REFRESH 30 days with rotation; a replayed refresh token or a code
+  redeemed twice revokes every token of that client for that person (the chain). The person can
+  revoke in the product's settings; the token is dead at the next call.
+- **The endpoints** (`/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`,
+  `/oauth/register`, `/oauth/authorize`, `/oauth/token`, `/oauth/revoke`) are infrastructure, not
+  functions of the product: they appear in the manifest's infrastructure routes with a reason, not in
+  the parity check. What the product must provide is in `oauth-door/HOST-CONTRACT.md`.
+
+## 7. What stays in the product
 
 The door call itself (`openMachineDoor`), the key store of a product that still has its own keys,
 the actor, the access context from the platform, the error envelope and the HTTP framework glue.

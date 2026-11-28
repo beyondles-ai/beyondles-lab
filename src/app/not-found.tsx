@@ -66,6 +66,7 @@ async function inFrame(content: React.ReactNode): Promise<React.ReactNode | null
         organisation={{ name: organisationDisplayName(session) }}
         links={frame.links}
         sessionHint={frame.sessionHint}
+        sessionHintCookie={frame.sessionHintCookie}
       >
         {content}
       </AppShell>

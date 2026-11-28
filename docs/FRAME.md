@@ -34,6 +34,18 @@ this file and that one disagree, that one wins and this template is updated.
   environment asks ITS OWN Suite. Sign-in and the gate have no production
   fallback (the middleware answers 503 and Compose refuses to start without
   the variable); only the "back to Suite" links fall back to beyondles.ai.
+- The cookie's name depends on the environment (card #466). Staging lives
+  under the same domain `.beyondles.ai` as production, so the staging Suite
+  adds a suffix to its session cookies: `platform-auth-token-staging`,
+  `platform-session-hint-staging`. The Lab reads the names through
+  `src/lib/session-cookies.ts` (`AUTH_COOKIE_SUFFIX`), never as a literal: in
+  the middleware, in `src/lib/auth.ts`, in every call to the Suite, and it
+  hands the hint cookie's name to the shell (`sessionHintCookie`).
+  `AUTH_COOKIE_SUFFIX` is **always the value of the Suite this environment
+  signs in against** (`NEXT_PUBLIC_PLATFORM_URL`): `staging` against the
+  staging Suite, not set against the production Suite. A Lab that looks for
+  another name than its Suite writes finds no sign-in; a malformed value
+  stops the request instead of falling back to the names of production.
 - `organisationId` comes from the confirmed token, never from the answer body,
   never from a request. Empty or non-uuid = reject. A platform answer for a
   different organisation than the token is refused (`src/lib/rbac.ts`).
@@ -434,7 +446,7 @@ like every person.
   there, never in a Lab. That shared check does not run in the public
   template or in a Lab outside the organisation, so `check:frame` block 5d
   also pins the sha256 of every file of the copy (`scripts/support/doors-pin.mjs`,
-  doors 1.5.1). A doors sync updates that pin in the same PR.
+  doors 1.13.0). A doors sync updates that pin in the same PR.
 - The core products (The Brain, Beyondles HorAIzon, Beyondles Suite) carry the
   same doors. `node scripts/check-frame.mjs --profile core --root <product>`
   checks one of them: its `doors.config.json` names the manifest, the parity

@@ -401,6 +401,16 @@ export interface MeOptions {
   fresh?: boolean;
 }
 
+/** Options of one `AccessClient.userContext` call. */
+export interface UserContextOptions {
+  /**
+   * Skip the cache READ and ask the platform now; the answer is stored as usual. For a route
+   * that mints a credential for the person (an OAuth refresh: oauth-door HOST-CONTRACT
+   * section 3), so it cannot pass a token floor the platform raised within the last 60 s.
+   */
+  fresh?: boolean;
+}
+
 /**
  * The answer of the machine route `GET /api/access/orgs/:org/users/:user/context?product=`.
  * The cache stores THIS (the answer), never a verdict: the verdict depends on the credential
@@ -443,7 +453,7 @@ export interface AccessClientOptions<T extends string = string> {
  */
 export interface AccessClient<T extends string = string> {
   me(token: string | null | undefined, options?: MeOptions): Promise<MeResult<T>>;
-  userContext(organisationId: string, userId: string): Promise<MachineAnswer<T>>;
+  userContext(organisationId: string, userId: string, options?: UserContextOptions): Promise<MachineAnswer<T>>;
   /** Drops both caches and the "warned once" memory. */
   clear(): void;
 }

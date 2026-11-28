@@ -35,6 +35,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       organisation={{ name: organisationDisplayName(session) }}
       links={frame.links}
       sessionHint={frame.sessionHint}
+      sessionHintCookie={frame.sessionHintCookie}
     >
       {children}
     </AppShell>
